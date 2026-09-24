@@ -64,11 +64,16 @@ export default function Navbar() {
           }
           setUserLocation(locationName);
           localStorage.setItem('krawing_user_location', locationName);
+          localStorage.setItem('krawing_user_coords', JSON.stringify({ lat: latitude, lng: longitude }));
+          // Dispatch custom event so Home page re-fetches shops based on new coordinates
+          window.dispatchEvent(new Event('krawing_location_changed'));
         } catch (err) {
           console.error('Reverse geocode error:', err);
           const fallback = `${latitude.toFixed(2)}°, ${longitude.toFixed(2)}°`;
           setUserLocation(fallback);
           localStorage.setItem('krawing_user_location', fallback);
+          localStorage.setItem('krawing_user_coords', JSON.stringify({ lat: latitude, lng: longitude }));
+          window.dispatchEvent(new Event('krawing_location_changed'));
         } finally {
           setLocating(false);
         }

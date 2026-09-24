@@ -18,6 +18,12 @@ export default function Home() {
 
   useEffect(() => {
     fetchHomeData();
+
+    const handleLocationChange = () => {
+      fetchHomeData();
+    };
+    window.addEventListener('krawing_location_changed', handleLocationChange);
+    return () => window.removeEventListener('krawing_location_changed', handleLocationChange);
   }, [mode]);
 
   const fetchHomeData = async () => {
@@ -26,8 +32,19 @@ export default function Home() {
       const vendorType = isFresh ? 'FRESH_MARKET' : 'FOOD_RESTAURANT';
       const productType = isFresh ? 'VEGETABLE,FRUIT' : 'FOOD';
 
+      let locationParams = '&radius=5';
+      const savedCoords = localStorage.getItem('krawing_user_coords');
+      if (savedCoords) {
+        try {
+          const { lat, lng } = JSON.parse(savedCoords);
+          if (lat && lng) {
+            locationParams = `&lat=${lat}&lng=${lng}&radius=5`;
+          }
+        } catch (e) {}
+      }
+
       const [resStores, resFoods] = await Promise.all([
-        API.get(`/restaurants?vendorType=${vendorType}`),
+        API.get(`/restaurants?vendorType=${vendorType}${locationParams}`),
         API.get(`/foods?productType=${productType}`)
       ]);
 
