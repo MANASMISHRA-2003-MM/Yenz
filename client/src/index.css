@@ -1,0 +1,109 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    
+    /* Page & Neutral Surfaces */
+    --bg-page: #FAFAF8;
+    --bg-surface: #FFFFFF;
+    --bg-surface-secondary: #F5F6F7;
+    
+    /* Typography Tokens */
+    --text-primary: #17181C;
+    --text-secondary: #686D78;
+    --text-muted: #9095A1;
+    --border-color: #E8E9ED;
+
+    /* Cravings Palette (Warm Appetizing) */
+    --cravings-primary: #E51B4B;
+    --cravings-dark: #B90F38;
+    --cravings-accent: #FF6B35;
+    --cravings-soft: #FFF0F3;
+
+    /* Fresh Palette (Natural Emerald) */
+    --fresh-primary: #168A5B;
+    --fresh-dark: #0F6945;
+    --fresh-accent: #52B788;
+    --fresh-soft: #ECF8F1;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: var(--bg-page);
+    color: var(--text-primary);
+    -webkit-tap-highlight-color: transparent;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1, h2, h3, h4, .font-heading {
+    font-family: var(--font-sans);
+    letter-spacing: -0.02em;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #F1F5F9;
+}
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Krawing Card & Shadow Utilities */
+.krawing-card {
+  background-color: #FFFFFF;
+  border: 1px solid #E8E9ED;
+  box-shadow: 0 2px 8px rgba(20, 25, 35, 0.04);
+  border-radius: 16px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.krawing-card-hover:hover {
+  transform: translateY(-2px);
+  border-color: #CBD5E1;
+  box-shadow: 0 8px 24px rgba(20, 25, 35, 0.08);
+}
+
+.glass-header {
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+/* Skeleton Loading Animation */
+@keyframes skeletonPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.animate-skeleton {
+  animation: skeletonPulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  background-color: #E8E9ED;
+}
+
+/* Accessible Focus Ring */
+*:focus-visible {
+  outline: 2px solid #E51B4B;
+  outline-offset: 2px;
+}

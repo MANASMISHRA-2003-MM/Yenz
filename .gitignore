@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+client/node_modules/
+server/node_modules/
+
+# Production build outputs
+client/dist/
+client/build/
+
+# Environment variables
+.env
+*.env
+client/.env
+server/.env
+
+# IDE & System files
+.DS_Store
+.vscode/
+.idea/
+*.log
+
+# Prisma generated client inside node_modules will be ignored by node_modules/ rule
