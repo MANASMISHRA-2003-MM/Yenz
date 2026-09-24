@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Flame, User, Store, Bike, ShieldCheck, ArrowRight } from 'lucide-react';
+import { Flame, ArrowRight } from 'lucide-react';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -9,7 +9,7 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const { login, demoSwitchRole } = useAuth();
+  const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -26,12 +26,6 @@ export default function Login() {
     }
   };
 
-  const handleQuickDemoLogin = async (role, path) => {
-    setLoading(true);
-    await demoSwitchRole(role);
-    navigate(path);
-  };
-
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col justify-center items-center p-4">
       <div className="w-full max-w-md space-y-6">
@@ -45,38 +39,7 @@ export default function Login() {
           <p className="text-xs text-slate-500 font-medium">Hyperlocal Food Delivery Ecosystem</p>
         </div>
 
-        {/* Quick Demo One-Click Access Box */}
-        <div className="bg-white p-5 rounded-3xl border border-brand-200 space-y-3 shadow-soft">
-          <p className="text-[11px] font-extrabold text-brand-600 uppercase tracking-wider text-center">⚡ Instant 1-Click Demo Login</p>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={() => handleQuickDemoLogin('consumer', '/home')}
-              className="p-2.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl text-left text-xs font-bold text-emerald-800 flex items-center gap-1.5 transition"
-            >
-              <User className="w-3.5 h-3.5" /> Consumer
-            </button>
-            <button
-              onClick={() => handleQuickDemoLogin('vendor', '/vendor/dashboard')}
-              className="p-2.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl text-left text-xs font-bold text-amber-800 flex items-center gap-1.5 transition"
-            >
-              <Store className="w-3.5 h-3.5" /> Vendor
-            </button>
-            <button
-              onClick={() => handleQuickDemoLogin('delivery_partner', '/delivery/dashboard')}
-              className="p-2.5 bg-cyan-50 hover:bg-cyan-100 border border-cyan-200 rounded-xl text-left text-xs font-bold text-cyan-800 flex items-center gap-1.5 transition"
-            >
-              <Bike className="w-3.5 h-3.5" /> Driver
-            </button>
-            <button
-              onClick={() => handleQuickDemoLogin('admin', '/admin/dashboard')}
-              className="p-2.5 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-xl text-left text-xs font-bold text-purple-800 flex items-center gap-1.5 transition"
-            >
-              <ShieldCheck className="w-3.5 h-3.5" /> Admin
-            </button>
-          </div>
-        </div>
-
-        {/* Standard Form */}
+        {/* Standard Login Form */}
         <form onSubmit={handleSubmit} className="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-soft space-y-4">
           {error && <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl">{error}</div>}
 
@@ -86,7 +49,7 @@ export default function Login() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="aarav@krawing.com"
+              placeholder="user@example.com"
               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 font-medium focus:outline-none focus:bg-white focus:border-brand-500"
               required
             />

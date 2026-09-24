@@ -17,9 +17,72 @@ export default function Navbar() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState(searchParams.get('q') || '');
 
+  const [userLocation, setUserLocation] = useState(() => {
+    return localStorage.getItem('krawing_user_location') || 'Lakkarpur, Faridabad';
+  });
+  const [locating, setLocating] = useState(false);
+
   useEffect(() => {
     setSearchQuery(searchParams.get('q') || '');
   }, [searchParams]);
+
+  useEffect(() => {
+    // Auto-prompt location request on first visit if location not yet stored
+    if (!localStorage.getItem('krawing_user_location') && navigator.geolocation) {
+      requestLiveLocation(true);
+    }
+  }, []);
+
+  const requestLiveLocation = (silent = false) => {
+    if (!navigator.geolocation) {
+      if (!silent) alert('Geolocation is not supported by your browser');
+      return;
+    }
+
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
+          const data = await res.json();
+          let locationName = '';
+          if (data && data.address) {
+            const addr = data.address;
+            const sub = addr.suburb || addr.neighbourhood || addr.residential || addr.road || addr.locality || addr.subdistrict;
+            const city = addr.city || addr.town || addr.district || addr.county || addr.state;
+            if (sub && city) {
+              locationName = `${sub}, ${city}`;
+            } else if (city) {
+              locationName = city;
+            } else {
+              locationName = data.display_name.split(',').slice(0, 2).join(',');
+            }
+          }
+          if (!locationName) {
+            locationName = `${latitude.toFixed(2)}°, ${longitude.toFixed(2)}°`;
+          }
+          setUserLocation(locationName);
+          localStorage.setItem('krawing_user_location', locationName);
+        } catch (err) {
+          console.error('Reverse geocode error:', err);
+          const fallback = `${latitude.toFixed(2)}°, ${longitude.toFixed(2)}°`;
+          setUserLocation(fallback);
+          localStorage.setItem('krawing_user_location', fallback);
+        } finally {
+          setLocating(false);
+        }
+      },
+      (error) => {
+        console.warn('Geolocation error:', error.message);
+        setLocating(false);
+        if (!silent && error.code === error.PERMISSION_DENIED) {
+          alert('Location permission denied. Please allow location access in your browser address bar.');
+        }
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -43,12 +106,20 @@ export default function Navbar() {
                 <KrawingLogo size="medium" />
               </Link>
 
-              {/* Dynamic Location Pill */}
-              <div className="hidden md:flex items-center gap-2 bg-[#F5F6F7] hover:bg-[#E8E9ED] border border-[#E8E9ED] px-3 py-1.5 rounded-xl cursor-pointer transition text-xs font-medium text-[#17181C]">
-                <MapPin className={`w-4 h-4 flex-shrink-0 ${isFresh ? 'text-[#168A5B]' : 'text-[#E51B4B]'}`} />
+              {/* Dynamic Live Location Pill */}
+              <div
+                onClick={() => requestLiveLocation(false)}
+                title="Click to update live location"
+                className="hidden md:flex items-center gap-2 bg-[#F5F6F7] hover:bg-[#E8E9ED] border border-[#E8E9ED] px-3 py-1.5 rounded-xl cursor-pointer transition text-xs font-medium text-[#17181C]"
+              >
+                <MapPin className={`w-4 h-4 flex-shrink-0 ${isFresh ? 'text-[#168A5B]' : 'text-[#E51B4B]'} ${locating ? 'animate-bounce' : ''}`} />
                 <div className="leading-tight">
-                  <span className="text-[10px] uppercase font-extrabold text-[#9095A1] block">Deliver to</span>
-                  <span className="font-extrabold text-[#17181C] truncate max-w-[150px] block">Lakkarpur, Faridabad</span>
+                  <span className="text-[10px] uppercase font-extrabold text-[#9095A1] block">
+                    {locating ? 'Locating...' : 'Deliver to'}
+                  </span>
+                  <span className="live-user-location font-extrabold text-[#17181C] truncate max-w-[150px] block">
+                    {userLocation}
+                  </span>
                 </div>
               </div>
             </div>

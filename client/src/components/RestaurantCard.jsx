@@ -63,11 +63,15 @@ export default function RestaurantCard({ restaurant }) {
         </div>
       </div>
 
-      {/* Footer ETA & Delivery Fee */}
+      {/* Footer ETA, 5km Distance & Delivery Fee */}
       <div className="pt-3 mt-3 border-t border-[#E8E9ED] flex items-center justify-between text-xs text-[#686D78] font-medium">
         <span className="flex items-center gap-1 font-bold text-[#17181C]">
           <Clock className="w-3.5 h-3.5 text-[#9095A1]" />
           <span>⚡ {restaurant.deliveryTime || '20-30 min'}</span>
+        </span>
+
+        <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+          📍 {restaurant.distanceKm ? `${restaurant.distanceKm} km` : '< 5 km'}
         </span>
 
         <span>₹{restaurant.deliveryFee || 30} delivery</span>

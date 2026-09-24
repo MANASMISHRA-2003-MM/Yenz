@@ -1,5 +1,19 @@
 const prisma = require('../../utils/prisma');
 
+// Haversine distance in kilometers
+function calculateDistanceKm(lat1, lon1, lat2, lon2) {
+  if (!lat1 || !lon1 || !lat2 || !lon2) return 0;
+  const R = 6371;
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
 // Helper to format a Vendor object to a consistent restaurant-like response
 const formatVendorObj = (vendor) => {
   if (!vendor) return null;
@@ -17,6 +31,7 @@ const formatVendorObj = (vendor) => {
     pincode: vendor.pincode,
     latitude: vendor.latitude ? Number(vendor.latitude) : null,
     longitude: vendor.longitude ? Number(vendor.longitude) : null,
+    distanceKm: vendor.distanceKm !== undefined ? vendor.distanceKm : 2.5,
     rating: Number(vendor.rating),
     numRatings: vendor.numRatings,
     deliveryTime: vendor.deliveryTime,
@@ -33,17 +48,16 @@ const formatVendorObj = (vendor) => {
   };
 };
 
-// @desc Get all vendors/restaurants with search & filter
+// @desc Get all vendors/restaurants with 5 km radius filtering & search
 // @route GET /api/restaurants
 const getRestaurants = async (req, res, next) => {
   try {
-    const { search, isVegOnly, minRating, sortBy, vendorType } = req.query;
+    const { search, isVegOnly, minRating, sortBy, vendorType, lat, lng, radius } = req.query;
 
     let whereClause = { status: 'open' };
 
     // Filter by vendorType (CRAVINGS or FRESH)
     if (vendorType) {
-      // Handle frontend sending 'FRESH_MARKET' or 'FOOD_RESTAURANT'
       if (vendorType === 'FRESH_MARKET' || vendorType === 'FRESH') {
         whereClause.vendorType = 'FRESH';
       } else if (vendorType === 'FOOD_RESTAURANT' || vendorType === 'CRAVINGS') {
@@ -79,9 +93,33 @@ const getRestaurants = async (req, res, next) => {
       orderBy: orderByClause
     });
 
-    const restaurants = rawVendors.map(formatVendorObj);
+    const userLat = lat ? Number(lat) : null;
+    const userLng = lng ? Number(lng) : null;
+    const maxRadius = radius ? Number(radius) : 5.0; // Default 5 km radius
 
-    res.json({ success: true, count: restaurants.length, restaurants });
+    let restaurants = rawVendors.map(v => {
+      let dist = 2.5;
+      if (userLat && userLng && v.latitude && v.longitude) {
+        dist = Number(calculateDistanceKm(userLat, userLng, Number(v.latitude), Number(v.longitude)).toFixed(1));
+      }
+      return formatVendorObj({ ...v, distanceKm: dist });
+    });
+
+    // If user coordinates provided, filter by 5 km radius and sort by nearest distance
+    if (userLat && userLng) {
+      const withinRadius = restaurants.filter(r => r.distanceKm <= maxRadius);
+      if (withinRadius.length > 0) {
+        restaurants = withinRadius;
+      }
+      restaurants.sort((a, b) => a.distanceKm - b.distanceKm);
+    }
+
+    res.json({
+      success: true,
+      count: restaurants.length,
+      maxRadiusKm: maxRadius,
+      restaurants
+    });
   } catch (err) {
     console.error('getRestaurants error:', err);
     next(err);
