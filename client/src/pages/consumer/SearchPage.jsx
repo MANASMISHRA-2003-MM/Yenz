@@ -21,8 +21,22 @@ export default function SearchPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const qFromUrl = searchParams.get('q') || '';
+    setSearchTerm(qFromUrl);
+  }, [searchParams]);
+
+  useEffect(() => {
     fetchSearchResults();
   }, [searchTerm, mode, vegOnly, selectedCategory]);
+
+  const handleInputChange = (val) => {
+    setSearchTerm(val);
+    if (val.trim()) {
+      setSearchParams({ q: val }, { replace: true });
+    } else {
+      setSearchParams({}, { replace: true });
+    }
+  };
 
   const fetchSearchResults = async () => {
     try {
@@ -99,12 +113,12 @@ export default function SearchPage() {
               type="text"
               placeholder={isFresh ? "Type 'Tamatar', 'Shimla Apple', 'Spinach', 'Onion'..." : "Type 'Paneer', 'Butter Chicken', 'Biryani', 'Pizza'..."}
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => handleInputChange(e.target.value)}
               className="w-full pl-11 pr-10 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-slate-300 shadow-inner transition"
             />
             {searchTerm && (
               <button
-                onClick={() => setSearchTerm('')}
+                onClick={() => handleInputChange('')}
                 className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
               >
                 <X className="w-4 h-4" />
