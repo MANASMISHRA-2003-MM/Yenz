@@ -48,7 +48,17 @@ app.use(express.urlencoded({ extended: true }));
 // Apply General Rate Limiter
 app.use('/api', generalApiLimiter);
 
-// Health Check Endpoint
+// Root & Health Check Endpoints
+app.get('/', (req, res) => {
+  res.json({
+    message: '🚀 Krawing/Yenz Backend API Server is running smoothly!',
+    health: '/health',
+    api: '/api'
+  });
+});
+
+app.get('/favicon.ico', (req, res) => res.status(204).end());
+
 app.get('/health', async (req, res) => {
   let dbStatus = 'Disconnected';
   try {
