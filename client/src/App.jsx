@@ -1,5 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { Toaster } from 'sonner';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
 import { ModeProvider } from './context/ModeContext';
@@ -58,6 +59,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
 export default function App() {
   return (
     <AuthProvider>
+      <Toaster position="top-center" richColors closeButton />
       <ModeProvider>
         <CartProvider>
           <Router>
@@ -80,6 +82,23 @@ export default function App() {
                   </ProtectedRoute>
                 }
               />
+              <Route
+                path="/checkout/cravings"
+                element={
+                  <ProtectedRoute allowedRoles={['customer', 'consumer']}>
+                    <CheckoutPage modeOverride="CRAVINGS" />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/checkout/fresh-mandi"
+                element={
+                  <ProtectedRoute allowedRoles={['customer', 'consumer']}>
+                    <CheckoutPage modeOverride="FRESH_MANDI" />
+                  </ProtectedRoute>
+                }
+              />
+              <Route path="/order-tracking" element={<OrderTracking />} />
               <Route path="/order-tracking/:id" element={<OrderTracking />} />
               <Route
                 path="/orders"

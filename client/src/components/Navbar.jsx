@@ -5,88 +5,50 @@ import { useCart } from '../context/CartContext';
 import { useMode } from '../context/ModeContext';
 import KrawingLogo from './KrawingLogo';
 import ModeSwitcher from './ModeSwitcher';
-import { Search, ShoppingBag, MapPin, LogOut, ShieldCheck, Store, Bike, Receipt, Home as HomeIcon } from 'lucide-react';
+import LocationSelector from './LocationSelector';
+import AddressModal from './AddressModal';
+import { Search, ShoppingBag, MapPin, LogOut, Receipt } from 'lucide-react';
 
-export default function Navbar() {
+export default function Navbar({ onVegToggle }) {
   const { user, logout } = useAuth();
-  const { itemCount, subtotal } = useCart();
-  const { isFresh } = useMode();
+  const { cravingsCart, freshCart } = useCart();
+  const { isFresh: globalIsFresh } = useMode();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const [profileOpen, setProfileOpen] = useState(false);
+  const [showAddressModal, setShowAddressModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState(searchParams.get('q') || '');
 
-  const [userLocation, setUserLocation] = useState(() => {
-    return localStorage.getItem('krawing_user_location') || 'Lakkarpur, Faridabad';
+  // Route-authoritative mode determination
+  const isFreshRoute = location.pathname.includes('fresh-mandi');
+  const isCravingsRoute = location.pathname.includes('cravings');
+  const isFresh = isFreshRoute ? true : (isCravingsRoute ? false : globalIsFresh);
+
+  // Active cart derived strictly from route-authoritative mode
+  const activeCart = isFresh ? (freshCart || { items: [] }) : (cravingsCart || { items: [] });
+  const itemCount = activeCart.items && Array.isArray(activeCart.items)
+    ? activeCart.items.reduce((acc, item) => acc + (item.quantity || 0), 0)
+    : 0;
+  const subtotal = activeCart.items && Array.isArray(activeCart.items)
+    ? activeCart.items.reduce((acc, item) => acc + (Number(item.price) || 0) * (item.quantity || 0), 0)
+    : 0;
+
+  // Global VEG Mode toggle state
+  const [isVegOnly, setIsVegOnly] = useState(() => {
+    return localStorage.getItem('krawing_veg_only') === 'true';
   });
-  const [locating, setLocating] = useState(false);
 
   useEffect(() => {
     setSearchQuery(searchParams.get('q') || '');
   }, [searchParams]);
 
-  useEffect(() => {
-    // Auto-prompt location request on first visit if location not yet stored
-    if (!localStorage.getItem('krawing_user_location') && navigator.geolocation) {
-      requestLiveLocation(true);
-    }
-  }, []);
-
-  const requestLiveLocation = (silent = false) => {
-    if (!navigator.geolocation) {
-      if (!silent) alert('Geolocation is not supported by your browser');
-      return;
-    }
-
-    setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        try {
-          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
-          const data = await res.json();
-          let locationName = '';
-          if (data && data.address) {
-            const addr = data.address;
-            const sub = addr.suburb || addr.neighbourhood || addr.residential || addr.road || addr.locality || addr.subdistrict;
-            const city = addr.city || addr.town || addr.district || addr.county || addr.state;
-            if (sub && city) {
-              locationName = `${sub}, ${city}`;
-            } else if (city) {
-              locationName = city;
-            } else {
-              locationName = data.display_name.split(',').slice(0, 2).join(',');
-            }
-          }
-          if (!locationName) {
-            locationName = `${latitude.toFixed(2)}°, ${longitude.toFixed(2)}°`;
-          }
-          setUserLocation(locationName);
-          localStorage.setItem('krawing_user_location', locationName);
-          localStorage.setItem('krawing_user_coords', JSON.stringify({ lat: latitude, lng: longitude }));
-          // Dispatch custom event so Home page re-fetches shops based on new coordinates
-          window.dispatchEvent(new Event('krawing_location_changed'));
-        } catch (err) {
-          console.error('Reverse geocode error:', err);
-          const fallback = `${latitude.toFixed(2)}°, ${longitude.toFixed(2)}°`;
-          setUserLocation(fallback);
-          localStorage.setItem('krawing_user_location', fallback);
-          localStorage.setItem('krawing_user_coords', JSON.stringify({ lat: latitude, lng: longitude }));
-          window.dispatchEvent(new Event('krawing_location_changed'));
-        } finally {
-          setLocating(false);
-        }
-      },
-      (error) => {
-        console.warn('Geolocation error:', error.message);
-        setLocating(false);
-        if (!silent && error.code === error.PERMISSION_DENIED) {
-          alert('Location permission denied. Please allow location access in your browser address bar.');
-        }
-      },
-      { enableHighAccuracy: true, timeout: 10000 }
-    );
+  const toggleVegMode = () => {
+    const nextState = !isVegOnly;
+    setIsVegOnly(nextState);
+    localStorage.setItem('krawing_veg_only', String(nextState));
+    window.dispatchEvent(new CustomEvent('krawing_veg_toggled', { detail: { isVegOnly: nextState } }));
+    if (onVegToggle) onVegToggle(nextState);
   };
 
   const handleSearchSubmit = (e) => {
@@ -100,41 +62,26 @@ export default function Navbar() {
 
   return (
     <>
-      {/* Top Desktop & Tablet Header */}
-      <header className="sticky top-0 z-40 glass-header border-b border-[#E8E9ED]">
+      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-[#E8E9ED] shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16 gap-4">
+          
+          {/* ================= DESKTOP HEADER (≥ 768px) ================= */}
+          <div className="hidden md:flex items-center justify-between h-16 gap-4">
             
-            {/* Left: Brand Logo & Dynamic Location Selector */}
+            {/* Logo & Deliver Location */}
             <div className="flex items-center gap-5">
               <Link to="/" className="flex items-center focus:outline-none">
                 <KrawingLogo size="medium" />
               </Link>
-
-              {/* Dynamic Live Location Pill */}
-              <div
-                onClick={() => requestLiveLocation(false)}
-                title="Click to update live location"
-                className="hidden md:flex items-center gap-2 bg-[#F5F6F7] hover:bg-[#E8E9ED] border border-[#E8E9ED] px-3 py-1.5 rounded-xl cursor-pointer transition text-xs font-medium text-[#17181C]"
-              >
-                <MapPin className={`w-4 h-4 flex-shrink-0 ${isFresh ? 'text-[#168A5B]' : 'text-[#E51B4B]'} ${locating ? 'animate-bounce' : ''}`} />
-                <div className="leading-tight">
-                  <span className="text-[10px] uppercase font-extrabold text-[#9095A1] block">
-                    {locating ? 'Locating...' : 'Deliver to'}
-                  </span>
-                  <span className="live-user-location font-extrabold text-[#17181C] truncate max-w-[150px] block">
-                    {userLocation}
-                  </span>
-                </div>
-              </div>
+              <LocationSelector variant="desktop" />
             </div>
 
-            {/* Center: Search Bar Input & Mode Switcher */}
-            <div className="flex-1 max-w-md hidden sm:flex items-center gap-3">
-              <ModeSwitcher />
+            {/* Mode Switcher & Universal Search */}
+            <div className="flex-1 max-w-lg flex items-center gap-3">
+              <ModeSwitcher routeMode={isFresh ? 'fresh' : 'cravings'} />
 
               <form onSubmit={handleSearchSubmit} className="flex-1 relative">
-                <Search className="w-4 h-4 text-[#9095A1] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   placeholder={isFresh ? "Search vegetables, fruits, essentials..." : "Search dishes, biryani, pizza..."}
@@ -145,30 +92,40 @@ export default function Navbar() {
               </form>
             </div>
 
-            {/* Right: Cart & User Account Menu */}
+            {/* VEG Toggle & Basket & Profile */}
             <div className="flex items-center gap-3">
               
-              {/* Mobile Mode Switcher */}
-              <div className="sm:hidden">
-                <ModeSwitcher />
-              </div>
+              {/* Global VEG Toggle Switch */}
+              <button
+                onClick={toggleVegMode}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-extrabold transition ${
+                  isVegOnly
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300 shadow-sm'
+                    : 'bg-[#F5F6F7] text-[#686D78] border-[#E8E9ED] hover:bg-[#E8E9ED]'
+                }`}
+                title="Toggle Veg Only Mode"
+              >
+                <span className="text-[10px] uppercase font-black">VEG</span>
+                <div className={`w-7 h-4 rounded-full p-0.5 transition-colors ${isVegOnly ? 'bg-emerald-600' : 'bg-slate-300'}`}>
+                  <div className={`w-3 h-3 rounded-full bg-white transition-transform ${isVegOnly ? 'translate-x-3' : 'translate-x-0'}`} />
+                </div>
+              </button>
 
-              {/* Shopping Cart Button */}
+              {/* Basket Button */}
               <Link
-                to="/cart"
+                to={isFresh ? '/checkout/fresh-mandi' : '/checkout/cravings'}
                 className={`relative flex items-center gap-2 px-3.5 py-2 rounded-xl font-extrabold text-xs transition border ${
                   itemCount > 0
                     ? isFresh
-                      ? 'bg-[#168A5B] text-white border-[#168A5B] shadow-sm'
-                      : 'bg-[#E51B4B] text-white border-[#E51B4B] shadow-sm'
+                      ? 'bg-[#168A5B] text-white border-[#0F6945] shadow-sm'
+                      : 'bg-[#E51B4B] text-white border-[#B90F38] shadow-sm'
                     : 'bg-[#F5F6F7] text-[#17181C] border-[#E8E9ED] hover:bg-[#E8E9ED]'
                 }`}
               >
                 <ShoppingBag className="w-4 h-4" />
-                <span className="hidden md:inline font-extrabold">
+                <span>
                   {itemCount > 0 ? `Basket (₹${subtotal})` : 'Cart'}
                 </span>
-
                 {itemCount > 0 && (
                   <span className="w-5 h-5 rounded-full text-[10px] font-extrabold flex items-center justify-center bg-slate-900 text-white border-2 border-white">
                     {itemCount}
@@ -176,7 +133,7 @@ export default function Navbar() {
                 )}
               </Link>
 
-              {/* User Account Menu */}
+              {/* User Profile */}
               {user ? (
                 <div className="relative">
                   <button
@@ -190,7 +147,6 @@ export default function Navbar() {
                     />
                   </button>
 
-                  {/* Profile Dropdown */}
                   {profileOpen && (
                     <div className="absolute right-0 mt-2 w-56 rounded-2xl bg-white border border-[#E8E9ED] shadow-xl z-50 p-2 space-y-1">
                       <div className="px-3 py-2 border-b border-slate-100">
@@ -198,58 +154,34 @@ export default function Navbar() {
                         <p className="text-[10px] text-[#9095A1] font-mono font-bold capitalize">{user.role} Account</p>
                       </div>
 
-                      {user.role === 'consumer' && (
-                        <Link
-                          to="/orders"
-                          onClick={() => setProfileOpen(false)}
-                          className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-[#17181C] hover:bg-[#F5F6F7]"
-                        >
-                          <Receipt className="w-4 h-4 text-[#9095A1]" />
-                          <span>My Orders</span>
-                        </Link>
-                      )}
-
-                      {(user.role === 'vendor' || user.role === 'admin') && (
-                        <Link
-                          to="/vendor/dashboard"
-                          onClick={() => setProfileOpen(false)}
-                          className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-[#17181C] hover:bg-[#F5F6F7]"
-                        >
-                          <Store className="w-4 h-4 text-amber-500" />
-                          <span>Vendor Dashboard</span>
-                        </Link>
-                      )}
-
-                      {(user.role === 'delivery_partner' || user.role === 'admin') && (
-                        <Link
-                          to="/delivery/dashboard"
-                          onClick={() => setProfileOpen(false)}
-                          className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-[#17181C] hover:bg-[#F5F6F7]"
-                        >
-                          <Bike className="w-4 h-4 text-cyan-500" />
-                          <span>Driver Panel</span>
-                        </Link>
-                      )}
-
-                      {user.role === 'admin' && (
-                        <Link
-                          to="/admin/dashboard"
-                          onClick={() => setProfileOpen(false)}
-                          className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-[#17181C] hover:bg-[#F5F6F7]"
-                        >
-                          <ShieldCheck className="w-4 h-4 text-purple-500" />
-                          <span>Admin Control Panel</span>
-                        </Link>
-                      )}
+                      <Link
+                        to="/orders"
+                        onClick={() => setProfileOpen(false)}
+                        className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-[#17181C] hover:bg-[#F5F6F7]"
+                      >
+                        <Receipt className="w-4 h-4 text-[#9095A1]" />
+                        <span>My Orders</span>
+                      </Link>
 
                       <button
                         onClick={() => {
-                          logout();
                           setProfileOpen(false);
+                          setShowAddressModal(true);
                         }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-[#E51B4B] hover:bg-[#FFF0F3] transition"
+                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-[#17181C] hover:bg-[#F5F6F7] transition text-left"
                       >
-                        <LogOut className="w-4 h-4 text-[#E51B4B]" />
+                        <MapPin className="w-4 h-4 text-[#E51B4B]" />
+                        <span>Saved Address</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setProfileOpen(false);
+                          logout();
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 transition text-left"
+                      >
+                        <LogOut className="w-4 h-4" />
                         <span>Sign Out</span>
                       </button>
                     </div>
@@ -258,67 +190,81 @@ export default function Navbar() {
               ) : (
                 <Link
                   to="/login"
-                  className="px-4 py-2 bg-[#17181C] hover:bg-slate-800 text-white rounded-xl text-xs font-extrabold shadow-sm transition"
+                  className="px-4 py-2 bg-[#E51B4B] text-white rounded-xl font-extrabold text-xs shadow-sm hover:bg-[#B90F38] transition"
                 >
                   Sign In
                 </Link>
               )}
+            </div>
+          </div>
 
+          {/* ================= MOBILE HEADER (< 768px) ================= */}
+          <div className="md:hidden py-2.5 space-y-2.5">
+            
+            {/* Top Row: Location Pill + Profile + VEG Switch */}
+            <div className="flex items-center justify-between gap-2">
+              <LocationSelector variant="mobile" />
+
+              <div className="flex items-center gap-2">
+                {/* Global VEG Mode Switch */}
+                <button
+                  onClick={toggleVegMode}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-extrabold transition ${
+                    isVegOnly
+                      ? 'bg-emerald-50 text-emerald-800 border-emerald-300 shadow-sm'
+                      : 'bg-[#F5F6F7] text-[#686D78] border-[#E8E9ED]'
+                  }`}
+                >
+                  <span className="font-black">VEG</span>
+                  <div className={`w-6 h-3.5 rounded-full p-0.5 transition-colors ${isVegOnly ? 'bg-emerald-600' : 'bg-slate-300'}`}>
+                    <div className={`w-2.5 h-2.5 rounded-full bg-white transition-transform ${isVegOnly ? 'translate-x-2.5' : 'translate-x-0'}`} />
+                  </div>
+                </button>
+
+                {/* Profile Icon */}
+                {user ? (
+                  <Link to="/orders" className="flex-shrink-0">
+                    <img
+                      src={user.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=100'}
+                      alt={user.name}
+                      className="w-8 h-8 rounded-full object-cover border border-[#E8E9ED]"
+                    />
+                  </Link>
+                ) : (
+                  <Link to="/login" className="px-3 py-1 bg-[#E51B4B] text-white rounded-lg text-[10px] font-extrabold">
+                    Login
+                  </Link>
+                )}
+              </div>
             </div>
 
+            {/* Bottom Row: Mobile Universal Search Bar (No Mic Icon) */}
+            <form onSubmit={handleSearchSubmit} className="relative">
+              <Search className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder={isFresh ? 'Search "tamatar", "apple", "spinach"...' : 'Search "chatpata", "biryani", "pizza"...'}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-4 py-2.5 bg-[#F5F6F7] border border-[#E8E9ED] rounded-2xl text-xs font-semibold text-[#17181C] placeholder-[#9095A1] focus:outline-none focus:bg-white focus:border-[#CBD5E1] shadow-inner transition"
+              />
+            </form>
+
           </div>
+
         </div>
       </header>
 
-      {/* Mobile Bottom Sticky Navigation */}
-      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-[#E8E9ED] px-4 py-2 flex items-center justify-around">
-        <Link
-          to="/"
-          className={`flex flex-col items-center gap-1 text-[10px] font-extrabold ${
-            location.pathname === '/' || location.pathname === '/home' ? (isFresh ? 'text-[#168A5B]' : 'text-[#E51B4B]') : 'text-[#9095A1]'
-          }`}
-        >
-          <HomeIcon className="w-5 h-5" />
-          <span>Home</span>
-        </Link>
-
-        <Link
-          to="/search"
-          className={`flex flex-col items-center gap-1 text-[10px] font-extrabold ${
-            location.pathname === '/search' ? (isFresh ? 'text-[#168A5B]' : 'text-[#E51B4B]') : 'text-[#9095A1]'
-          }`}
-        >
-          <Search className="w-5 h-5" />
-          <span>Search</span>
-        </Link>
-
-        <Link
-          to="/cart"
-          className={`flex flex-col items-center gap-1 text-[10px] font-extrabold relative ${
-            location.pathname === '/cart' ? (isFresh ? 'text-[#168A5B]' : 'text-[#E51B4B]') : 'text-[#9095A1]'
-          }`}
-        >
-          <ShoppingBag className="w-5 h-5" />
-          <span>Cart</span>
-          {itemCount > 0 && (
-            <span className={`absolute -top-1 right-1 w-4 h-4 rounded-full text-[9px] font-extrabold flex items-center justify-center text-white ${
-              isFresh ? 'bg-[#168A5B]' : 'bg-[#E51B4B]'
-            }`}>
-              {itemCount}
-            </span>
-          )}
-        </Link>
-
-        <Link
-          to="/orders"
-          className={`flex flex-col items-center gap-1 text-[10px] font-extrabold ${
-            location.pathname === '/orders' ? (isFresh ? 'text-[#168A5B]' : 'text-[#E51B4B]') : 'text-[#9095A1]'
-          }`}
-        >
-          <Receipt className="w-5 h-5" />
-          <span>Orders</span>
-        </Link>
-      </nav>
+      {showAddressModal && (
+        <AddressModal
+          isOpen={showAddressModal}
+          onClose={() => setShowAddressModal(false)}
+          onSelectAddress={() => {
+            setShowAddressModal(false);
+            window.dispatchEvent(new Event('krawing_location_changed'));
+          }}
+        />
+      )}
     </>
   );
 }

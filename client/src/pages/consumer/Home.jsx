@@ -2,12 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { useMode } from '../../context/ModeContext';
 import API from '../../services/api';
 import Navbar from '../../components/Navbar';
-import MoodShortcuts from '../../components/MoodShortcuts';
-import BuildBasketWidget from '../../components/BuildBasketWidget';
+import PromotionCarousel from '../../components/PromotionCarousel';
+import CategoryRail from '../../components/CategoryRail';
+import FilterRail from '../../components/FilterRail';
 import RestaurantCard from '../../components/RestaurantCard';
 import FoodCard from '../../components/FoodCard';
 import FreshProductCard from '../../components/FreshProductCard';
-import { Flame, Leaf, Sparkles, ArrowRight, ShieldCheck, Truck, Clock, MapPin, Zap } from 'lucide-react';
+import BuildBasketWidget from '../../components/BuildBasketWidget';
+import StickyBasketBar from '../../components/StickyBasketBar';
+import MobileBottomNavigation from '../../components/MobileBottomNavigation';
+import { Flame, Leaf, Sparkles, ArrowRight, ShieldCheck, Zap, MapPin, Store, Utensils, Compass } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export default function Home() {
@@ -16,14 +20,32 @@ export default function Home() {
   const [featuredFoods, setFeaturedFoods] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // Active Discovery Filters
+  const [selectedCategory, setSelectedCategory] = useState('ALL');
+  const [fastDelivery, setFastDelivery] = useState(false);
+  const [ratingFourPlus, setRatingFourPlus] = useState(false);
+  const [pureVeg, setPureVeg] = useState(() => {
+    return localStorage.getItem('krawing_veg_only') === 'true';
+  });
+  const [under250, setUnder250] = useState(false);
+
   useEffect(() => {
     fetchHomeData();
 
-    const handleLocationChange = () => {
-      fetchHomeData();
+    const handleLocationChange = () => fetchHomeData();
+    const handleVegEvent = (e) => {
+      if (e.detail && typeof e.detail.isVegOnly === 'boolean') {
+        setPureVeg(e.detail.isVegOnly);
+      }
     };
+
     window.addEventListener('krawing_location_changed', handleLocationChange);
-    return () => window.removeEventListener('krawing_location_changed', handleLocationChange);
+    window.addEventListener('krawing_veg_toggled', handleVegEvent);
+
+    return () => {
+      window.removeEventListener('krawing_location_changed', handleLocationChange);
+      window.removeEventListener('krawing_veg_toggled', handleVegEvent);
+    };
   }, [mode]);
 
   const fetchHomeData = async () => {
@@ -51,88 +73,178 @@ export default function Home() {
       if (resStores.data.success) setRestaurants(resStores.data.restaurants);
       if (resFoods.data.success) setFeaturedFoods(resFoods.data.foods);
     } catch (err) {
-      console.error('Error loading homepage:', err);
+      console.error('Error loading homepage data:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  // Local Gems filter (small high-rated local outlets)
-  const localGems = restaurants.filter(r => r.rating >= 4.8);
-  // Quick Bites filter (under 25 min)
-  const quickBites = restaurants.filter(r => r.deliveryTime?.includes('15') || r.deliveryTime?.includes('20'));
+  const handleToggleFilter = (filterKey) => {
+    if (filterKey === 'fastDelivery') setFastDelivery(!fastDelivery);
+    if (filterKey === 'ratingFourPlus') setRatingFourPlus(!ratingFourPlus);
+    if (filterKey === 'pureVeg') {
+      const nextVeg = !pureVeg;
+      setPureVeg(nextVeg);
+      localStorage.setItem('krawing_veg_only', String(nextVeg));
+      window.dispatchEvent(new CustomEvent('krawing_veg_toggled', { detail: { isVegOnly: nextVeg } }));
+    }
+    if (filterKey === 'under250') setUnder250(!under250);
+  };
+
+  const handleResetFilters = () => {
+    setSelectedCategory('ALL');
+    setFastDelivery(false);
+    setRatingFourPlus(false);
+    setPureVeg(false);
+    setUnder250(false);
+    localStorage.setItem('krawing_veg_only', 'false');
+  };
+
+  // Filter Logic Applied to Restaurants
+  const filteredRestaurants = restaurants.filter(rest => {
+    if (pureVeg && !rest.isVeg && rest.cuisine && !rest.cuisine.some(c => c.toLowerCase().includes('veg'))) return false;
+    if (ratingFourPlus && (rest.rating || 0) < 4.0) return false;
+    if (fastDelivery && !(rest.deliveryTime?.includes('15') || rest.deliveryTime?.includes('20') || rest.deliveryTime?.includes('25'))) return false;
+    if (under250 && rest.priceRange && rest.priceRange.includes('500')) return false;
+    if (selectedCategory !== 'ALL' && selectedCategory !== 'UNDER_250') {
+      const matchCuisine = rest.cuisine && rest.cuisine.some(c => c.toLowerCase().includes(selectedCategory.toLowerCase()));
+      const matchName = rest.name.toLowerCase().includes(selectedCategory.toLowerCase());
+      if (!matchCuisine && !matchName) return false;
+    }
+    return true;
+  });
+
+  // Filter Logic Applied to Featured Foods / Products
+  const filteredFoods = featuredFoods.filter(food => {
+    if (pureVeg && !food.isVeg) return false;
+    if (ratingFourPlus && (food.rating || 0) < 4.0) return false;
+    if (under250 && food.price > 250) return false;
+    if (selectedCategory === 'UNDER_250' && food.price > 250) return false;
+    if (selectedCategory !== 'ALL' && selectedCategory !== 'UNDER_250') {
+      const matchCategory = food.category && food.category.toLowerCase().includes(selectedCategory.toLowerCase());
+      const matchName = food.name.toLowerCase().includes(selectedCategory.toLowerCase());
+      if (!matchCategory && !matchName) return false;
+    }
+    return true;
+  });
+
+  // High rated local gems
+  const localGems = filteredRestaurants.filter(r => (r.rating || 0) >= 4.5);
+  // Deals section
+  const recommendedDeals = filteredRestaurants.filter(r => r.offers && r.offers.length > 0);
 
   return (
-    <div className="min-h-screen bg-[#FAFAF8] text-[#17181C] pb-28">
-      <Navbar />
+    <div className="min-h-screen bg-[#FAFAF8] text-[#17181C] pb-32">
+      {/* 1. Header (Navbar) */}
+      <Navbar onVegToggle={(val) => setPureVeg(val)} />
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-9">
-        
-        {/* HERO BANNER (~180-220px) */}
-        <div className={`p-6 sm:p-8 rounded-2xl border shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-6 transition-all duration-300 ${
-          isFresh
-            ? 'bg-gradient-to-r from-[#0F6945] via-[#168A5B] to-slate-900 text-white border-[#168A5B]/40'
-            : 'bg-gradient-to-r from-[#B90F38] via-[#E51B4B] to-slate-900 text-white border-[#E51B4B]/40'
-        }`}>
-          <div className="space-y-2.5 max-w-xl">
-            <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-white/10 backdrop-blur-md border border-white/20">
-              {isFresh ? <Leaf className="w-3.5 h-3.5 text-[#52B788] fill-[#52B788]" /> : <Flame className="w-3.5 h-3.5 text-[#FF6B35] fill-[#FF6B35]" />}
-              <span>{isFresh ? 'DIRECT FROM LOCAL SABZI MANDI' : 'HYPERLOCAL FOOD & MEALS'}</span>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 space-y-7">
+
+        {/* 2. Mode Switcher Banner Pill (Mobile & Desktop) */}
+        <div className="flex items-center justify-between bg-white p-3 sm:p-4 rounded-2xl border border-[#E8E9ED] shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg ${
+              isFresh ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+            }`}>
+              {isFresh ? '🥬' : '🍔'}
             </div>
-
-            <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-white tracking-tight leading-tight">
-              {isFresh ? 'What does your kitchen need?' : "What's calling you today?"}
-            </h1>
-
-            <p className="text-xs sm:text-sm text-slate-200 font-medium leading-relaxed">
-              {isFresh
-                ? 'Fresh fruits, vegetables and everyday essentials from nearby sellers in Lakkarpur, Faridabad.'
-                : 'Discover local favourites, new spots and dishes around you in Lakkarpur, Faridabad.'}
-            </p>
-
-            {/* Feature Indicators */}
-            <div className="flex items-center gap-3 text-[11px] text-slate-200 font-bold pt-1">
-              <span className="flex items-center gap-1">
-                <Zap className="w-3.5 h-3.5 text-amber-300" />
-                <span>⚡ Fast delivery</span>
-              </span>
-              <span>•</span>
-              <span className="flex items-center gap-1">
-                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                <span>⭐ Local favourites</span>
-              </span>
-              <span>•</span>
-              <span className="flex items-center gap-1">
-                <MapPin className="w-3.5 h-3.5 text-amber-300" />
-                <span>📍 Around Lakkarpur</span>
-              </span>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.2 rounded-md ${
+                  isFresh ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                }`}>
+                  Active Channel
+                </span>
+                {pureVeg && (
+                  <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.2 rounded-md bg-emerald-700 text-white">
+                    🌱 Pure Veg On
+                  </span>
+                )}
+              </div>
+              <h2 className="text-sm sm:text-base font-extrabold text-[#17181C] leading-tight mt-0.5">
+                {isFresh ? 'Sabzi Mandi & Grocery' : 'Cravings Food & Meals'}
+              </h2>
             </div>
           </div>
 
-          {/* Quick Highlight Card */}
-          <div className="hidden lg:block bg-white/10 backdrop-blur-md border border-white/20 p-4 rounded-2xl text-center min-w-[200px]">
-            <span className="text-3xl block mb-1">{isFresh ? '🥦 🍅 🍎' : '🥟 🍕 🥘'}</span>
-            <span className="text-xs font-extrabold text-white block">
-              {isFresh ? 'Wholesale Mandi Rates' : 'Authentic Outlets'}
-            </span>
-            <span className="text-[10px] text-slate-300 font-medium block mt-0.5">
-              {isFresh ? 'Fresh 5 AM Morning Harvest' : 'Prepared Fresh To Order'}
-            </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => switchMode('cravings')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition ${
+                !isFresh
+                  ? 'bg-[#E51B4B] text-white shadow-sm'
+                  : 'bg-[#F5F6F7] text-[#686D78] hover:bg-[#E8E9ED]'
+              }`}
+            >
+              🍔 Cravings
+            </button>
+            <button
+              onClick={() => switchMode('fresh')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition ${
+                isFresh
+                  ? 'bg-[#168A5B] text-white shadow-sm'
+                  : 'bg-[#F5F6F7] text-[#686D78] hover:bg-[#E8E9ED]'
+              }`}
+            >
+              🥬 Fresh Mandi
+            </button>
           </div>
         </div>
 
-        {/* MOOD / INTENT NAVIGATION */}
-        <MoodShortcuts />
+        {/* 3. Promotional Carousel Area */}
+        <PromotionCarousel />
 
-        {/* BUILD MY BASKET WIDGET (Fresh Mode Only) */}
+        {/* 4. Food Category Discovery Rail */}
+        <CategoryRail
+          selectedCategory={selectedCategory}
+          onCategorySelect={(cat) => setSelectedCategory(cat)}
+        />
+
+        {/* 5. Quick Filter Rail */}
+        <FilterRail
+          fastDelivery={fastDelivery}
+          ratingFourPlus={ratingFourPlus}
+          pureVeg={pureVeg}
+          under250={under250}
+          onToggleFilter={handleToggleFilter}
+          onResetFilters={handleResetFilters}
+        />
+
+        {/* Build My Basket Widget (Fresh Mode Only) */}
         {isFresh && <BuildBasketWidget />}
 
-        {/* TOP PICKS NEAR YOU */}
+        {/* 6. RECOMMENDED WITH DEALS (Horizontal Mobile Rail / Responsive Grid) */}
+        {!isFresh && recommendedDeals.length > 0 && (
+          <div className="space-y-3.5">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg sm:text-xl font-extrabold text-[#17181C] tracking-tight">
+                  Recommended with deals
+                </h2>
+                <p className="text-xs text-[#686D78] font-medium">Great food at pocket-friendly prices</p>
+              </div>
+            </div>
+
+            <div className="flex sm:grid sm:grid-cols-2 lg:grid-cols-3 gap-4 overflow-x-auto scrollbar-none pb-2 snap-x">
+              {recommendedDeals.map(rest => (
+                <div key={rest._id} className="min-w-[280px] sm:min-w-0 snap-start flex-shrink-0">
+                  <RestaurantCard restaurant={rest} />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 7. TOP PICKS NEAR YOU */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-extrabold text-[#17181C]">Top picks near you</h2>
-              <p className="text-xs text-[#686D78] font-medium">Popular with people around Lakkarpur, Faridabad</p>
+              <h2 className="text-lg sm:text-xl font-extrabold text-[#17181C] tracking-tight">
+                {isFresh ? 'Top Fresh Mandi Stores' : 'Top picks near you'}
+              </h2>
+              <p className="text-xs text-[#686D78] font-medium">
+                {isFresh ? 'Wholesale vendors around Lakkarpur, Faridabad' : 'Popular outlets near Lakkarpur, Faridabad'}
+              </p>
             </div>
             <Link to="/search" className="text-xs font-extrabold text-[#E51B4B] hover:underline flex items-center gap-1">
               <span>See all</span>
@@ -141,40 +253,52 @@ export default function Home() {
           </div>
 
           {loading ? (
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {[1, 2, 3].map(n => (
-                <div key={n} className="h-64 rounded-2xl bg-slate-200/60 animate-skeleton" />
+                <div key={n} className="h-64 rounded-2xl bg-slate-200/60 skeleton-loading-pulse" />
+              ))}
+            </div>
+          ) : filteredRestaurants.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredRestaurants.map(rest => (
+                <RestaurantCard key={rest._id} restaurant={rest} />
               ))}
             </div>
           ) : (
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {restaurants.map(rest => (
-                <RestaurantCard key={rest._id} restaurant={rest} />
-              ))}
+            <div className="bg-white p-8 rounded-3xl text-center border border-slate-200 space-y-3">
+              <Compass className="w-10 h-10 text-slate-400 mx-auto" />
+              <h3 className="text-base font-extrabold text-slate-800">No restaurants match active filters</h3>
+              <p className="text-xs text-slate-500 font-medium">Try removing pure veg or rating filters to view more local spots.</p>
+              <button
+                onClick={handleResetFilters}
+                className="px-4 py-2 bg-rose-50 text-rose-700 font-extrabold text-xs rounded-xl border border-rose-200"
+              >
+                Reset All Filters
+              </button>
             </div>
           )}
         </div>
 
-        {/* MOST ORDERED DISHES / PRODUCE */}
+        {/* 8. POPULAR DISHES / PRODUCE GRID */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-extrabold text-[#17181C]">
-                {isFresh ? '🌱 Fresh Mandi Vegetables & Produce' : '🔥 Most ordered near you'}
+              <h2 className="text-lg sm:text-xl font-extrabold text-[#17181C] tracking-tight">
+                {isFresh ? '🌱 Fresh Mandi Produce & Essentials' : '🔥 Popular dishes & meals'}
               </h2>
-              <p className="text-xs text-[#686D78] font-medium">Dishes and produce loved by local customers</p>
+              <p className="text-xs text-[#686D78] font-medium">Order items loved by your neighbors</p>
             </div>
           </div>
 
           {loading ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {[1, 2, 3, 4].map(n => (
-                <div key={n} className="h-64 rounded-2xl bg-slate-200/60 animate-skeleton" />
+                <div key={n} className="h-64 rounded-2xl bg-slate-200/60 skeleton-loading-pulse" />
               ))}
             </div>
-          ) : (
+          ) : filteredFoods.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {featuredFoods.map(item => (
+              {filteredFoods.map(item => (
                 isFresh ? (
                   <FreshProductCard key={item._id} product={item} />
                 ) : (
@@ -182,21 +306,27 @@ export default function Home() {
                 )
               ))}
             </div>
+          ) : (
+            <div className="bg-white p-8 rounded-3xl text-center border border-slate-200 space-y-2">
+              <Utensils className="w-10 h-10 text-slate-400 mx-auto" />
+              <h3 className="text-base font-extrabold text-slate-800">No food items found</h3>
+              <p className="text-xs text-slate-500">Try changing your category choice or filter criteria.</p>
+            </div>
           )}
         </div>
 
-        {/* LOCAL GEMS (Signature Krawing Section) */}
+        {/* 9. LOCAL GEMS SECTION */}
         {!isFresh && localGems.length > 0 && (
-          <div className="bg-gradient-to-r from-rose-50/70 via-white to-amber-50/50 p-6 rounded-2xl border border-[#E8E9ED] space-y-4">
+          <div className="bg-gradient-to-r from-rose-50/80 via-white to-amber-50/60 p-6 rounded-3xl border border-[#E8E9ED] space-y-4 shadow-sm">
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-lg">📍</span>
-                <h2 className="text-xl font-extrabold text-[#17181C]">Local gems</h2>
+                <span className="text-xl">📍</span>
+                <h2 className="text-lg sm:text-xl font-extrabold text-[#17181C]">Local gems</h2>
               </div>
-              <p className="text-xs text-[#686D78] font-medium">Small places. Good food. Close to home in Lakkarpur.</p>
+              <p className="text-xs text-[#686D78] font-medium">Small places. Good food. Rated 4.5+ near home.</p>
             </div>
 
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {localGems.slice(0, 3).map(rest => (
                 <RestaurantCard key={rest._id} restaurant={rest} />
               ))}
@@ -204,26 +334,26 @@ export default function Home() {
           </div>
         )}
 
-        {/* FRESH CROSSOVER BANNER (Connecting Food & Fresh) */}
-        <div className={`p-6 rounded-2xl border flex flex-col sm:flex-row items-center justify-between gap-4 ${
+        {/* 10. CROSSOVER BANNER */}
+        <div className={`p-6 rounded-3xl border flex flex-col sm:flex-row items-center justify-between gap-4 ${
           isFresh
             ? 'bg-[#FFF0F3] border-[#E51B4B]/20 text-[#17181C]'
             : 'bg-[#ECF8F1] border-[#168A5B]/20 text-[#17181C]'
         }`}>
           <div className="space-y-1 text-center sm:text-left">
             <h3 className="font-heading font-extrabold text-base text-[#17181C]">
-              {isFresh ? '🍔 Craving hot food instead?' : '🥬 Need groceries too?'}
+              {isFresh ? '🍔 Craving hot food instead?' : '🥬 Need fresh sabzi & fruits?'}
             </h3>
             <p className="text-xs text-[#686D78] font-medium">
               {isFresh
-                ? 'Explore momos, biryani, pizzas and thalis from nearby top-rated restaurants.'
-                : 'Fresh fruits, vegetables and essentials from nearby wholesale sellers.'}
+                ? 'Order momos, biryani, pizzas and thalis from nearby top-rated outlets.'
+                : 'Direct morning harvest vegetables & staples at wholesale prices.'}
             </p>
           </div>
 
           <button
             onClick={() => switchMode(isFresh ? 'cravings' : 'fresh')}
-            className={`px-5 py-2.5 rounded-xl text-xs font-extrabold text-white shadow-sm transition whitespace-nowrap ${
+            className={`px-5 py-2.5 rounded-xl text-xs font-extrabold text-white shadow-sm transition whitespace-nowrap active:scale-95 ${
               isFresh ? 'bg-[#E51B4B] hover:bg-[#B90F38]' : 'bg-[#168A5B] hover:bg-[#0F6945]'
             }`}
           >
@@ -232,6 +362,12 @@ export default function Home() {
         </div>
 
       </main>
+
+      {/* 11. Mobile Sticky Basket Bar (Appears when cart has items on mobile) */}
+      <StickyBasketBar />
+
+      {/* 12. Persistent Mobile Bottom Navigation */}
+      <MobileBottomNavigation />
     </div>
   );
 }

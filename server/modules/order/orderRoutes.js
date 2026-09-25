@@ -10,11 +10,11 @@ const {
 } = require('./orderController');
 const { protect, authorize } = require('../../middlewares/authMiddleware');
 
-router.post('/', protect, authorize('consumer', 'admin'), createOrder);
+router.post('/', protect, authorize('customer', 'consumer', 'CUSTOMER', 'admin', 'ADMIN'), createOrder);
 router.get('/', protect, getOrders);
 router.get('/:id', protect, getOrderById);
 router.put('/:id/status', protect, updateOrderStatus);
-router.put('/:id/accept-job', protect, authorize('delivery_partner', 'admin'), acceptDeliveryJob);
-router.put('/:id/assign-delivery', protect, authorize('admin'), assignDeliveryPartner);
+router.put('/:id/accept-job', protect, authorize('delivery_partner', 'admin', 'DELIVERY_PARTNER', 'ADMIN'), acceptDeliveryJob);
+router.put('/:id/assign-delivery', protect, authorize('admin', 'ADMIN'), assignDeliveryPartner);
 
 module.exports = router;

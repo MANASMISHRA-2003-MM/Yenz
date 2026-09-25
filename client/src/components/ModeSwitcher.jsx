@@ -1,13 +1,18 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useMode } from '../context/ModeContext';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { ChevronDown, Check } from 'lucide-react';
 
-export default function ModeSwitcher() {
-  const { activeMode, switchMode, isFresh } = useMode();
+export default function ModeSwitcher({ routeMode }) {
+  const { activeMode: globalActiveMode, switchMode, isFresh: globalIsFresh } = useMode();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  // Close dropdown on click outside or escape key
+  const isFresh = routeMode ? (routeMode === 'fresh') : globalIsFresh;
+  const activeMode = routeMode || globalActiveMode;
+
   useEffect(() => {
     function handleClickOutside(event) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -28,6 +33,9 @@ export default function ModeSwitcher() {
   const handleSelect = (newMode) => {
     switchMode(newMode);
     setIsOpen(false);
+    if (location.pathname.includes('/checkout/')) {
+      navigate(newMode === 'fresh' ? '/checkout/fresh-mandi' : '/checkout/cravings');
+    }
   };
 
   return (

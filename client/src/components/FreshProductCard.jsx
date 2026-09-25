@@ -1,48 +1,66 @@
 import React, { useState } from 'react';
 import { useCart } from '../context/CartContext';
 import { Plus, Minus, Leaf } from 'lucide-react';
+import { toast } from 'sonner';
+import { getAccurateDishImage } from '../utils/imageUtils';
 
 export default function FreshProductCard({ product }) {
   const { cart, addToCart, updateQuantity } = useCart();
   const [adding, setAdding] = useState(false);
 
+  const targetId = product.id || product._id;
+
   // Default weight options if not specified
   const weightOptions = product.weightOptions && product.weightOptions.length > 0
     ? product.weightOptions
     : [
-        { weightLabel: '500g', price: Math.round(product.price * 0.5) || product.price },
+        { weightLabel: '500g', price: Math.round((product.price || 40) * 0.5) || product.price },
         { weightLabel: '1kg', price: product.price || 40 }
       ];
 
   const [selectedWeight, setSelectedWeight] = useState(weightOptions[0]);
 
-  const cartItem = cart.items ? cart.items.find(i => (i.foodId?._id === product._id || i.foodId === product._id) && i.selectedWeight === selectedWeight.weightLabel) : null;
+  const cartItem = cart?.items
+    ? cart.items.find(i => (
+        i.foodId === targetId ||
+        i.productId === targetId ||
+        i.foodId?._id === targetId ||
+        i.id === targetId ||
+        i._id === targetId
+      ) && i.selectedWeight === selectedWeight.weightLabel)
+    : null;
+
   const quantity = cartItem ? cartItem.quantity : 0;
 
   const handleAdd = async (e) => {
     e.stopPropagation();
     setAdding(true);
-    await addToCart(product._id, 1, selectedWeight.weightLabel);
+    const res = await addToCart(targetId, 1, selectedWeight.weightLabel, 'FRESH_MANDI');
     setAdding(false);
+    if (res?.success) {
+      toast.success(`Added ${product.name} (${selectedWeight.weightLabel}) to basket!`);
+    }
   };
 
   const handleIncrement = async (e) => {
     e.stopPropagation();
-    await updateQuantity(product._id, quantity + 1, selectedWeight.weightLabel);
+    await updateQuantity(targetId, quantity + 1, selectedWeight.weightLabel, 'FRESH_MANDI');
   };
 
   const handleDecrement = async (e) => {
     e.stopPropagation();
-    await updateQuantity(product._id, quantity - 1, selectedWeight.weightLabel);
+    await updateQuantity(targetId, quantity - 1, selectedWeight.weightLabel, 'FRESH_MANDI');
   };
 
+  const imageUrl = getAccurateDishImage(product.name, product.category, product.image, true);
+
   return (
-    <div className="krawing-card krawing-card-hover rounded-3xl overflow-hidden flex flex-col justify-between p-4 group bg-white border border-slate-200/90 shadow-soft">
+    <article className="restaurant-food-card restaurant-food-card-hover rounded-3xl overflow-hidden flex flex-col justify-between p-4 group bg-white border border-slate-200/90 shadow-soft">
       <div>
         {/* Fresh Image & Badges */}
         <div className="relative h-44 w-full rounded-2xl overflow-hidden mb-3.5 bg-slate-100">
           <img
-            src={product.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=400'}
+            src={imageUrl}
             alt={product.name}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
           />
@@ -61,7 +79,7 @@ export default function FreshProductCard({ product }) {
           </h3>
 
           <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed font-medium">
-            {product.description}
+            {product.description || 'Farm-fresh quality harvested daily'}
           </p>
         </div>
 
@@ -112,13 +130,13 @@ export default function FreshProductCard({ product }) {
           <button
             onClick={handleAdd}
             disabled={adding}
-            className="px-4 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-extrabold shadow-sm transition flex items-center gap-1"
+            className="px-4 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-extrabold shadow-sm transition flex items-center gap-1 active:scale-95"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>ADD</span>
           </button>
         )}
       </div>
-    </div>
+    </article>
   );
 }

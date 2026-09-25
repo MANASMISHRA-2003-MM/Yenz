@@ -8,6 +8,9 @@ import FreshProductCard from '../../components/FreshProductCard';
 import RestaurantCard from '../../components/RestaurantCard';
 import { Search, Filter, Leaf, Utensils, X, Sparkles } from 'lucide-react';
 
+import StickyBasketBar from '../../components/StickyBasketBar';
+import MobileBottomNavigation from '../../components/MobileBottomNavigation';
+
 export default function SearchPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const initialQuery = searchParams.get('q') || '';
@@ -165,7 +168,7 @@ export default function SearchPage() {
         {loading ? (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {[1, 2, 3, 4, 5, 6, 7, 8].map(n => (
-              <div key={n} className="h-64 rounded-3xl bg-slate-200/60 animate-skeleton" />
+              <div key={n} className="h-64 rounded-3xl bg-slate-200/60 skeleton-loading-pulse" />
             ))}
           </div>
         ) : (
@@ -214,6 +217,9 @@ export default function SearchPage() {
         )}
 
       </main>
+
+      <StickyBasketBar />
+      <MobileBottomNavigation />
     </div>
   );
 }

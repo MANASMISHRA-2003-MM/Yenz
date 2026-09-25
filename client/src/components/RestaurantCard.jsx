@@ -1,20 +1,23 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Star, Clock, Tag, Leaf } from 'lucide-react';
+import { getAccurateRestaurantImage } from '../utils/imageUtils';
 
 export default function RestaurantCard({ restaurant }) {
-  const isFresh = restaurant.vendorType === 'FRESH_MARKET';
+  const isFresh = restaurant.vendorType === 'FRESH_MARKET' || restaurant.vendorType === 'FRESH';
+  const restaurantId = restaurant.id || restaurant._id;
+  const imageUrl = getAccurateRestaurantImage(restaurant.name, restaurant.image, isFresh);
 
   return (
     <Link
-      to={`/restaurant/${restaurant._id}`}
-      className="krawing-card krawing-card-hover rounded-2xl overflow-hidden flex flex-col justify-between p-4 group bg-white border border-[#E8E9ED]"
+      to={`/restaurant/${restaurantId}`}
+      className="restaurant-food-card restaurant-food-card-hover rounded-2xl overflow-hidden flex flex-col justify-between p-4 group bg-white border border-[#E8E9ED] shadow-sm hover:shadow-md transition"
     >
       <div>
         {/* Cover Image & Badges */}
         <div className="relative h-44 w-full rounded-xl overflow-hidden mb-3 bg-[#F5F6F7]">
           <img
-            src={restaurant.image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&q=80&w=600'}
+            src={imageUrl}
             alt={restaurant.name}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
           />
@@ -31,7 +34,7 @@ export default function RestaurantCard({ restaurant }) {
           <div className="absolute top-3 right-3 bg-white/95 backdrop-blur-md px-2 py-1 rounded-xl text-xs font-extrabold text-[#17181C] shadow-sm flex items-center gap-1 border border-[#E8E9ED]">
             <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
             <span>{restaurant.rating || 4.8}</span>
-            <span className="text-[10px] text-[#9095A1] font-normal">· {restaurant.numRatings || 10}</span>
+            <span className="text-[10px] text-[#9095A1] font-normal">· {restaurant.numRatings || 12}</span>
           </div>
 
           {/* Verified Offer Banner */}
@@ -52,7 +55,7 @@ export default function RestaurantCard({ restaurant }) {
           </h3>
 
           <p className="text-xs text-[#686D78] font-medium truncate">
-            {restaurant.cuisine ? restaurant.cuisine.join(' • ') : 'Hyperlocal'}
+            {restaurant.cuisine ? (Array.isArray(restaurant.cuisine) ? restaurant.cuisine.join(' • ') : restaurant.cuisine) : 'Hyperlocal Gourmet'}
           </p>
 
           {restaurant.priceRange && (

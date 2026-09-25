@@ -30,7 +30,6 @@ model categories {
   products    products[]
 }
 
-/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model coupons {
   coupon_id       BigInt    @id @default(autoincrement())
   code            String    @unique @db.VarChar(50)
@@ -44,7 +43,6 @@ model coupons {
   orders          orders[]
 }
 
-/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model deliveries {
   delivery_id         BigInt            @id @default(autoincrement())
   order_id            BigInt            @unique
@@ -58,7 +56,6 @@ model deliveries {
   delivery_partners   delivery_partners @relation(fields: [delivery_partner_id], references: [delivery_partner_id], onUpdate: NoAction, map: "fk_deliveries_partner")
 }
 
-/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model delivery_partners {
   delivery_partner_id BigInt       @id @default(autoincrement())
   name                String       @db.VarChar(100)
@@ -71,7 +68,6 @@ model delivery_partners {
   deliveries          deliveries[]
 }
 
-/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model order_items {
   order_item_id BigInt   @id @default(autoincrement())
   order_id      BigInt
@@ -83,7 +79,6 @@ model order_items {
   products      products @relation(fields: [product_id], references: [product_id], onUpdate: NoAction, map: "fk_order_items_product")
 }
 
-/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model orders {
   order_id       BigInt        @id @default(autoincrement())
   user_id        BigInt
@@ -108,7 +103,6 @@ model orders {
   reviews        reviews?
 }
 
-/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model payments {
   payment_id     BigInt    @id @default(autoincrement())
   order_id       BigInt
@@ -121,7 +115,6 @@ model payments {
   orders         orders    @relation(fields: [order_id], references: [order_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_payments_order")
 }
 
-/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model products {
   product_id     BigInt        @id @default(autoincrement())
   vendor_id      BigInt
@@ -139,7 +132,6 @@ model products {
   vendors        vendors       @relation(fields: [vendor_id], references: [vendor_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_products_vendor")
 }
 
-/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model reviews {
   review_id  BigInt   @id @default(autoincrement())
   user_id    BigInt
@@ -153,7 +145,6 @@ model reviews {
   vendors    vendors  @relation(fields: [vendor_id], references: [vendor_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_reviews_vendor")
 }
 
-/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model users {
   user_id       BigInt      @id @default(autoincrement())
   full_name     String      @db.VarChar(100)
@@ -168,7 +159,6 @@ model users {
   reviews       reviews[]
 }
 
-/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model vendors {
   vendor_id   BigInt     @id @default(autoincrement())
   owner_name  String     @db.VarChar(100)
@@ -187,7 +177,7 @@ model vendors {
 }
 
 model Address {
-  id          String   @id @db.VarChar(36)
+  id          String   @id @default(uuid()) @db.VarChar(36)
   userId      String   @db.VarChar(36)
   label       String?  @default("Home") @db.VarChar(30)
   addressLine String   @db.VarChar(255)
@@ -206,8 +196,8 @@ model Address {
 }
 
 model Cart {
-  id         String     @id @db.VarChar(36)
-  userId     String     @unique @db.VarChar(36)
+  id         String     @id @default(uuid()) @db.VarChar(36)
+  userId     String     @db.VarChar(36)
   vendorId   String?    @db.VarChar(36)
   cartType   VendorType @default(CRAVINGS)
   couponCode String?    @db.VarChar(50)
@@ -217,10 +207,12 @@ model Cart {
   User       User       @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   Vendor     Vendor?    @relation(fields: [vendorId], references: [id], onUpdate: NoAction)
   CartItem   CartItem[]
+
+  @@unique([userId, cartType], map: "uniq_user_cart_type")
 }
 
 model CartItem {
-  id             String  @id @db.VarChar(36)
+  id             String  @id @default(uuid()) @db.VarChar(36)
   cartId         String  @db.VarChar(36)
   productId      String  @db.VarChar(36)
   name           String  @db.VarChar(150)
@@ -234,7 +226,7 @@ model CartItem {
 }
 
 model Category {
-  id        String    @id @db.VarChar(36)
+  id        String    @id @default(uuid()) @db.VarChar(36)
   name      String    @db.VarChar(100)
   slug      String    @unique @db.VarChar(120)
   icon      String    @default("Utensils") @db.VarChar(50)
@@ -246,7 +238,7 @@ model Category {
 }
 
 model Coupon {
-  id            String    @id @db.VarChar(36)
+  id            String    @id @default(uuid()) @db.VarChar(36)
   code          String    @unique @db.VarChar(50)
   title         String    @db.VarChar(100)
   discountType  String    @default("PERCENTAGE") @db.VarChar(20)
@@ -263,7 +255,7 @@ model Coupon {
 }
 
 model Delivery {
-  id                String             @id @db.VarChar(36)
+  id                String             @id @default(uuid()) @db.VarChar(36)
   orderId           String             @unique @db.VarChar(36)
   deliveryPartnerId String             @db.VarChar(36)
   status            DeliveryStatus     @default(ASSIGNED)
@@ -289,7 +281,7 @@ model Delivery {
 }
 
 model DeliveryLocation {
-  id         String   @id @db.VarChar(36)
+  id         String   @id @default(uuid()) @db.VarChar(36)
   deliveryId String   @db.VarChar(36)
   latitude   Decimal  @db.Decimal(10, 7)
   longitude  Decimal  @db.Decimal(10, 7)
@@ -298,7 +290,7 @@ model DeliveryLocation {
 }
 
 model Notification {
-  id        String   @id @db.VarChar(36)
+  id        String   @id @default(uuid()) @db.VarChar(36)
   userId    String   @db.VarChar(36)
   title     String   @db.VarChar(150)
   message   String
@@ -309,7 +301,7 @@ model Notification {
 }
 
 model Order {
-  id                            String          @id @db.VarChar(36)
+  id                            String          @id @default(uuid()) @db.VarChar(36)
   orderNumber                   String          @unique @db.VarChar(50)
   orderType                     VendorType      @default(CRAVINGS)
   customerId                    String          @db.VarChar(36)
@@ -344,7 +336,7 @@ model Order {
 }
 
 model OrderItem {
-  id             String  @id @db.VarChar(36)
+  id             String  @id @default(uuid()) @db.VarChar(36)
   orderId        String  @db.VarChar(36)
   productId      String  @db.VarChar(36)
   name           String  @db.VarChar(150)
@@ -360,7 +352,7 @@ model OrderItem {
 }
 
 model OrderTimeline {
-  id        String      @id @db.VarChar(36)
+  id        String      @id @default(uuid()) @db.VarChar(36)
   orderId   String      @db.VarChar(36)
   status    OrderStatus
   note      String?
@@ -369,7 +361,7 @@ model OrderTimeline {
 }
 
 model Payment {
-  id            String        @id @db.VarChar(36)
+  id            String        @id @default(uuid()) @db.VarChar(36)
   orderId       String        @unique @db.VarChar(36)
   transactionId String?       @unique @db.VarChar(100)
   provider      String?       @default("COD") @db.VarChar(50)
@@ -386,7 +378,7 @@ model Payment {
 }
 
 model Product {
-  id             String      @id @db.VarChar(36)
+  id             String      @id @default(uuid()) @db.VarChar(36)
   vendorId       String      @db.VarChar(36)
   categoryId     String      @db.VarChar(36)
   productType    ProductType @default(FOOD)
@@ -416,7 +408,7 @@ model Product {
 }
 
 model Refund {
-  id           String       @id @db.VarChar(36)
+  id           String       @id @default(uuid()) @db.VarChar(36)
   orderId      String       @db.VarChar(36)
   paymentId    String       @db.VarChar(36)
   refundAmount Decimal      @db.Decimal(10, 2)
@@ -430,7 +422,7 @@ model Refund {
 }
 
 model Review {
-  id                                  String   @id @db.VarChar(36)
+  id                                  String   @id @default(uuid()) @db.VarChar(36)
   userId                              String   @db.VarChar(36)
   vendorId                            String   @db.VarChar(36)
   orderId                             String   @unique @db.VarChar(36)
@@ -459,7 +451,7 @@ model User {
   createdAt                             DateTime       @default(now())
   updatedAt                             DateTime       @default(now())
   Address                               Address[]
-  Cart                                  Cart?
+  Cart                                  Cart[]
   Delivery                              Delivery[]
   Notification                          Notification[]
   Order_Order_customerIdToUser          Order[]        @relation("Order_customerIdToUser")
@@ -473,7 +465,7 @@ model User {
 }
 
 model Vendor {
-  id           String        @id @db.VarChar(36)
+  id           String        @id @default(uuid()) @db.VarChar(36)
   ownerUserId  String        @db.VarChar(36)
   vendorType   VendorType    @default(CRAVINGS)
   name         String        @db.VarChar(150)
@@ -510,7 +502,7 @@ model Vendor {
 }
 
 model VendorHours {
-  id        String  @id @db.VarChar(36)
+  id        String  @id @default(uuid()) @db.VarChar(36)
   vendorId  String  @db.VarChar(36)
   dayOfWeek Int
   openTime  String? @default("09:00") @db.VarChar(10)

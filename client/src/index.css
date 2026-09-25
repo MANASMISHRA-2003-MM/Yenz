@@ -70,8 +70,15 @@
   scrollbar-width: none;
 }
 
-/* Krawing Card & Shadow Utilities */
-.krawing-card {
+/* Navigation Glass Header */
+.navigation-glass-header {
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+/* Restaurant & Food Card Utilities */
+.restaurant-food-card {
   background-color: #FFFFFF;
   border: 1px solid #E8E9ED;
   box-shadow: 0 2px 8px rgba(20, 25, 35, 0.04);
@@ -79,16 +86,10 @@
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.krawing-card-hover:hover {
+.restaurant-food-card-hover:hover {
   transform: translateY(-2px);
   border-color: #CBD5E1;
   box-shadow: 0 8px 24px rgba(20, 25, 35, 0.08);
-}
-
-.glass-header {
-  background: rgba(255, 255, 255, 0.94);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
 }
 
 /* Skeleton Loading Animation */
@@ -97,7 +98,7 @@
   50% { opacity: 0.4; }
 }
 
-.animate-skeleton {
+.skeleton-loading-pulse {
   animation: skeletonPulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   background-color: #E8E9ED;
 }

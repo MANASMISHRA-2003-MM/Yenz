@@ -31,7 +31,7 @@ export default function CartPage() {
     if (!user) {
       navigate('/login');
     } else {
-      navigate('/checkout');
+      navigate(isFresh ? '/checkout/fresh-mandi' : '/checkout/cravings');
     }
   };
 

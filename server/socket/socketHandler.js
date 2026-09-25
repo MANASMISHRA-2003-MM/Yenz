@@ -45,23 +45,14 @@ const initSocket = (io) => {
       try {
         const order = await prisma.order.findUnique({
           where: { id: orderId },
-          include: { restaurant: true }
+          include: { Vendor: true }
         });
 
         if (order) {
-          await prisma.order.update({
-            where: { id: orderId },
-            data: {
-              courierLat: Number(lat),
-              courierLng: Number(lng),
-              courierUpdatedAt: new Date()
-            }
-          });
-
-          const vendorLat = order.restaurant?.lat || 28.5700;
-          const vendorLng = order.restaurant?.lng || 77.3200;
-          const customerLat = order.lat || 28.5355;
-          const customerLng = order.lng || 77.3910;
+          const vendorLat = order.Vendor?.latitude ? Number(order.Vendor.latitude) : 28.5700;
+          const vendorLng = order.Vendor?.longitude ? Number(order.Vendor.longitude) : 77.3200;
+          const customerLat = 28.5355;
+          const customerLng = 77.3910;
 
           const distanceToCustomer = calculateDistance(lat, lng, customerLat, customerLng);
 

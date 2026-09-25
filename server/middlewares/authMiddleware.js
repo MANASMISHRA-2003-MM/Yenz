@@ -2,6 +2,16 @@ const jwt = require('jsonwebtoken');
 const prisma = require('../utils/prisma');
 const { formatWithId } = require('../utils/formatters');
 
+const normalizeRole = (role) => {
+  if (!role) return '';
+  const r = role.toString().toUpperCase().trim();
+  if (r === 'CONSUMER' || r === 'CUSTOMER' || r === 'USER') return 'CUSTOMER';
+  if (r === 'VENDOR' || r === 'SELLER' || r === 'RESTAURANT') return 'VENDOR';
+  if (r === 'DELIVERY_PARTNER' || r === 'DELIVERY' || r === 'DRIVER') return 'DELIVERY_PARTNER';
+  if (r === 'ADMIN') return 'ADMIN';
+  return r;
+};
+
 const protect = async (req, res, next) => {
   let token;
   if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
@@ -30,14 +40,18 @@ const protect = async (req, res, next) => {
 
 const authorize = (...roles) => {
   return (req, res, next) => {
-    if (!roles.includes(req.user.role)) {
+    const userRole = normalizeRole(req.user?.role);
+    const allowedRoles = roles.map(normalizeRole);
+
+    if (!allowedRoles.includes(userRole)) {
       return res.status(403).json({
         success: false,
-        message: `Role (${req.user.role}) is not authorized to access this route`
+        message: `Role (${req.user?.role || 'UNKNOWN'}) is not authorized to access this route`
       });
     }
     next();
   };
 };
 
-module.exports = { protect, authorize };
+module.exports = { protect, authorize, normalizeRole };
+

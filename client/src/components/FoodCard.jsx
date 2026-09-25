@@ -1,38 +1,56 @@
 import React, { useState } from 'react';
 import { useCart } from '../context/CartContext';
 import { Plus, Minus, Star, Clock } from 'lucide-react';
+import { toast } from 'sonner';
+import { getAccurateDishImage } from '../utils/imageUtils';
 
 export default function FoodCard({ food }) {
   const { cart, addToCart, updateQuantity } = useCart();
   const [adding, setAdding] = useState(false);
 
-  const cartItem = cart.items ? cart.items.find(i => i.foodId?._id === food._id || i.foodId === food._id) : null;
+  const targetId = food.id || food._id;
+
+  const cartItem = cart?.items
+    ? cart.items.find(i => (
+        i.foodId === targetId ||
+        i.productId === targetId ||
+        i.foodId?._id === targetId ||
+        i.id === targetId ||
+        i._id === targetId
+      ))
+    : null;
+
   const quantity = cartItem ? cartItem.quantity : 0;
 
   const handleAdd = async (e) => {
     e.stopPropagation();
     setAdding(true);
-    await addToCart(food._id, 1);
+    const res = await addToCart(targetId, 1);
     setAdding(false);
+    if (res?.success) {
+      toast.success(`Added ${food.name} to cart!`);
+    }
   };
 
   const handleIncrement = async (e) => {
     e.stopPropagation();
-    await updateQuantity(food._id, quantity + 1);
+    await updateQuantity(targetId, quantity + 1);
   };
 
   const handleDecrement = async (e) => {
     e.stopPropagation();
-    await updateQuantity(food._id, quantity - 1);
+    await updateQuantity(targetId, quantity - 1);
   };
 
+  const imageUrl = getAccurateDishImage(food.name, food.category, food.image, false);
+
   return (
-    <div className="krawing-card krawing-card-hover rounded-3xl overflow-hidden flex flex-col justify-between p-4 group bg-white">
+    <article className="restaurant-food-card restaurant-food-card-hover rounded-3xl overflow-hidden flex flex-col justify-between p-4 group bg-white border border-slate-200/80 shadow-sm hover:shadow-md transition">
       <div>
         {/* Image Container with Badges */}
         <div className="relative h-44 w-full rounded-2xl overflow-hidden mb-3.5 bg-slate-100">
           <img
-            src={food.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=400'}
+            src={imageUrl}
             alt={food.name}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
           />
@@ -63,7 +81,7 @@ export default function FoodCard({ food }) {
           </div>
 
           <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed font-medium">
-            {food.description}
+            {food.description || 'Freshly prepared with authentic ingredients'}
           </p>
         </div>
       </div>
@@ -103,13 +121,13 @@ export default function FoodCard({ food }) {
           <button
             onClick={handleAdd}
             disabled={adding}
-            className="px-4 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-extrabold shadow-sm transition flex items-center gap-1"
+            className="px-4 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-extrabold shadow-sm transition flex items-center gap-1 active:scale-95"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>ADD</span>
           </button>
         )}
       </div>
-    </div>
+    </article>
   );
 }

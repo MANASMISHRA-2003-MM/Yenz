@@ -1,136 +1,226 @@
+const crypto = require('crypto');
 const prisma = require('../../utils/prisma');
 const { formatWithId } = require('../../utils/formatters');
 const { getIO, calculateDistance } = require('../../socket/socketHandler');
 
 const formatOrderObj = (ord) => {
-  if (!ord) return ord;
-  const formatted = formatWithId(ord);
-  if (formatted.restaurant) {
-    formatted.restaurantId = formatted.restaurant;
-    formatted.restaurantId.address = {
-      street: ord.restaurant?.street || '',
-      city: ord.restaurant?.city || '',
-      state: ord.restaurant?.state || '',
-      pincode: ord.restaurant?.pincode || '',
-      lat: ord.restaurant?.lat || 28.5700,
-      lng: ord.restaurant?.lng || 77.3200
-    };
-  }
-  if (formatted.customer) {
-    formatted.customerId = formatted.customer;
-  }
-  if (formatted.deliveryPartner) {
-    formatted.deliveryPartnerId = formatted.deliveryPartner;
-  }
-  formatted.address = {
-    title: ord.addressTitle || 'Home',
-    street: ord.street,
-    area: ord.area || '',
-    city: ord.city,
-    state: ord.state || '',
-    pincode: ord.pincode || '',
-    phone: ord.phone || '',
-    lat: ord.lat || 28.5355,
-    lng: ord.lng || 77.3910
+  if (!ord) return null;
+  
+  const vendorObj = ord.Vendor || ord.restaurant || null;
+  const customerObj = ord.User_Order_customerIdToUser || ord.customer || null;
+  const driverObj = ord.User_Order_vendorUserIdToUser || ord.deliveryPartner || null;
+
+  const rawItems = ord.OrderItem || ord.items || [];
+  const items = rawItems.map(item => ({
+    _id: item.id,
+    id: item.id,
+    foodId: item.productId,
+    productId: item.productId,
+    name: item.name,
+    price: Number(item.unitPrice || item.price || 0),
+    quantity: item.quantity,
+    selectedWeight: item.selectedWeight || null,
+    isVeg: Boolean(item.isVeg)
+  }));
+
+  const rawTimeline = ord.OrderTimeline || ord.timeline || [];
+  const timeline = rawTimeline.map(t => ({
+    status: t.status,
+    timestamp: t.timestamp,
+    note: t.note || ''
+  }));
+
+  const paymentObj = ord.Payment || null;
+
+  return {
+    _id: ord.id,
+    id: ord.id,
+    orderId: ord.orderNumber || ord.id,
+    orderNumber: ord.orderNumber || ord.id,
+    orderType: ord.orderType,
+    shoppingMode: ord.orderType === 'FRESH' ? 'FRESH_MANDI' : 'CRAVINGS',
+    status: ord.status,
+    subtotal: Number(ord.subtotal || 0),
+    deliveryFee: Number(ord.deliveryFee || 0),
+    tax: Number(ord.tax || 0),
+    discount: Number(ord.discount || 0),
+    totalAmount: Number(ord.totalAmount || 0),
+    deliveryNotes: ord.deliveryNotes || '',
+    placedAt: ord.placedAt,
+    updatedAt: ord.updatedAt,
+    restaurant: vendorObj ? {
+      _id: vendorObj.id,
+      id: vendorObj.id,
+      name: vendorObj.name,
+      phone: vendorObj.phone,
+      address: vendorObj.address,
+      city: vendorObj.city,
+      image: vendorObj.image,
+      vendorType: vendorObj.vendorType
+    } : null,
+    restaurantId: vendorObj ? vendorObj.id : ord.vendorId,
+    vendorId: ord.vendorId,
+    customer: customerObj ? {
+      _id: customerObj.id,
+      id: customerObj.id,
+      name: customerObj.fullName || customerObj.name,
+      email: customerObj.email,
+      phone: customerObj.phone,
+      avatar: customerObj.avatar
+    } : null,
+    deliveryPartner: driverObj ? {
+      _id: driverObj.id,
+      id: driverObj.id,
+      name: driverObj.fullName || driverObj.name,
+      phone: driverObj.phone,
+      vehicleType: driverObj.vehicleType,
+      ratings: driverObj.ratings,
+      avatar: driverObj.avatar
+    } : null,
+    paymentMethod: paymentObj?.method || 'COD',
+    paymentStatus: paymentObj?.status || 'PENDING',
+    payment: paymentObj ? {
+      id: paymentObj.id,
+      provider: paymentObj.provider,
+      method: paymentObj.method,
+      amount: Number(paymentObj.amount),
+      status: paymentObj.status,
+      paidAt: paymentObj.paidAt
+    } : null,
+    items,
+    timeline
   };
-  return formatted;
 };
 
-exports.createOrder = async (req, res) => {
+exports.createOrder = async (req, res, next) => {
   try {
-    const { address, paymentMethod = 'UPI', deliveryNotes = '' } = req.body;
+    const { address, paymentMethod = 'COD', deliveryNotes = '', shoppingMode, mode, cartType: inputCartType } = req.body;
 
-    const cart = await prisma.cart.findUnique({
-      where: { userId: req.user.id },
+    const modeInput = shoppingMode || mode || inputCartType;
+    const targetCartType = (modeInput && modeInput.toString().toUpperCase().includes('FRESH')) ? 'FRESH' : 'CRAVINGS';
+
+    const cart = await prisma.cart.findFirst({
+      where: {
+        userId: req.user.id,
+        cartType: targetCartType
+      },
       include: {
-        restaurant: true,
-        items: {
-          include: { food: true }
+        Vendor: true,
+        CartItem: {
+          include: { Product: true }
         }
       }
     });
 
-    if (!cart || cart.items.length === 0) {
-      return res.status(400).json({ success: false, message: 'Basket is empty' });
+    const rawItems = cart ? (cart.CartItem || []) : [];
+    if (!cart || rawItems.length === 0) {
+      const modeLabel = targetCartType === 'FRESH' ? 'Fresh Mandi' : 'Cravings';
+      return res.status(400).json({ success: false, message: `Your ${modeLabel} basket is empty!` });
     }
 
-    const restaurant = cart.restaurant;
-    const orderType = restaurant.vendorType === 'FRESH_MARKET' ? 'FRESH' : 'FOOD';
+    let vendor = cart.Vendor;
+    if (!vendor && rawItems.length > 0) {
+      const firstProdId = rawItems[0].productId;
+      const prod = await prisma.product.findUnique({
+        where: { id: firstProdId },
+        include: { Vendor: true }
+      });
+      if (prod && prod.Vendor) {
+        vendor = prod.Vendor;
+      }
+    }
+
+    if (!vendor) {
+      return res.status(400).json({ success: false, message: 'Vendor store not found for this cart' });
+    }
 
     let subtotal = 0;
-    const orderItemsData = cart.items.map(item => {
-      const itemTotal = item.price * item.quantity;
+    const orderItemsData = rawItems.map(item => {
+      const itemPrice = Number(item.price || item.Product?.price || 0);
+      const itemTotal = itemPrice * item.quantity;
       subtotal += itemTotal;
       return {
-        foodId: item.foodId,
-        name: item.name,
-        price: item.price,
-        selectedWeight: item.selectedWeight || null,
+        id: crypto.randomUUID(),
+        productId: item.productId,
+        name: item.name || item.Product?.name || 'Item',
+        unitPrice: itemPrice,
+        lineTotal: itemTotal,
         quantity: item.quantity,
-        isVeg: item.isVeg
+        selectedWeight: item.selectedWeight || null,
+        isVeg: Boolean(item.isVeg ?? item.Product?.isVeg ?? true)
       };
     });
 
-    const deliveryFee = restaurant.deliveryFee || 35;
+    const deliveryFee = Number(vendor.deliveryFee || 30);
     const tax = Math.round(subtotal * 0.05);
-    const discount = cart.discount || 0;
+    const discount = Number(cart.discount || 0);
     const totalAmount = Math.max(0, subtotal + deliveryFee + tax - discount);
 
     const orderIdCode = `KRAW-${Date.now().toString().slice(-6)}`;
+    const newOrderId = crypto.randomUUID();
+
+    const orderDataPayload = {
+      id: newOrderId,
+      orderNumber: orderIdCode,
+      orderType: targetCartType,
+      customerId: req.user.id,
+      vendorId: vendor.id,
+      subtotal,
+      deliveryFee,
+      tax,
+      discount,
+      totalAmount,
+      status: 'PENDING',
+      deliveryNotes: deliveryNotes || ''
+    };
+
+    console.log("=== KRAWING ACTIVE ORDER CONTROLLER ===");
+    console.log("FILE: server/modules/order/orderController.js");
+    console.log("ORDER CREATE VERSION: NEW-V2");
+    console.log("ORDER PAYLOAD:", orderDataPayload);
 
     const createdOrder = await prisma.order.create({
       data: {
-        orderId: orderIdCode,
-        orderType,
-        customerId: req.user.id,
-        vendorId: restaurant.vendorId,
-        restaurantId: restaurant.id,
-        status: 'PLACED',
-        street: address?.street || 'Connaught Place',
-        area: address?.area || 'Central Delhi',
-        city: address?.city || 'New Delhi',
-        state: address?.state || 'Delhi',
-        pincode: address?.pincode || '110001',
-        phone: address?.phone || req.user.phone || '',
-        lat: address?.lat ? Number(address.lat) : 28.6139,
-        lng: address?.lng ? Number(address.lng) : 77.2090,
-        addressTitle: address?.title || 'Home',
-        paymentMethod: paymentMethod || 'UPI',
-        paymentStatus: 'COMPLETED',
-        subtotal,
-        deliveryFee,
-        tax,
-        discount,
-        totalAmount,
-        deliveryNotes,
-        items: {
+        ...orderDataPayload,
+        OrderItem: {
           create: orderItemsData
         },
-        timeline: {
+        OrderTimeline: {
           create: [
             {
-              status: 'PLACED',
-              timestamp: new Date(),
-              note: orderType === 'FRESH' ? 'Fresh Sabzi order placed' : 'Order placed by customer'
+              id: crypto.randomUUID(),
+              status: 'PENDING',
+              note: targetCartType === 'FRESH' ? 'Fresh Sabzi Mandi order placed' : 'Cravings Food order placed'
             }
           ]
+        },
+        Payment: {
+          create: {
+            id: crypto.randomUUID(),
+            provider: paymentMethod === 'COD' ? 'COD' : 'ONLINE',
+            method: paymentMethod === 'COD' ? 'COD' : 'ONLINE',
+            amount: totalAmount,
+            status: paymentMethod === 'COD' ? 'PENDING' : 'PAID',
+            paidAt: paymentMethod === 'COD' ? null : new Date()
+          }
         }
       },
       include: {
-        restaurant: true,
-        customer: { select: { id: true, name: true, email: true, phone: true, avatar: true } },
-        deliveryPartner: { select: { id: true, name: true, phone: true, vehicleType: true, ratings: true, avatar: true } },
-        items: true,
-        timeline: true
+        Vendor: true,
+        User_Order_customerIdToUser: { select: { id: true, fullName: true, email: true, phone: true, avatar: true } },
+        User_Order_vendorUserIdToUser: { select: { id: true, fullName: true, phone: true, vehicleType: true, ratings: true, avatar: true } },
+        OrderItem: true,
+        OrderTimeline: true,
+        Payment: true
       }
     });
 
-    // Reset Cart
+    // Reset ONLY this specific shopping mode's cart
     await prisma.cartItem.deleteMany({ where: { cartId: cart.id } });
     await prisma.cart.update({
       where: { id: cart.id },
       data: {
-        restaurantId: null,
+        vendorId: null,
         couponCode: null,
         discount: 0
       }
@@ -141,7 +231,9 @@ exports.createOrder = async (req, res) => {
     // Socket.IO Notification to Vendor
     try {
       const io = getIO();
-      io.to(`vendor_${restaurant.vendorId}`).emit('order:created', { order });
+      if (vendor.id) {
+        io.to(`vendor_${vendor.id}`).emit('order:created', { order });
+      }
     } catch (e) {
       console.log('Socket notification warning:', e.message);
     }
@@ -149,9 +241,10 @@ exports.createOrder = async (req, res) => {
     res.status(201).json({
       success: true,
       order,
-      message: 'Order created successfully'
+      message: 'Order placed successfully!'
     });
   } catch (err) {
+    console.error('createOrder error:', err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
@@ -159,64 +252,66 @@ exports.createOrder = async (req, res) => {
 exports.getOrders = async (req, res) => {
   try {
     let whereClause = {};
-    if (req.user.role === 'consumer') {
+    const roleUpper = (req.user.role || '').toUpperCase();
+    if (roleUpper === 'CONSUMER' || roleUpper === 'CUSTOMER') {
       whereClause.customerId = req.user.id;
-    } else if (req.user.role === 'vendor') {
+    } else if (roleUpper === 'VENDOR') {
       whereClause.vendorId = req.user.id;
-    } else if (req.user.role === 'delivery_partner') {
+    } else if (roleUpper === 'DELIVERY_PARTNER' || roleUpper === 'DRIVER') {
       whereClause.OR = [
-        { deliveryPartnerId: req.user.id },
-        { status: { in: ['VENDOR_ACCEPTED', 'PREPARING', 'READY_FOR_PICKUP'] }, deliveryPartnerId: null }
+        { vendorUserId: req.user.id },
+        { status: { in: ['CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP'] }, vendorUserId: null }
       ];
     }
 
     if (req.query.orderType) {
-      whereClause.orderType = req.query.orderType;
+      const norm = req.query.orderType.toString().toUpperCase().includes('FRESH') ? 'FRESH' : 'CRAVINGS';
+      whereClause.orderType = norm;
     }
 
     const rawOrders = await prisma.order.findMany({
       where: whereClause,
       include: {
-        restaurant: true,
-        customer: { select: { id: true, name: true, email: true, phone: true, avatar: true } },
-        deliveryPartner: { select: { id: true, name: true, phone: true, vehicleType: true, ratings: true, avatar: true } },
-        items: true,
-        timeline: true
+        Vendor: true,
+        User_Order_customerIdToUser: { select: { id: true, fullName: true, email: true, phone: true, avatar: true } },
+        User_Order_vendorUserIdToUser: { select: { id: true, fullName: true, phone: true, vehicleType: true, ratings: true, avatar: true } },
+        OrderItem: true,
+        OrderTimeline: true,
+        Payment: true
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { placedAt: 'desc' }
     });
 
-    const ordersWithPayout = rawOrders.map(ord => {
-      const plainObj = formatOrderObj(ord);
-      const shopLat = ord.restaurant?.lat || 28.5700;
-      const shopLng = ord.restaurant?.lng || 77.3200;
-      const custLat = ord.lat || 28.5355;
-      const custLng = ord.lng || 77.3910;
+    const orders = rawOrders.map(formatOrderObj);
 
-      const distanceKm = calculateDistance(shopLat, shopLng, custLat, custLng);
-      const predictedPayout = Math.round(30 + (distanceKm * 20));
-
-      plainObj.tripDistanceKm = distanceKm;
-      plainObj.predictedPayout = predictedPayout;
-      return plainObj;
+    res.json({
+      success: true,
+      orders
     });
-
-    res.json({ success: true, orders: ordersWithPayout });
   } catch (err) {
+    console.error('getOrders error:', err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
 exports.getOrderById = async (req, res) => {
   try {
-    const rawOrder = await prisma.order.findUnique({
-      where: { id: req.params.id },
+    const { id } = req.params;
+
+    const rawOrder = await prisma.order.findFirst({
+      where: {
+        OR: [
+          { id: id },
+          { orderNumber: id }
+        ]
+      },
       include: {
-        restaurant: true,
-        customer: { select: { id: true, name: true, email: true, phone: true, avatar: true } },
-        deliveryPartner: { select: { id: true, name: true, phone: true, vehicleType: true, ratings: true, avatar: true } },
-        items: true,
-        timeline: true
+        Vendor: true,
+        User_Order_customerIdToUser: { select: { id: true, fullName: true, email: true, phone: true, avatar: true } },
+        User_Order_vendorUserIdToUser: { select: { id: true, fullName: true, phone: true, vehicleType: true, ratings: true, avatar: true } },
+        OrderItem: true,
+        OrderTimeline: true,
+        Payment: true
       }
     });
 
@@ -224,144 +319,101 @@ exports.getOrderById = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
-    const plainObj = formatOrderObj(rawOrder);
-    const shopLat = rawOrder.restaurant?.lat || 28.5700;
-    const shopLng = rawOrder.restaurant?.lng || 77.3200;
-    const custLat = rawOrder.lat || 28.5355;
-    const custLng = rawOrder.lng || 77.3910;
+    const order = formatOrderObj(rawOrder);
 
-    const distanceKm = calculateDistance(shopLat, shopLng, custLat, custLng);
-    plainObj.tripDistanceKm = distanceKm;
-    plainObj.predictedPayout = Math.round(30 + (distanceKm * 20));
-
-    res.json({ success: true, order: plainObj });
+    res.json({
+      success: true,
+      order
+    });
   } catch (err) {
+    console.error('getOrderById error:', err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
 exports.updateOrderStatus = async (req, res) => {
   try {
+    const { id } = req.params;
     const { status, note } = req.body;
-    const existing = await prisma.order.findUnique({
-      where: { id: req.params.id },
-      include: { restaurant: true }
-    });
 
-    if (!existing) {
-      return res.status(404).json({ success: false, message: 'Order not found' });
+    const validStatuses = ['PENDING', 'CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP', 'ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ success: false, message: 'Invalid order status' });
     }
 
-    await prisma.orderTimeline.create({
+    const order = await prisma.order.update({
+      where: { id },
       data: {
-        orderId: existing.id,
         status,
-        timestamp: new Date(),
-        note: note || `Status updated to ${status}`
-      }
-    });
-
-    const updated = await prisma.order.update({
-      where: { id: existing.id },
-      data: { status },
+        updatedAt: new Date(),
+        OrderTimeline: {
+          create: {
+            id: crypto.randomUUID(),
+            status,
+            note: note || `Order status updated to ${status}`
+          }
+        }
+      },
       include: {
-        restaurant: true,
-        customer: { select: { id: true, name: true, email: true, phone: true, avatar: true } },
-        deliveryPartner: { select: { id: true, name: true, phone: true, vehicleType: true, ratings: true, avatar: true } },
-        items: true,
-        timeline: true
+        Vendor: true,
+        User_Order_customerIdToUser: { select: { id: true, fullName: true, email: true, phone: true, avatar: true } },
+        User_Order_vendorUserIdToUser: { select: { id: true, fullName: true, phone: true, vehicleType: true, ratings: true, avatar: true } },
+        OrderItem: true,
+        OrderTimeline: true,
+        Payment: true
       }
     });
 
-    const order = formatOrderObj(updated);
+    const formatted = formatOrderObj(order);
 
     try {
       const io = getIO();
       io.to(`order_${order.id}`).emit('order:status_updated', {
         orderId: order.id,
         status: order.status,
-        timeline: order.timeline
+        timeline: formatted.timeline
       });
-
-      if (status === 'VENDOR_ACCEPTED') {
-        const shopLat = updated.restaurant?.lat || 28.5700;
-        const shopLng = updated.restaurant?.lng || 77.3200;
-        const custLat = updated.lat || 28.5355;
-        const custLng = updated.lng || 77.3910;
-        const distanceKm = calculateDistance(shopLat, shopLng, custLat, custLng);
-        const payout = Math.round(30 + (distanceKm * 20));
-
-        io.to('drivers_pool').emit('delivery:new_job_available', {
-          orderId: order.id,
-          orderCode: order.orderId,
-          restaurantName: updated.restaurant?.name,
-          vendorType: order.orderType,
-          distanceKm,
-          payout
-        });
-      }
     } catch (e) {
-      console.log('Socket update warning:', e.message);
+      console.log('Socket emit warning:', e.message);
     }
 
-    res.json({ success: true, order });
+    res.json({
+      success: true,
+      order: formatted,
+      message: `Order status updated to ${status}`
+    });
   } catch (err) {
+    console.error('updateOrderStatus error:', err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
 exports.acceptDeliveryJob = async (req, res) => {
   try {
-    const existing = await prisma.order.findUnique({
-      where: { id: req.params.id }
-    });
-
-    if (!existing) {
-      return res.status(404).json({ success: false, message: 'Order not found' });
-    }
-
-    if (existing.deliveryPartnerId && existing.deliveryPartnerId !== req.user.id) {
-      return res.status(400).json({ success: false, message: 'This delivery job has already been taken by another driver' });
-    }
-
-    await prisma.orderTimeline.create({
+    const { id } = req.params;
+    const order = await prisma.order.update({
+      where: { id },
       data: {
-        orderId: existing.id,
-        status: 'COURIER_ASSIGNED',
-        timestamp: new Date(),
-        note: `Delivery partner ${req.user.name} accepted job`
-      }
-    });
-
-    const updated = await prisma.order.update({
-      where: { id: existing.id },
-      data: {
-        deliveryPartnerId: req.user.id,
-        status: 'COURIER_ASSIGNED'
+        vendorUserId: req.user.id,
+        status: 'ASSIGNED',
+        OrderTimeline: {
+          create: {
+            id: crypto.randomUUID(),
+            status: 'ASSIGNED',
+            note: 'Delivery partner accepted job'
+          }
+        }
       },
       include: {
-        restaurant: true,
-        customer: { select: { id: true, name: true, email: true, phone: true, avatar: true } },
-        deliveryPartner: { select: { id: true, name: true, phone: true, vehicleType: true, ratings: true, avatar: true } },
-        items: true,
-        timeline: true
+        Vendor: true,
+        User_Order_customerIdToUser: true,
+        User_Order_vendorUserIdToUser: true,
+        OrderItem: true,
+        OrderTimeline: true,
+        Payment: true
       }
     });
-
-    const order = formatOrderObj(updated);
-
-    try {
-      const io = getIO();
-      io.to(`order_${order.id}`).emit('order:status_updated', {
-        orderId: order.id,
-        status: order.status,
-        timeline: order.timeline
-      });
-    } catch (e) {
-      console.log('Socket broadcast warning:', e.message);
-    }
-
-    res.json({ success: true, order, message: 'Delivery job accepted successfully!' });
+    res.json({ success: true, order: formatOrderObj(order), message: 'Delivery job accepted' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -369,53 +421,31 @@ exports.acceptDeliveryJob = async (req, res) => {
 
 exports.assignDeliveryPartner = async (req, res) => {
   try {
+    const { id } = req.params;
     const { deliveryPartnerId } = req.body;
-    const existing = await prisma.order.findUnique({
-      where: { id: req.params.id }
-    });
-
-    if (!existing) {
-      return res.status(404).json({ success: false, message: 'Order not found' });
-    }
-
-    await prisma.orderTimeline.create({
+    const order = await prisma.order.update({
+      where: { id },
       data: {
-        orderId: existing.id,
-        status: 'COURIER_ASSIGNED',
-        timestamp: new Date(),
-        note: 'Delivery partner assigned by admin'
-      }
-    });
-
-    const updated = await prisma.order.update({
-      where: { id: existing.id },
-      data: {
-        deliveryPartnerId,
-        status: 'COURIER_ASSIGNED'
+        vendorUserId: deliveryPartnerId,
+        status: 'ASSIGNED',
+        OrderTimeline: {
+          create: {
+            id: crypto.randomUUID(),
+            status: 'ASSIGNED',
+            note: 'Delivery partner assigned by admin'
+          }
+        }
       },
       include: {
-        restaurant: true,
-        customer: { select: { id: true, name: true, email: true, phone: true, avatar: true } },
-        deliveryPartner: { select: { id: true, name: true, phone: true, vehicleType: true, ratings: true, avatar: true } },
-        items: true,
-        timeline: true
+        Vendor: true,
+        User_Order_customerIdToUser: true,
+        User_Order_vendorUserIdToUser: true,
+        OrderItem: true,
+        OrderTimeline: true,
+        Payment: true
       }
     });
-
-    const order = formatOrderObj(updated);
-
-    try {
-      const io = getIO();
-      io.to(`order_${order.id}`).emit('order:status_updated', {
-        orderId: order.id,
-        status: order.status,
-        timeline: order.timeline
-      });
-    } catch (e) {
-      console.log('Socket assignment warning:', e.message);
-    }
-
-    res.json({ success: true, order });
+    res.json({ success: true, order: formatOrderObj(order), message: 'Delivery partner assigned' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

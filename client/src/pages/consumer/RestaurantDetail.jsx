@@ -6,6 +6,9 @@ import FoodCard from '../../components/FoodCard';
 import FreshProductCard from '../../components/FreshProductCard';
 import { Star, Clock, MapPin, Tag, Leaf, Utensils } from 'lucide-react';
 
+import StickyBasketBar from '../../components/StickyBasketBar';
+import MobileBottomNavigation from '../../components/MobileBottomNavigation';
+
 export default function RestaurantDetail() {
   const { id } = useParams();
   const [restaurant, setRestaurant] = useState(null);
@@ -158,6 +161,9 @@ export default function RestaurantDetail() {
         </div>
 
       </main>
+
+      <StickyBasketBar />
+      <MobileBottomNavigation />
     </div>
   );
 }
