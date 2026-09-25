@@ -12,7 +12,7 @@ const userSchema = new mongoose.Schema(
     },
     phone: { type: String, default: '' },
     isOnline: { type: Boolean, default: true },
-    avatar: { type: String, default: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250' },
+    avatar: { type: String, default: 'https://img.icons8.com/?size=100&id=85147&format=png&color=000000' },
     currentLocation: {
       lat: { type: Number, default: 28.6139 },
       lng: { type: Number, default: 77.2090 },

@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import API from '../../services/api';
 import { useCart } from '../../context/CartContext';
 import { useMode } from '../../context/ModeContext';
 import Navbar from '../../components/Navbar';
 import AddressModal, { getSavedAddresses } from '../../components/AddressModal';
-import { MapPin, CreditCard, ShieldCheck, CheckCircle2, ArrowRight, Navigation, Plus, Bookmark, Store, Clock, Scale } from 'lucide-react';
+import { MapPin, CreditCard, ShieldCheck, CheckCircle2, ArrowRight, Navigation, Plus, Bookmark, Store, Clock, Scale, Tag } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function CheckoutPage({ modeOverride }) {
@@ -323,34 +323,60 @@ export default function CheckoutPage({ modeOverride }) {
 
               <div className="space-y-2">
                 {[
-                  { id: 'COD', label: 'Cash on Delivery (COD)', desc: 'Pay cash to driver upon arrival' },
-                  { id: 'UPI', label: 'Instant Google Pay / PhonePe UPI', desc: 'Fast & 100% Instant Approval' },
-                  { id: 'CARD', label: 'Credit / Debit Card', desc: 'Visa, Mastercard, RuPay' }
-                ].map(pm => (
-                  <label
-                    key={pm.id}
-                    onClick={() => setPaymentMethod(pm.id)}
-                    className={`flex items-start gap-3 p-4 rounded-2xl border cursor-pointer transition ${
-                      paymentMethod === pm.id
-                        ? 'bg-slate-900 text-white border-slate-900 shadow-md'
-                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="payment"
-                      checked={paymentMethod === pm.id}
-                      onChange={() => setPaymentMethod(pm.id)}
-                      className="mt-1"
-                    />
-                    <div>
-                      <span className="text-xs font-extrabold block">{pm.label}</span>
-                      <span className={`text-[11px] font-medium ${paymentMethod === pm.id ? 'text-slate-300' : 'text-slate-500'}`}>
-                        {pm.desc}
-                      </span>
+                  { id: 'COD', label: 'Cash on Delivery (COD)', desc: 'Pay cash to driver upon arrival', available: true },
+                  { id: 'UPI', label: 'Instant Google Pay / PhonePe UPI', desc: 'Fast & 100% Instant Approval', available: false },
+                  { id: 'CARD', label: 'Credit / Debit Card', desc: 'Visa, Mastercard, RuPay', available: false }
+                ].map(pm => {
+                  const isSelected = paymentMethod === pm.id;
+                  const isComingSoon = !pm.available;
+
+                  return (
+                    <div
+                      key={pm.id}
+                      onClick={() => {
+                        if (isComingSoon) {
+                          toast.info('Feature will be coming soon');
+                        } else {
+                          setPaymentMethod(pm.id);
+                        }
+                      }}
+                      className={`flex items-start justify-between p-4 rounded-2xl border transition select-none ${
+                        isComingSoon
+                          ? 'bg-slate-50/80 border-slate-200 text-slate-500 cursor-not-allowed hover:bg-slate-100/50'
+                          : isSelected
+                            ? 'bg-slate-900 text-white border-slate-900 shadow-md cursor-pointer'
+                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 cursor-pointer'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <input
+                          type="radio"
+                          name="payment"
+                          checked={isSelected}
+                          disabled={isComingSoon}
+                          onChange={() => {
+                            if (!isComingSoon) setPaymentMethod(pm.id);
+                          }}
+                          className="mt-1"
+                        />
+                        <div>
+                          <span className={`text-xs font-extrabold block ${isComingSoon ? 'text-slate-600 font-bold' : ''}`}>
+                            {pm.label}
+                          </span>
+                          <span className={`text-[11px] font-medium ${isSelected ? 'text-slate-300' : 'text-slate-500'}`}>
+                            {pm.desc}
+                          </span>
+                        </div>
+                      </div>
+
+                      {isComingSoon && (
+                        <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 text-[10px] font-extrabold border border-amber-300 flex-shrink-0">
+                          Coming Soon
+                        </span>
+                      )}
                     </div>
-                  </label>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
@@ -446,6 +472,21 @@ export default function CheckoutPage({ modeOverride }) {
                   </>
                 )}
               </button>
+
+              {/* Explore More Deals Redirect Link (Tactical Lure to add more items) */}
+              {(() => {
+                const targetShopId = cart.restaurantId || cart.vendorId || cart.restaurant?.id || cart.restaurant?._id;
+                const targetUrl = targetShopId ? `/restaurant/${targetShopId}` : '/home';
+                return (
+                  <Link
+                    to={targetUrl}
+                    className="w-full py-3 px-4 rounded-2xl border-2 border-dashed border-rose-300 hover:border-rose-400 bg-rose-50/80 hover:bg-rose-100/90 text-rose-700 text-xs font-extrabold flex items-center justify-center gap-2 transition shadow-sm text-center"
+                  >
+                    <Tag className="w-4 h-4 text-rose-600 animate-pulse" />
+                    <span>Explore more deals in this store before ordering!</span>
+                  </Link>
+                );
+              })()}
 
               <div className="flex items-center justify-center gap-1.5 text-[11px] text-emerald-700 font-extrabold pt-1">
                 <ShieldCheck className="w-4 h-4" />

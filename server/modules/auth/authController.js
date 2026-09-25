@@ -38,7 +38,7 @@ const formatUserResponse = (user) => {
     email: user.email,
     role: mapToFrontendRole(user.role),
     phone: user.phone || '',
-    avatar: user.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250',
+    avatar: (user.avatar && !user.avatar.includes('user-avatar.jpg')) ? user.avatar : 'https://img.icons8.com/?size=100&id=85147&format=png&color=000000',
     vehicleType: user.vehicleType || 'Bike'
   });
 };

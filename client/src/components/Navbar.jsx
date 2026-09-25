@@ -141,7 +141,7 @@ export default function Navbar({ onVegToggle }) {
                     className="flex items-center gap-2 p-1 rounded-xl hover:bg-[#F5F6F7] border border-transparent hover:border-[#E8E9ED] transition"
                   >
                     <img
-                      src={user.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=100'}
+                      src={(user.avatar && !user.avatar.includes('user-avatar.jpg')) ? user.avatar : 'https://img.icons8.com/?size=100&id=85147&format=png&color=000000'}
                       alt={user.name}
                       className="w-9 h-9 rounded-xl object-cover border border-[#E8E9ED]"
                     />
@@ -225,7 +225,7 @@ export default function Navbar({ onVegToggle }) {
                 {user ? (
                   <Link to="/orders" className="flex-shrink-0">
                     <img
-                      src={user.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=100'}
+                      src={(user.avatar && !user.avatar.includes('user-avatar.jpg')) ? user.avatar : 'https://img.icons8.com/?size=100&id=85147&format=png&color=000000'}
                       alt={user.name}
                       className="w-8 h-8 rounded-full object-cover border border-[#E8E9ED]"
                     />
