@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { MapPin, ChevronDown, Navigation } from 'lucide-react';
-import AddressModal from './AddressModal';
+import AddressModal, { getSavedAddresses } from './AddressModal';
 
 export default function LocationSelector({ variant = 'desktop', onLocationUpdate }) {
   const [addressTitle, setAddressTitle] = useState('Lakkarpur, Faridabad');
@@ -12,38 +12,97 @@ export default function LocationSelector({ variant = 'desktop', onLocationUpdate
     loadSavedAddress();
     const handleLocationEvent = () => loadSavedAddress();
     window.addEventListener('krawing_location_changed', handleLocationEvent);
-    return () => window.removeEventListener('krawing_location_changed', handleLocationEvent);
+    window.addEventListener('krawing_addresses_updated', handleLocationEvent);
+    return () => {
+      window.removeEventListener('krawing_location_changed', handleLocationEvent);
+      window.removeEventListener('krawing_addresses_updated', handleLocationEvent);
+    };
   }, []);
 
   const loadSavedAddress = () => {
     try {
-      const saved = localStorage.getItem('krawing_user_address');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.title || parsed.street || parsed.area) {
-          setAddressTitle(parsed.title || parsed.area || 'Saved Location');
-          setAddressSubtext([parsed.street, parsed.city || 'Faridabad'].filter(Boolean).join(', '));
+      // 1. Check if user explicitly selected/saved a location
+      const savedRaw = localStorage.getItem('krawing_user_address') || localStorage.getItem('krawing_selected_address');
+      let targetAddr = null;
+      if (savedRaw) {
+        targetAddr = JSON.parse(savedRaw);
+      }
+
+      // 2. If no active selection, check saved addresses list for default or first address
+      if (!targetAddr || (!targetAddr.street && !targetAddr.title && !targetAddr.area && !targetAddr.city)) {
+        const savedList = getSavedAddresses();
+        if (savedList && savedList.length > 0) {
+          targetAddr = savedList.find(a => a.isDefault) || savedList[0];
         }
       }
+
+      // 3. Format address display if targetAddr exists
+      if (targetAddr && (targetAddr.street || targetAddr.title || targetAddr.area || targetAddr.city)) {
+        const titleStr = targetAddr.street || targetAddr.title || targetAddr.area || 'Selected Address';
+        const subtextStr = [targetAddr.city, targetAddr.pincode].filter(Boolean).join(' - ') || targetAddr.state || 'Saved Location';
+        setAddressTitle(titleStr);
+        setAddressSubtext(subtextStr);
+        return;
+      }
+
+      // 4. Default fallback only if no address given and live location is off
+      setAddressTitle('Lakkarpur, Faridabad');
+      setAddressSubtext('Shiv Durga Vihar, Haryana');
+    } catch (e) {
+      console.error('Error loading address:', e);
+      setAddressTitle('Lakkarpur, Faridabad');
+      setAddressSubtext('Shiv Durga Vihar, Haryana');
+    }
+  };
+
+  const handleSelectAddress = (addr) => {
+    try {
+      localStorage.setItem('krawing_user_address', JSON.stringify(addr));
+      localStorage.setItem('krawing_selected_address', JSON.stringify(addr));
     } catch (e) {}
+    const titleStr = addr.street || addr.title || addr.area || 'Selected Address';
+    const subtextStr = [addr.city, addr.pincode].filter(Boolean).join(' - ') || 'Saved Location';
+    setAddressTitle(titleStr);
+    setAddressSubtext(subtextStr);
+    setIsModalOpen(false);
+    window.dispatchEvent(new Event('krawing_location_changed'));
   };
 
   const handleUseLiveGPS = (e) => {
-    e.stopPropagation();
+    if (e) e.stopPropagation();
     if (!navigator.geolocation) {
       alert('Geolocation is not supported by your browser');
       return;
     }
     setGettingLocation(true);
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
+      async (pos) => {
         const { latitude, longitude } = pos.coords;
         const coords = { lat: latitude, lng: longitude };
         localStorage.setItem('krawing_user_coords', JSON.stringify(coords));
-        const gpsAddress = { title: 'Live Location', area: 'Lakkarpur', city: 'Faridabad', street: 'Current GPS Position' };
+        
+        let street = 'Live GPS Position';
+        let city = 'Faridabad';
+        let pincode = '';
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
+          const data = await res.json();
+          if (data && data.address) {
+            const a = data.address;
+            const sub = a.suburb || a.neighbourhood || a.residential || a.road || a.subdistrict || '';
+            const house = a.house_number || a.building || '';
+            street = [house, sub].filter(Boolean).join(', ') || data.display_name.split(',')[0];
+            city = a.city || a.town || a.district || 'Faridabad';
+            pincode = a.postcode || '';
+          }
+        } catch (err) {}
+
+        const gpsAddress = { title: 'Live Location 📍', street, city, pincode };
         localStorage.setItem('krawing_user_address', JSON.stringify(gpsAddress));
-        setAddressTitle('Live Location');
-        setAddressSubtext('Lakkarpur, Faridabad');
+        localStorage.setItem('krawing_selected_address', JSON.stringify(gpsAddress));
+        
+        setAddressTitle(street || 'Live Location 📍');
+        setAddressSubtext([city, pincode].filter(Boolean).join(' - '));
         setGettingLocation(false);
         window.dispatchEvent(new Event('krawing_location_changed'));
         if (onLocationUpdate) onLocationUpdate(coords);
@@ -81,12 +140,7 @@ export default function LocationSelector({ variant = 'desktop', onLocationUpdate
           <AddressModal
             isOpen={isModalOpen}
             onClose={() => setIsModalOpen(false)}
-            onSelectAddress={(addr) => {
-              setAddressTitle(addr.title || addr.area || 'Selected Address');
-              setAddressSubtext([addr.street, addr.city].filter(Boolean).join(', '));
-              setIsModalOpen(false);
-              window.dispatchEvent(new Event('krawing_location_changed'));
-            }}
+            onSelectAddress={handleSelectAddress}
           />
         )}
       </>
@@ -116,12 +170,7 @@ export default function LocationSelector({ variant = 'desktop', onLocationUpdate
         <AddressModal
           isOpen={isModalOpen}
           onClose={() => setIsModalOpen(false)}
-          onSelectAddress={(addr) => {
-            setAddressTitle(addr.title || addr.area || 'Selected Address');
-            setAddressSubtext([addr.street, addr.city].filter(Boolean).join(', '));
-            setIsModalOpen(false);
-            window.dispatchEvent(new Event('krawing_location_changed'));
-          }}
+          onSelectAddress={handleSelectAddress}
         />
       )}
     </>

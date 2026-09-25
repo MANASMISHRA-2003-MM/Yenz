@@ -1,0 +1,11 @@
+commit b7faf57cea0a820abfc979f55625883c829abab4
+Author: Ankit <ankitkumartiwari8360@gmail.com>
+Date:   Fri Sep 25 23:27:33 2026 +0530
+
+    Disable unsupported checkout payment methods with coming-soon toast, add Explore More Deals link in cravings checkout, and update user avatar to Icons8 icon
+
+commit bb0431bc4e60c194a3fc1fe87386914178d90650
+Author: Ankit <ankitkumartiwari8360@gmail.com>
+Date:   Fri Sep 25 22:46:08 2026 +0530
+
+    Fix payment processing errors and update components
