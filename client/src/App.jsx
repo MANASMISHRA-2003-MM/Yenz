@@ -1,44 +1,63 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
 import { ModeProvider } from './context/ModeContext';
 
-// Consumer Pages
+// Eagerly loaded critical consumer pages
 import Home from './pages/consumer/Home';
-import RestaurantDetail from './pages/consumer/RestaurantDetail';
-import CartPage from './pages/consumer/CartPage';
-import CheckoutPage from './pages/consumer/CheckoutPage';
-import OrderTracking from './pages/consumer/OrderTracking';
-import OrderHistory from './pages/consumer/OrderHistory';
-import SearchPage from './pages/consumer/SearchPage';
 
-// Vendor Pages
-import VendorDashboard from './pages/vendor/VendorDashboard';
-import VendorOnboarding from './pages/vendor/VendorOnboarding';
+// Lazy loaded secondary & role-specific pages
+const RestaurantDetail = lazy(() => import('./pages/consumer/RestaurantDetail'));
+const CartPage = lazy(() => import('./pages/consumer/CartPage'));
+const CheckoutPage = lazy(() => import('./pages/consumer/CheckoutPage'));
+const OrderTracking = lazy(() => import('./pages/consumer/OrderTracking'));
+const OrderHistory = lazy(() => import('./pages/consumer/OrderHistory'));
+const SearchPage = lazy(() => import('./pages/consumer/SearchPage'));
 
-// Delivery Pages
-import DeliveryDashboard from './pages/delivery/DeliveryDashboard';
-import DeliveryOnboarding from './pages/delivery/DeliveryOnboarding';
+const VendorDashboard = lazy(() => import('./pages/vendor/VendorDashboard'));
+const VendorOnboarding = lazy(() => import('./pages/vendor/VendorOnboarding'));
 
-// Admin Pages
-import AdminDashboard from './pages/admin/AdminDashboard';
+const DeliveryDashboard = lazy(() => import('./pages/delivery/DeliveryDashboard'));
+const DeliveryOnboarding = lazy(() => import('./pages/delivery/DeliveryOnboarding'));
 
-// Auth Pages
-import Login from './pages/auth/Login';
-import Register from './pages/auth/Register';
+const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
+
+const Login = lazy(() => import('./pages/auth/Login'));
+const Register = lazy(() => import('./pages/auth/Register'));
+const Profile = lazy(() => import('./pages/consumer/Profile'));
+
+const PageFallback = () => (
+  <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center">
+    <div className="w-10 h-10 border-4 border-brand-500 border-t-transparent rounded-full animate-spin" />
+  </div>
+);
+
+// Consumer Route Guard (Restricts Vendors, Drivers, Admin to their portals)
+const ConsumerRoute = ({ children }) => {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return <PageFallback />;
+  }
+
+  if (user) {
+    const role = (user.role || '').toUpperCase();
+    if (role === 'VENDOR') return <Navigate to="/vendor/dashboard" replace />;
+    if (role === 'DELIVERY_PARTNER') return <Navigate to="/delivery/dashboard" replace />;
+    if (role === 'ADMIN') return <Navigate to="/admin/dashboard" replace />;
+  }
+
+  return children;
+};
 
 // Protected Route Wrapper with RBAC for Unified Krawing System
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { user, loading } = useAuth();
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center">
-        <div className="w-10 h-10 border-4 border-brand-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
+    return <PageFallback />;
   }
 
   if (!user) {
@@ -65,87 +84,97 @@ export default function App() {
       <ModeProvider>
         <CartProvider>
           <Router>
-            <Routes>
-              {/* Public / Auth */}
-              <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
+            <Suspense fallback={<PageFallback />}>
+              <Routes>
+                {/* Public / Auth */}
+                <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
 
-              {/* Consumer Routes */}
-              <Route path="/" element={<Home />} />
-              <Route path="/home" element={<Home />} />
-              <Route path="/search" element={<SearchPage />} />
-              <Route path="/restaurant/:id" element={<RestaurantDetail />} />
-              <Route path="/cart" element={<CartPage />} />
-              <Route
-                path="/checkout"
-                element={
-                  <ProtectedRoute allowedRoles={['customer', 'consumer']}>
-                    <CheckoutPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/checkout/cravings"
-                element={
-                  <ProtectedRoute allowedRoles={['customer', 'consumer']}>
-                    <CheckoutPage modeOverride="CRAVINGS" />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/checkout/fresh-mandi"
-                element={
-                  <ProtectedRoute allowedRoles={['customer', 'consumer']}>
-                    <CheckoutPage modeOverride="FRESH_MANDI" />
-                  </ProtectedRoute>
-                }
-              />
-              <Route path="/order-tracking" element={<OrderTracking />} />
-              <Route path="/order-tracking/:id" element={<OrderTracking />} />
-              <Route
-                path="/orders"
-                element={
-                  <ProtectedRoute allowedRoles={['customer', 'consumer']}>
-                    <OrderHistory />
-                  </ProtectedRoute>
-                }
-              />
+                {/* Consumer Routes */}
+                <Route path="/" element={<ConsumerRoute><Home /></ConsumerRoute>} />
+                <Route path="/home" element={<ConsumerRoute><Home /></ConsumerRoute>} />
+                <Route path="/search" element={<ConsumerRoute><SearchPage /></ConsumerRoute>} />
+                <Route path="/restaurant/:id" element={<ConsumerRoute><RestaurantDetail /></ConsumerRoute>} />
+                <Route path="/cart" element={<ConsumerRoute><CartPage /></ConsumerRoute>} />
+                <Route
+                  path="/checkout"
+                  element={
+                    <ProtectedRoute allowedRoles={['customer', 'consumer']}>
+                      <CheckoutPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/checkout/cravings"
+                  element={
+                    <ProtectedRoute allowedRoles={['customer', 'consumer']}>
+                      <CheckoutPage modeOverride="CRAVINGS" />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/checkout/fresh-mandi"
+                  element={
+                    <ProtectedRoute allowedRoles={['customer', 'consumer']}>
+                      <CheckoutPage modeOverride="FRESH_MANDI" />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route path="/order-tracking" element={<OrderTracking />} />
+                <Route path="/order-tracking/:id" element={<OrderTracking />} />
+                <Route
+                  path="/orders"
+                  element={
+                    <ProtectedRoute allowedRoles={['customer', 'consumer']}>
+                      <OrderHistory />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/profile"
+                  element={
+                    <ProtectedRoute allowedRoles={['customer', 'consumer', 'vendor', 'delivery_partner', 'admin']}>
+                      <Profile />
+                    </ProtectedRoute>
+                  }
+                />
 
-              {/* Vendor Routes */}
-              <Route path="/vendor/onboarding" element={<ProtectedRoute allowedRoles={['customer', 'consumer', 'vendor', 'admin']}><VendorOnboarding /></ProtectedRoute>} />
-              <Route
-                path="/vendor/dashboard"
-                element={
-                  <ProtectedRoute allowedRoles={['vendor', 'admin']}>
-                    <VendorDashboard />
-                  </ProtectedRoute>
-                }
-              />
+                {/* Vendor Routes */}
+                <Route path="/vendor/onboarding" element={<ProtectedRoute allowedRoles={['customer', 'consumer', 'vendor', 'admin']}><VendorOnboarding /></ProtectedRoute>} />
+                <Route
+                  path="/vendor/dashboard"
+                  element={
+                    <ProtectedRoute allowedRoles={['vendor', 'admin']}>
+                      <VendorDashboard />
+                    </ProtectedRoute>
+                  }
+                />
 
-              {/* Delivery Routes */}
-              <Route path="/delivery/onboarding" element={<ProtectedRoute allowedRoles={['customer', 'consumer', 'delivery_partner', 'admin']}><DeliveryOnboarding /></ProtectedRoute>} />
-              <Route
-                path="/delivery/dashboard"
-                element={
-                  <ProtectedRoute allowedRoles={['delivery_partner', 'admin']}>
-                    <DeliveryDashboard />
-                  </ProtectedRoute>
-                }
-              />
+                {/* Delivery Routes */}
+                <Route path="/delivery/onboarding" element={<ProtectedRoute allowedRoles={['customer', 'consumer', 'delivery_partner', 'admin']}><DeliveryOnboarding /></ProtectedRoute>} />
+                <Route
+                  path="/delivery/dashboard"
+                  element={
+                    <ProtectedRoute allowedRoles={['delivery_partner', 'admin']}>
+                      <DeliveryDashboard />
+                    </ProtectedRoute>
+                  }
+                />
 
-              {/* Admin Routes */}
-              <Route
-                path="/admin/dashboard"
-                element={
-                  <ProtectedRoute allowedRoles={['admin']}>
-                    <AdminDashboard />
-                  </ProtectedRoute>
-                }
-              />
+                {/* Admin Routes */}
+                <Route
+                  path="/admin/dashboard"
+                  element={
+                    <ProtectedRoute allowedRoles={['admin']}>
+                      <AdminDashboard />
+                    </ProtectedRoute>
+                  }
+                />
 
-              {/* Fallback */}
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
+                {/* Fallback */}
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </Suspense>
           </Router>
         </CartProvider>
       </ModeProvider>

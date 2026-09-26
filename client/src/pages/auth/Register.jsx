@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Flame, ArrowRight } from 'lucide-react';
+import { Flame, ArrowRight, User, Store, Bike } from 'lucide-react';
 
 export default function Register() {
   const [formData, setFormData] = useState({
@@ -23,13 +23,19 @@ export default function Register() {
     setLoading(true);
     try {
       await register(formData);
-      navigate('/');
+      navigate('/home');
     } catch (err) {
       setError(err.response?.data?.message || 'Registration failed');
     } finally {
       setLoading(false);
     }
   };
+
+  const roles = [
+    { id: 'consumer', label: 'Customer', icon: User },
+    { id: 'vendor', label: 'Vendor / Shop', icon: Store },
+    { id: 'delivery_partner', label: 'Delivery Partner', icon: Bike }
+  ];
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col justify-center items-center p-4">
@@ -40,11 +46,37 @@ export default function Register() {
             <Flame className="w-8 h-8 text-white animate-pulse" />
           </div>
           <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Create Account</h1>
-          <p className="text-xs text-slate-500 font-medium">Join Krawing Hyperlocal Platform</p>
+          <p className="text-xs text-slate-500 font-medium">Join Krawing Platform</p>
         </div>
 
         <form onSubmit={handleSubmit} className="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-soft space-y-4">
           {error && <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl">{error}</div>}
+
+          {/* 3 Role Options (Excluding Admin) */}
+          <div>
+            <label className="text-xs font-extrabold text-slate-700 block mb-2">Select Registration Role</label>
+            <div className="grid grid-cols-3 gap-2">
+              {roles.map((r) => {
+                const Icon = r.icon;
+                const active = formData.role === r.id;
+                return (
+                  <button
+                    type="button"
+                    key={r.id}
+                    onClick={() => setFormData({ ...formData, role: r.id })}
+                    className={`flex flex-col items-center justify-center py-2.5 px-1 rounded-xl text-[11px] font-extrabold border transition ${
+                      active
+                        ? 'bg-brand-500 text-white border-brand-500 shadow-sm'
+                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4 mb-1" />
+                    <span className="truncate w-full text-center">{r.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
           <div>
             <label className="text-xs font-extrabold text-slate-700 block mb-1">Full Name</label>
@@ -64,7 +96,7 @@ export default function Register() {
               type="email"
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              placeholder="aarav@krawing.com"
+              placeholder="aarav@example.com"
               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 font-medium focus:outline-none focus:bg-white focus:border-brand-500"
               required
             />
@@ -80,19 +112,6 @@ export default function Register() {
               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 font-medium focus:outline-none focus:bg-white focus:border-brand-500"
               required
             />
-          </div>
-
-          <div>
-            <label className="text-xs font-extrabold text-slate-700 block mb-1">Account Role</label>
-            <select
-              value={formData.role}
-              onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 font-medium focus:outline-none focus:bg-white focus:border-brand-500"
-            >
-              <option value="consumer">Consumer / Customer</option>
-              <option value="vendor">Vendor / Restaurant</option>
-              <option value="delivery_partner">Delivery Partner</option>
-            </select>
           </div>
 
           <div>

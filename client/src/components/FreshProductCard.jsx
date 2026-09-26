@@ -10,13 +10,32 @@ export default function FreshProductCard({ product }) {
 
   const targetId = product.id || product._id;
 
-  // Default weight options if not specified
-  const weightOptions = product.weightOptions && product.weightOptions.length > 0
-    ? product.weightOptions
-    : [
-        { weightLabel: '500g', price: Math.round((product.price || 40) * 0.5) || product.price },
-        { weightLabel: '1kg', price: product.price || 40 }
+  // Weight / Unit options from relational ProductVariant, weightOptions JSON, or product.unit
+  let weightOptions = [];
+  if (Array.isArray(product.variants) && product.variants.length > 0) {
+    weightOptions = product.variants.map(v => ({
+      weightLabel: v.name || `${v.quantity}${v.unit}`,
+      price: v.price
+    }));
+  } else if (product.weightOptions && product.weightOptions.length > 0) {
+    weightOptions = product.weightOptions;
+  } else {
+    const unitStr = (product.unit || '1 kg').trim();
+    const isProduce = product.productType === 'VEGETABLE' || product.productType === 'FRUIT';
+    
+    if (isProduce && (unitStr.toLowerCase() === 'kg' || unitStr.toLowerCase() === '1 kg' || unitStr.toLowerCase() === '1kg')) {
+      const basePrice = Number(product.price) || 40;
+      weightOptions = [
+        { weightLabel: '500g', price: Math.round(basePrice * 0.5) },
+        { weightLabel: '1kg', price: Math.round(basePrice) },
+        { weightLabel: '2kg', price: Math.round(basePrice * 2) }
       ];
+    } else {
+      weightOptions = [
+        { weightLabel: unitStr.length > 0 ? unitStr : '1 Pack', price: Number(product.price) }
+      ];
+    }
+  }
 
   const [selectedWeight, setSelectedWeight] = useState(weightOptions[0]);
 
@@ -61,6 +80,7 @@ export default function FreshProductCard({ product }) {
         <div className="relative h-44 w-full rounded-2xl overflow-hidden mb-3.5 bg-slate-100">
           <img
             src={imageUrl}
+            onError={(e) => { e.target.onerror = null; e.target.src = 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=600'; }}
             alt={product.name}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
           />

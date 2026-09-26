@@ -158,7 +158,7 @@ export default function AddressModal({ isOpen, onClose, onSelectAddress }) {
         setLocating(false);
         alert(`Location permission error: ${err.message}`);
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
   };
 

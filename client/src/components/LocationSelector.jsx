@@ -111,7 +111,7 @@ export default function LocationSelector({ variant = 'desktop', onLocationUpdate
         setGettingLocation(false);
         alert('Could not access live location. Please select address manually.');
       },
-      { timeout: 10000, enableHighAccuracy: true }
+      { timeout: 15000, enableHighAccuracy: true, maximumAge: 0 }
     );
   };
 

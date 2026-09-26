@@ -48,12 +48,12 @@ export default function PromotionCarousel() {
     },
     {
       id: 2,
-      title: 'FRESH FRUITS & GREENS',
-      subtitle: '100% farm-fresh apples, bananas & palak',
-      tag: 'HEALTHY CHOICE',
+      title: 'QUALITY GROCERIES',
+      subtitle: 'Staples, pulses, flour, oil & daily kitchen essentials',
+      tag: 'GROCERY STAPLES',
       gradient: 'from-emerald-700 via-teal-600 to-slate-900',
-      btnText: 'Explore Fruits',
-      link: '/search?q=Fruit'
+      btnText: 'Explore Groceries',
+      link: '/restaurant/vnd-mandi-04?cat=GROCERY_ESSENTIALS'
     }
   ];
 
@@ -61,8 +61,8 @@ export default function PromotionCarousel() {
 
   return (
     <div className="w-full">
-      {/* Horizontal Scrollable Rail on Mobile, Grid/Carousel on Desktop */}
-      <div className="flex gap-4 overflow-x-auto scrollbar-none snap-x snap-mandatory py-1">
+      {/* Horizontal Scrollable Rail on Mobile, Clean Grid on Desktop */}
+      <div className="flex lg:grid lg:grid-cols-3 gap-4 overflow-x-auto lg:overflow-visible scrollbar-none snap-x snap-mandatory py-1 max-w-full">
         {promos.map((promo) => (
           <div
             key={promo.id}

@@ -7,10 +7,11 @@ export default function RestaurantCard({ restaurant }) {
   const isFresh = restaurant.vendorType === 'FRESH_MARKET' || restaurant.vendorType === 'FRESH';
   const restaurantId = restaurant.id || restaurant._id;
   const imageUrl = getAccurateRestaurantImage(restaurant.name, restaurant.image, isFresh);
+  const targetUrl = restaurant.linkUrl || `/restaurant/${restaurantId}`;
 
   return (
     <Link
-      to={`/restaurant/${restaurantId}`}
+      to={targetUrl}
       className="restaurant-food-card restaurant-food-card-hover rounded-2xl overflow-hidden flex flex-col justify-between p-4 group bg-white border border-[#E8E9ED] shadow-sm hover:shadow-md transition"
     >
       <div>
@@ -27,7 +28,7 @@ export default function RestaurantCard({ restaurant }) {
             isFresh ? 'bg-[#168A5B] text-white' : 'bg-[#E51B4B] text-white'
           }`}>
             {isFresh ? <Leaf className="w-3 h-3 fill-white" /> : '🍔'}
-            <span>{isFresh ? 'SABZI MANDI' : 'RESTAURANT'}</span>
+            <span>{isFresh ? (restaurant.name?.toLowerCase().includes('grocer') ? 'GROCERY STORE' : 'SABZI MANDI') : 'RESTAURANT'}</span>
           </div>
 
           {/* Rating Pill (⭐ 4.8 · 39) */}
@@ -51,7 +52,7 @@ export default function RestaurantCard({ restaurant }) {
           <h3 className={`font-heading font-extrabold text-base text-[#17181C] line-clamp-1 transition-colors ${
             isFresh ? 'group-hover:text-[#168A5B]' : 'group-hover:text-[#E51B4B]'
           }`}>
-            {restaurant.name}
+            {restaurant.name || 'Fresh Sabzi near you'}
           </h3>
 
           <p className="text-xs text-[#686D78] font-medium truncate">

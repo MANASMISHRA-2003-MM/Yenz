@@ -223,6 +223,7 @@ model Product {
   isVeg               Boolean               @default(true)
   isAvailable         Boolean               @default(true)
   image               String
+  imagePublicId       String?               @db.VarChar(255)
   rating              Decimal               @default(4.5) @db.Decimal(2, 1)
   prepTime            String?               @default("15-20 min") @db.VarChar(20)
   freshnessBadge      String?               @db.VarChar(50)
@@ -402,7 +403,9 @@ model Vendor {
   isVegOnly    Boolean       @default(false)
   status       String        @default("open") @db.VarChar(20)
   image        String
+  imagePublicId String?       @db.VarChar(255)
   bannerImage  String?
+  bannerImagePublicId String? @db.VarChar(255)
   offers       String[]
   freshTagline String?
   createdAt    DateTime      @default(now())

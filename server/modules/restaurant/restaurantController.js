@@ -240,18 +240,62 @@ const updateRestaurant = async (req, res, next) => {
     }
 
     // Check ownership or admin
-    if (existing.ownerUserId !== req.user.id && req.user.role !== 'ADMIN') {
+    const roleUpper = (req.user.role || '').toUpperCase();
+    if (existing.ownerUserId !== req.user.id && roleUpper !== 'ADMIN') {
       return res.status(403).json({ success: false, message: 'Not authorized to update this store' });
     }
 
+    const updateData = { ...req.body };
+    delete updateData._id;
+
     const updated = await prisma.vendor.update({
       where: { id: req.params.id },
-      data: req.body
+      data: updateData
     });
 
     res.json({ success: true, restaurant: formatVendorObj(updated) });
   } catch (err) {
     console.error('updateRestaurant error:', err);
+    next(err);
+  }
+};
+
+// @desc Create new Vendor Store (Admin)
+// @route POST /api/restaurants
+const createVendor = async (req, res, next) => {
+  try {
+    const crypto = require('crypto');
+    const { name, vendorType, phone, email, address, city, state, pincode, deliveryFee, deliveryTime, image, bannerImage, ownerUserId } = req.body;
+
+    let finalImageUrl = image;
+    let imagePublicId = null;
+    let finalBannerUrl = bannerImage;
+    let bannerImagePublicId = null;
+
+    const created = await prisma.vendor.create({
+      data: {
+        id: crypto.randomUUID(),
+        ownerUserId: ownerUserId || req.user.id,
+        name: name || 'New Store',
+        vendorType: (vendorType && vendorType.toUpperCase().includes('FRESH')) ? 'FRESH' : 'CRAVINGS',
+        phone: phone || `+91 ${Math.floor(1000000000 + Math.random() * 9000000000)}`,
+        email: email || `store_${Date.now()}@krawing.com`,
+        address: address || 'Main Market',
+        city: city || 'Faridabad',
+        state: state || 'Haryana',
+        pincode: pincode || '121009',
+        deliveryFee: deliveryFee ? Number(deliveryFee) : 30.00,
+        deliveryTime: deliveryTime || '25-35 min',
+        image: finalImageUrl || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&q=80&w=600',
+        imagePublicId,
+        bannerImage: finalBannerUrl || null,
+        bannerImagePublicId,
+        status: 'open'
+      }
+    });
+
+    res.status(201).json({ success: true, restaurant: formatVendorObj(created) });
+  } catch (err) {
     next(err);
   }
 };
@@ -316,6 +360,7 @@ module.exports = {
   getRestaurantById,
   getMyVendorRestaurant,
   updateRestaurant,
+  createVendor,
   submitVendorApplication,
   getMyVendorApplication
 };

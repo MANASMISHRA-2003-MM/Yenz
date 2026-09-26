@@ -134,7 +134,7 @@ export default function CheckoutPage({ modeOverride }) {
         setLocating(false);
         toast.error(`Location permission error: ${err.message}`);
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
   };
 
@@ -203,6 +203,11 @@ export default function CheckoutPage({ modeOverride }) {
             
             {/* 1. Address Selection Box */}
             <div className="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-soft space-y-4">
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl flex items-center gap-2 text-amber-900 text-xs font-bold">
+                <MapPin className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                <span>Please verify that the selected delivery address is your exact current delivery location before placing your order.</span>
+              </div>
+
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <div className="flex items-center gap-2 text-sm font-extrabold text-slate-900">
                   <MapPin className="w-5 h-5 text-rose-600" />

@@ -15,7 +15,7 @@ export default function FilterRail({
   const activeCount = [fastDelivery, ratingFourPlus, pureVeg, under250].filter(Boolean).length;
 
   return (
-    <div className="flex items-center gap-2 overflow-x-auto scrollbar-none py-1 snap-x">
+    <div className="flex items-center gap-2 overflow-x-auto scrollbar-none py-1 snap-x min-w-0 max-w-full">
       {/* Filters Dropdown / Clear Button */}
       <button
         onClick={onResetFilters}

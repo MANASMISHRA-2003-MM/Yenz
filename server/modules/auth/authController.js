@@ -53,7 +53,8 @@ const registerUser = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Please provide name, email, and password' });
     }
 
-    const existingUser = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    const cleanEmail = email.toLowerCase().trim();
+    const existingUser = await prisma.user.findUnique({ where: { email: cleanEmail } });
     if (existingUser) {
       return res.status(400).json({ success: false, message: 'User with this email already exists' });
     }
@@ -67,7 +68,7 @@ const registerUser = async (req, res, next) => {
       data: {
         id: crypto.randomUUID(),
         fullName: name,
-        email: email.toLowerCase(),
+        email: cleanEmail,
         phone: userPhone,
         passwordHash: hashedPassword,
         role: prismaRole,
@@ -92,13 +93,14 @@ const registerUser = async (req, res, next) => {
 // @route POST /api/auth/login
 const loginUser = async (req, res, next) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, requestedRole } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({ success: false, message: 'Please provide email and password' });
     }
 
-    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    const cleanEmail = email.toLowerCase().trim();
+    const user = await prisma.user.findUnique({ where: { email: cleanEmail } });
     if (!user) {
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
     }
@@ -106,6 +108,16 @@ const loginUser = async (req, res, next) => {
     const isMatch = await bcrypt.compare(password, user.passwordHash || user.password || '');
     if (!isMatch) {
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
+    }
+
+    if (requestedRole && requestedRole !== 'any' && requestedRole !== 'all') {
+      const targetPrismaRole = mapToPrismaRole(requestedRole);
+      if (user.role !== targetPrismaRole) {
+        return res.status(401).json({
+          success: false,
+          message: `Role mismatch: This account is registered as ${user.role}, not ${targetPrismaRole}`
+        });
+      }
     }
 
     const token = generateToken(user.id);
@@ -121,33 +133,10 @@ const loginUser = async (req, res, next) => {
   }
 };
 
-// @desc Quick Demo Login (for switching roles instantly in UI)
+// @desc Quick Demo Login disabled for security
 // @route POST /api/auth/demo-login
-const demoLogin = async (req, res, next) => {
-  try {
-    const { role } = req.body;
-    const targetPrismaRole = mapToPrismaRole(role);
-    let user = await prisma.user.findFirst({ where: { role: targetPrismaRole } });
-
-    if (!user) {
-      user = await prisma.user.findFirst();
-    }
-
-    if (!user) {
-      return res.status(404).json({ success: false, message: `No demo user found for role ${role}` });
-    }
-
-    const token = generateToken(user.id);
-    const formattedUser = formatUserResponse(user);
-
-    res.json({
-      success: true,
-      token,
-      user: formattedUser
-    });
-  } catch (err) {
-    next(err);
-  }
+const demoLogin = async (req, res) => {
+  return res.status(400).json({ success: false, message: 'Demo role switching is disabled. Authenticate with actual credentials.' });
 };
 
 // @desc Get Current Logged In User

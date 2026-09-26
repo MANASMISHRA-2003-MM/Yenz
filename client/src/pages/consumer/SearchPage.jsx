@@ -15,6 +15,7 @@ export default function SearchPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const initialQuery = searchParams.get('q') || '';
   const [searchTerm, setSearchTerm] = useState(initialQuery);
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(initialQuery);
   const { mode, switchMode, isFresh } = useMode();
 
   const [vegOnly, setVegOnly] = useState(false);
@@ -26,11 +27,20 @@ export default function SearchPage() {
   useEffect(() => {
     const qFromUrl = searchParams.get('q') || '';
     setSearchTerm(qFromUrl);
+    setDebouncedSearchTerm(qFromUrl);
   }, [searchParams]);
+
+  // Debounce search term by 300ms before making network request
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [searchTerm]);
 
   useEffect(() => {
     fetchSearchResults();
-  }, [searchTerm, mode, vegOnly, selectedCategory]);
+  }, [debouncedSearchTerm, mode, vegOnly, selectedCategory]);
 
   const handleInputChange = (val) => {
     setSearchTerm(val);
@@ -45,14 +55,14 @@ export default function SearchPage() {
     try {
       setLoading(true);
       const params = {};
-      if (searchTerm) params.search = searchTerm;
+      if (debouncedSearchTerm) params.search = debouncedSearchTerm;
       if (vegOnly) params.isVeg = true;
       if (selectedCategory !== 'ALL') params.category = selectedCategory;
-      params.productType = isFresh ? 'VEGETABLE,FRUIT' : 'FOOD';
+      params.productType = isFresh ? 'VEGETABLE,FRUIT,GROCERY' : 'FOOD';
 
       const [resFoods, resRestaurants] = await Promise.all([
         API.get('/foods', { params }),
-        API.get('/restaurants', { params: { vendorType: isFresh ? 'FRESH_MARKET' : 'FOOD_RESTAURANT', search: searchTerm } })
+        API.get('/restaurants', { params: { vendorType: isFresh ? 'FRESH' : 'FOOD_RESTAURANT', search: debouncedSearchTerm } })
       ]);
 
       if (resFoods.data.success) setFoods(resFoods.data.foods);

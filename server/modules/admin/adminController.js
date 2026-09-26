@@ -426,6 +426,24 @@ const resolveDispute = async (req, res, next) => {
   }
 };
 
+// @desc Upload Image to Cloudinary
+// @route POST /api/admin/upload-image
+const uploadImage = async (req, res, next) => {
+  try {
+    const { uploadToCloudinary } = require('../../utils/cloudinary');
+    const { image, folder } = req.body;
+
+    if (!image) {
+      return res.status(400).json({ success: false, message: 'No image provided' });
+    }
+
+    const result = await uploadToCloudinary(image, folder || 'krawing/media');
+    res.json({ success: true, secureUrl: result.secureUrl, publicId: result.publicId });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getAdminMetrics,
   getUsers,
@@ -438,5 +456,6 @@ module.exports = {
   updateVendorApplicationStatus,
   getDeliveryPartnerApplications,
   updateDeliveryPartnerApplicationStatus,
-  resolveDispute
+  resolveDispute,
+  uploadImage
 };

@@ -30,8 +30,8 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const login = async (email, password) => {
-    const res = await API.post('/auth/login', { email, password });
+  const login = async (email, password, requestedRole) => {
+    const res = await API.post('/auth/login', { email, password, requestedRole });
     if (res.data.success) {
       localStorage.setItem('krawing_token', res.data.token);
       setToken(res.data.token);

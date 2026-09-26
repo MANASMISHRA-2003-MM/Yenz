@@ -52,7 +52,7 @@ export default function Home() {
     try {
       setLoading(true);
       const vendorType = isFresh ? 'FRESH_MARKET' : 'FOOD_RESTAURANT';
-      const productType = isFresh ? 'VEGETABLE,FRUIT' : 'FOOD';
+      const productType = isFresh ? 'VEGETABLE,FRUIT,GROCERY' : 'FOOD';
 
       let locationParams = '&radius=5';
       const savedCoords = localStorage.getItem('krawing_user_coords');
@@ -106,7 +106,7 @@ export default function Home() {
     if (ratingFourPlus && (rest.rating || 0) < 4.0) return false;
     if (fastDelivery && !(rest.deliveryTime?.includes('15') || rest.deliveryTime?.includes('20') || rest.deliveryTime?.includes('25'))) return false;
     if (under250 && rest.priceRange && rest.priceRange.includes('500')) return false;
-    if (selectedCategory !== 'ALL' && selectedCategory !== 'UNDER_250') {
+    if (selectedCategory !== 'ALL' && selectedCategory !== 'UNDER_250' && selectedCategory !== 'FRESH_PRODUCE' && selectedCategory !== 'GROCERY_ESSENTIALS') {
       const matchCuisine = rest.cuisine && rest.cuisine.some(c => c.toLowerCase().includes(selectedCategory.toLowerCase()));
       const matchName = rest.name.toLowerCase().includes(selectedCategory.toLowerCase());
       if (!matchCuisine && !matchName) return false;
@@ -120,13 +120,72 @@ export default function Home() {
     if (ratingFourPlus && (food.rating || 0) < 4.0) return false;
     if (under250 && food.price > 250) return false;
     if (selectedCategory === 'UNDER_250' && food.price > 250) return false;
-    if (selectedCategory !== 'ALL' && selectedCategory !== 'UNDER_250') {
-      const matchCategory = food.category && food.category.toLowerCase().includes(selectedCategory.toLowerCase());
-      const matchName = food.name.toLowerCase().includes(selectedCategory.toLowerCase());
-      if (!matchCategory && !matchName) return false;
+
+    if (selectedCategory === 'FRESH_PRODUCE') {
+      const isProduce = food.productType === 'VEGETABLE' || food.productType === 'FRUIT' ||
+        ['Vegetable', 'Fruit', 'Greens', 'Onion', 'Herb', 'Seasonal', 'Mandi'].some(k => 
+          (food.category || '').toLowerCase().includes(k.toLowerCase()) || (food.name || '').toLowerCase().includes(k.toLowerCase())
+        );
+      if (!isProduce) return false;
+    } else if (selectedCategory === 'GROCERY_ESSENTIALS') {
+      const isGrocery = food.productType === 'GROCERY' ||
+        ['Rice', 'Pulse', 'Dal', 'Flour', 'Atta', 'Oil', 'Ghee', 'Spice', 'Salt', 'Sugar', 'Dry Fruit', 'Nut', 'Snack', 'Biscuit', 'Packaged', 'Breakfast', 'Cereal', 'Beverage', 'Essential'].some(k => 
+          (food.category || '').toLowerCase().includes(k.toLowerCase()) || (food.name || '').toLowerCase().includes(k.toLowerCase())
+        );
+      if (!isGrocery) return false;
+    } else if (selectedCategory !== 'ALL') {
+      const catLower = selectedCategory.toLowerCase();
+      const matchCategory = food.category && food.category.toLowerCase().includes(catLower);
+      const matchName = food.name && food.name.toLowerCase().includes(catLower);
+      const matchType = food.productType && food.productType.toLowerCase().includes(catLower);
+      if (!matchCategory && !matchName && !matchType) return false;
     }
     return true;
   });
+
+  // Dual Fresh Mandi Store Cards when in Fresh mode (using real database vendor IDs)
+  const displayStores = React.useMemo(() => {
+    if (!isFresh) return filteredRestaurants;
+    if (filteredRestaurants.length === 0) return [];
+
+    const baseStore = filteredRestaurants[0];
+    const realVendorId = baseStore._id || baseStore.id;
+
+    const freshSabziStore = {
+      ...baseStore,
+      cardKey: 'card-sabzi-' + realVendorId,
+      _id: realVendorId,
+      id: realVendorId,
+      linkUrl: `/restaurant/${realVendorId}?cat=FRESH_PRODUCE`,
+      name: 'Fresh Sabzi near you',
+      cuisine: ['Fresh Vegetables', 'Fruits', 'Leafy Greens', 'Mandi Rates'],
+      deliveryTime: '25-35 min',
+      distanceKm: '2.5',
+      rating: 4.9,
+      numRatings: 180,
+      image: 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=600'
+    };
+
+    const groceriesStore = {
+      ...baseStore,
+      cardKey: 'card-groceries-' + realVendorId,
+      _id: realVendorId,
+      id: realVendorId,
+      linkUrl: `/restaurant/${realVendorId}?cat=GROCERY_ESSENTIALS`,
+      name: 'Groceries Near You',
+      cuisine: ['Staples & Grains', 'Oil & Spices', 'Snacks & Beverages'],
+      deliveryTime: '20-30 min',
+      distanceKm: '2.5',
+      rating: 4.8,
+      numRatings: 142,
+      image: 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?auto=format&fit=crop&q=80&w=600'
+    };
+
+    if (selectedCategory === 'FRESH_PRODUCE') return [freshSabziStore];
+    if (selectedCategory === 'GROCERY_ESSENTIALS') return [groceriesStore];
+
+    return [freshSabziStore, groceriesStore];
+  }, [isFresh, filteredRestaurants, selectedCategory]);
 
   // High rated local gems
   const localGems = filteredRestaurants.filter(r => (r.rating || 0) >= 4.5);
@@ -141,15 +200,15 @@ export default function Home() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 space-y-7">
 
         {/* 2. Mode Switcher Banner Pill (Mobile & Desktop) */}
-        <div className="flex items-center justify-between bg-white p-3 sm:p-4 rounded-2xl border border-[#E8E9ED] shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg ${
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-white p-3 sm:p-4 rounded-2xl border border-[#E8E9ED] shadow-sm gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0 ${
               isFresh ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
             }`}>
               {isFresh ? '🥬' : '🍔'}
             </div>
-            <div>
-              <div className="flex items-center gap-1.5">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-1.5">
                 <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.2 rounded-md ${
                   isFresh ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
                 }`}>
@@ -161,13 +220,13 @@ export default function Home() {
                   </span>
                 )}
               </div>
-              <h2 className="text-sm sm:text-base font-extrabold text-[#17181C] leading-tight mt-0.5">
+              <h2 className="text-sm sm:text-base font-extrabold text-[#17181C] leading-tight mt-0.5 truncate">
                 {isFresh ? 'Sabzi Mandi & Grocery' : 'Cravings Food & Meals'}
               </h2>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-auto">
             <button
               onClick={() => switchMode('cravings')}
               className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition ${
@@ -258,10 +317,10 @@ export default function Home() {
                 <div key={n} className="h-64 rounded-2xl bg-slate-200/60 skeleton-loading-pulse" />
               ))}
             </div>
-          ) : filteredRestaurants.length > 0 ? (
+          ) : displayStores.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredRestaurants.map(rest => (
-                <RestaurantCard key={rest._id} restaurant={rest} />
+              {displayStores.map(rest => (
+                <RestaurantCard key={rest.cardKey || rest._id || rest.id} restaurant={rest} />
               ))}
             </div>
           ) : (

@@ -141,6 +141,7 @@ export default function FoodCard({ food }) {
           {imageUrl ? (
             <img
               src={imageUrl}
+              onError={(e) => { e.target.onerror = null; e.target.src = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=600'; }}
               alt={food?.name || 'Food'}
               className="
                 w-full
