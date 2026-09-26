@@ -41,9 +41,9 @@ const getOrCreateCart = async (userId, cartType = 'CRAVINGS') => {
       }
     });
   } catch (err) {
-    // If DB has a single-column unique constraint on (userId), fallback to reusing existing user cart safely
+    // If duplicate race condition, fetch the exact (userId, cartType) cart safely
     cart = await prisma.cart.findFirst({
-      where: { userId },
+      where: { userId, cartType },
       include: {
         Vendor: true,
         CartItem: {
@@ -51,19 +51,6 @@ const getOrCreateCart = async (userId, cartType = 'CRAVINGS') => {
         }
       }
     });
-
-    if (cart) {
-      cart = await prisma.cart.update({
-        where: { id: cart.id },
-        data: { cartType },
-        include: {
-          Vendor: true,
-          CartItem: {
-            include: { Product: true }
-          }
-        }
-      });
-    }
   }
 
   return cart;

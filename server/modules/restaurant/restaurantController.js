@@ -256,9 +256,67 @@ const updateRestaurant = async (req, res, next) => {
   }
 };
 
+// @desc Submit Vendor Application
+// @route POST /api/restaurants/application
+const submitVendorApplication = async (req, res, next) => {
+  try {
+    const crypto = require('crypto');
+    const { fullName, phone, email, businessName, vendorType, address, city, state, pincode, fssaiNumber, gstNumber, documents } = req.body;
+
+    const existingApp = await prisma.vendorApplication.findFirst({
+      where: { userId: req.user.id, status: 'PENDING' }
+    });
+
+    if (existingApp) {
+      return res.status(400).json({ success: false, message: 'You already have a pending vendor application under review' });
+    }
+
+    const app = await prisma.vendorApplication.create({
+      data: {
+        id: crypto.randomUUID(),
+        userId: req.user.id,
+        fullName: fullName || req.user.fullName,
+        phone: phone || req.user.phone,
+        email: email || req.user.email,
+        businessName: businessName || 'My Store',
+        vendorType: (vendorType && vendorType.toUpperCase().includes('FRESH')) ? 'FRESH' : 'CRAVINGS',
+        address: address || 'Sector 62',
+        city: city || 'Noida',
+        state: state || 'Uttar Pradesh',
+        pincode: pincode || '201301',
+        fssaiNumber: fssaiNumber || null,
+        gstNumber: gstNumber || null,
+        documents: documents || null,
+        status: 'PENDING'
+      }
+    });
+
+    res.status(201).json({ success: true, message: 'Vendor application submitted for admin review', application: app });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc Get current user's Vendor Application
+// @route GET /api/restaurants/application/me
+const getMyVendorApplication = async (req, res, next) => {
+  try {
+    const app = await prisma.vendorApplication.findFirst({
+      where: { userId: req.user.id },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json({ success: true, application: app });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getRestaurants,
   getRestaurantById,
   getMyVendorRestaurant,
-  updateRestaurant
+  updateRestaurant,
+  submitVendorApplication,
+  getMyVendorApplication
 };
+

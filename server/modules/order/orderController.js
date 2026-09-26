@@ -1,14 +1,14 @@
 const crypto = require('crypto');
 const prisma = require('../../utils/prisma');
 const { formatWithId } = require('../../utils/formatters');
-const { getIO, calculateDistance } = require('../../socket/socketHandler');
+const { getIO } = require('../../socket/socketHandler');
 
 const formatOrderObj = (ord) => {
   if (!ord) return null;
   
   const vendorObj = ord.Vendor || ord.restaurant || null;
   const customerObj = ord.User_Order_customerIdToUser || ord.customer || null;
-  const driverObj = ord.User_Order_vendorUserIdToUser || ord.deliveryPartner || null;
+  const driverObj = ord.Delivery?.User || ord.User_Order_vendorUserIdToUser || ord.deliveryPartner || null;
 
   const rawItems = ord.OrderItem || ord.items || [];
   const items = rawItems.map(item => ({
@@ -20,7 +20,8 @@ const formatOrderObj = (ord) => {
     price: Number(item.unitPrice || item.price || 0),
     quantity: item.quantity,
     selectedWeight: item.selectedWeight || null,
-    isVeg: Boolean(item.isVeg)
+    isVeg: Boolean(item.isVeg),
+    image: item.image || item.Product?.image || ''
   }));
 
   const rawTimeline = ord.OrderTimeline || ord.timeline || [];
@@ -94,7 +95,7 @@ const formatOrderObj = (ord) => {
 
 exports.createOrder = async (req, res, next) => {
   try {
-    const { address, paymentMethod = 'COD', deliveryNotes = '', shoppingMode, mode, cartType: inputCartType } = req.body;
+    const { address, addressId, paymentMethod = 'COD', deliveryNotes = '', shoppingMode, mode, cartType: inputCartType } = req.body;
 
     const modeInput = shoppingMode || mode || inputCartType;
     const targetCartType = (modeInput && modeInput.toString().toUpperCase().includes('FRESH')) ? 'FRESH' : 'CRAVINGS';
@@ -147,7 +148,8 @@ exports.createOrder = async (req, res, next) => {
         lineTotal: itemTotal,
         quantity: item.quantity,
         selectedWeight: item.selectedWeight || null,
-        isVeg: Boolean(item.isVeg ?? item.Product?.isVeg ?? true)
+        isVeg: Boolean(item.isVeg ?? item.Product?.isVeg ?? true),
+        image: item.image || item.Product?.image || ''
       };
     });
 
@@ -159,80 +161,128 @@ exports.createOrder = async (req, res, next) => {
     const orderIdCode = `KRAW-${Date.now().toString().slice(-6)}`;
     const newOrderId = crypto.randomUUID();
 
-    const orderDataPayload = {
-      id: newOrderId,
-      orderNumber: orderIdCode,
-      orderType: targetCartType,
-      customerId: req.user.id,
-      vendorId: vendor.id,
-      subtotal,
-      deliveryFee,
-      tax,
-      discount,
-      totalAmount,
-      status: 'PENDING',
-      deliveryNotes: deliveryNotes || ''
-    };
-
-    console.log("=== KRAWING ACTIVE ORDER CONTROLLER ===");
-    console.log("FILE: server/modules/order/orderController.js");
-    console.log("ORDER CREATE VERSION: NEW-V2");
-    console.log("ORDER PAYLOAD:", orderDataPayload);
-
-    const createdOrder = await prisma.order.create({
-      data: {
-        ...orderDataPayload,
-        OrderItem: {
-          create: orderItemsData
-        },
-        OrderTimeline: {
-          create: [
-            {
-              id: crypto.randomUUID(),
-              status: 'PENDING',
-              note: targetCartType === 'FRESH' ? 'Fresh Sabzi Mandi order placed' : 'Cravings Food order placed'
-            }
-          ]
-        },
-        Payment: {
-          create: {
-            id: crypto.randomUUID(),
-            provider: paymentMethod === 'COD' ? 'COD' : 'ONLINE',
-            method: paymentMethod === 'COD' ? 'COD' : 'ONLINE',
-            amount: totalAmount,
-            status: paymentMethod === 'COD' ? 'PENDING' : 'PAID',
-            paidAt: paymentMethod === 'COD' ? null : new Date()
-          }
-        }
-      },
-      include: {
-        Vendor: true,
-        User_Order_customerIdToUser: { select: { id: true, fullName: true, email: true, phone: true, avatar: true } },
-        User_Order_vendorUserIdToUser: { select: { id: true, fullName: true, phone: true, vehicleType: true, ratings: true, avatar: true } },
-        OrderItem: true,
-        OrderTimeline: true,
-        Payment: true
-      }
+    // Find active delivery partner to assign automatically if available
+    const availableDriver = await prisma.user.findFirst({
+      where: { role: 'DELIVERY_PARTNER', isOnline: true }
     });
 
-    // Reset ONLY this specific shopping mode's cart
-    await prisma.cartItem.deleteMany({ where: { cartId: cart.id } });
-    await prisma.cart.update({
-      where: { id: cart.id },
-      data: {
-        vendorId: null,
-        couponCode: null,
-        discount: 0
+    // Execute Order creation in a database transaction
+    const createdOrder = await prisma.$transaction(async (tx) => {
+      const ord = await tx.order.create({
+        data: {
+          id: newOrderId,
+          orderNumber: orderIdCode,
+          orderType: targetCartType,
+          customerId: req.user.id,
+          vendorId: vendor.id,
+          addressId: addressId || null,
+          vendorUserId: availableDriver ? availableDriver.id : null,
+          subtotal,
+          deliveryFee,
+          tax,
+          discount,
+          totalAmount,
+          status: 'PENDING',
+          deliveryNotes: deliveryNotes || '',
+          OrderItem: {
+            create: orderItemsData
+          },
+          OrderTimeline: {
+            create: [
+              {
+                id: crypto.randomUUID(),
+                status: 'PENDING',
+                note: targetCartType === 'FRESH' ? 'Fresh Sabzi Mandi order placed' : 'Cravings Food order placed'
+              }
+            ]
+          },
+          Payment: {
+            create: {
+              id: crypto.randomUUID(),
+              provider: paymentMethod === 'COD' ? 'COD' : 'ONLINE',
+              method: paymentMethod === 'COD' ? 'COD' : 'ONLINE',
+              amount: totalAmount,
+              status: paymentMethod === 'COD' ? 'PENDING' : 'PAID',
+              paidAt: paymentMethod === 'COD' ? null : new Date()
+            }
+          }
+        },
+        include: {
+          Vendor: true,
+          User_Order_customerIdToUser: { select: { id: true, fullName: true, email: true, phone: true, avatar: true } },
+          OrderItem: true,
+          OrderTimeline: true,
+          Payment: true
+        }
+      });
+
+      // Create Delivery record linked to order
+      if (availableDriver) {
+        await tx.delivery.create({
+          data: {
+            id: crypto.randomUUID(),
+            orderId: ord.id,
+            deliveryPartnerId: availableDriver.id,
+            status: 'ASSIGNED',
+            pickupLat: vendor.latitude ? Number(vendor.latitude) : 28.5700,
+            pickupLng: vendor.longitude ? Number(vendor.longitude) : 77.3200,
+            dropLat: 28.5355,
+            dropLng: 77.3910,
+            earnings: 65.00,
+            distanceKm: 3.40,
+            estimatedMinutes: 20
+          }
+        });
       }
+
+      // Persistent Notification for Customer
+      await tx.notification.create({
+        data: {
+          id: crypto.randomUUID(),
+          userId: req.user.id,
+          title: `Order Placed (${orderIdCode})`,
+          message: `Your ${targetCartType === 'FRESH' ? 'Fresh Mandi' : 'Cravings'} order of ₹${totalAmount} has been placed successfully!`,
+          type: 'ORDER_CREATED'
+        }
+      });
+
+      // Persistent Notification for Vendor Owner
+      if (vendor.ownerUserId) {
+        await tx.notification.create({
+          data: {
+            id: crypto.randomUUID(),
+            userId: vendor.ownerUserId,
+            title: `New Incoming Order (${orderIdCode})`,
+            message: `New order of ₹${totalAmount} received for ${vendor.name}`,
+            type: 'NEW_ORDER'
+          }
+        });
+      }
+
+      // Reset cart items & reset vendor binding
+      await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
+      await tx.cart.update({
+        where: { id: cart.id },
+        data: {
+          vendorId: null,
+          couponCode: null,
+          discount: 0
+        }
+      });
+
+      return ord;
     });
 
     const order = formatOrderObj(createdOrder);
 
-    // Socket.IO Notification to Vendor
+    // Socket.IO Notification to Vendor & Driver
     try {
       const io = getIO();
       if (vendor.id) {
         io.to(`vendor_${vendor.id}`).emit('order:created', { order });
+      }
+      if (availableDriver) {
+        io.to(`driver_${availableDriver.id}`).emit('job:new', { order });
       }
     } catch (e) {
       console.log('Socket notification warning:', e.message);
@@ -256,11 +306,13 @@ exports.getOrders = async (req, res) => {
     if (roleUpper === 'CONSUMER' || roleUpper === 'CUSTOMER') {
       whereClause.customerId = req.user.id;
     } else if (roleUpper === 'VENDOR') {
-      whereClause.vendorId = req.user.id;
+      const vendorStore = await prisma.vendor.findFirst({ where: { ownerUserId: req.user.id } });
+      whereClause.vendorId = vendorStore ? vendorStore.id : req.user.id;
     } else if (roleUpper === 'DELIVERY_PARTNER' || roleUpper === 'DRIVER') {
       whereClause.OR = [
         { vendorUserId: req.user.id },
-        { status: { in: ['CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP'] }, vendorUserId: null }
+        { Delivery: { deliveryPartnerId: req.user.id } },
+        { status: { in: ['CONFIRMED', 'PREPARING', 'PACKING', 'READY_FOR_PICKUP'] } }
       ];
     }
 
@@ -275,6 +327,7 @@ exports.getOrders = async (req, res) => {
         Vendor: true,
         User_Order_customerIdToUser: { select: { id: true, fullName: true, email: true, phone: true, avatar: true } },
         User_Order_vendorUserIdToUser: { select: { id: true, fullName: true, phone: true, vehicleType: true, ratings: true, avatar: true } },
+        Delivery: { include: { User: true } },
         OrderItem: true,
         OrderTimeline: true,
         Payment: true
@@ -309,6 +362,7 @@ exports.getOrderById = async (req, res) => {
         Vendor: true,
         User_Order_customerIdToUser: { select: { id: true, fullName: true, email: true, phone: true, avatar: true } },
         User_Order_vendorUserIdToUser: { select: { id: true, fullName: true, phone: true, vehicleType: true, ratings: true, avatar: true } },
+        Delivery: { include: { User: true } },
         OrderItem: true,
         OrderTimeline: true,
         Payment: true
@@ -336,13 +390,23 @@ exports.updateOrderStatus = async (req, res) => {
     const { id } = req.params;
     const { status, note } = req.body;
 
-    const validStatuses = ['PENDING', 'CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP', 'ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'];
+    const validStatuses = ['PENDING', 'CONFIRMED', 'PREPARING', 'PACKING', 'READY_FOR_PICKUP', 'ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ success: false, message: 'Invalid order status' });
     }
 
-    const order = await prisma.order.update({
-      where: { id },
+    const targetOrder = await prisma.order.findFirst({
+      where: {
+        OR: [{ id: id }, { orderNumber: id }]
+      }
+    });
+
+    if (!targetOrder) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    const updatedOrder = await prisma.order.update({
+      where: { id: targetOrder.id },
       data: {
         status,
         updatedAt: new Date(),
@@ -358,19 +422,32 @@ exports.updateOrderStatus = async (req, res) => {
         Vendor: true,
         User_Order_customerIdToUser: { select: { id: true, fullName: true, email: true, phone: true, avatar: true } },
         User_Order_vendorUserIdToUser: { select: { id: true, fullName: true, phone: true, vehicleType: true, ratings: true, avatar: true } },
+        Delivery: { include: { User: true } },
         OrderItem: true,
         OrderTimeline: true,
         Payment: true
       }
     });
 
-    const formatted = formatOrderObj(order);
+    // Create Notification for Customer
+    await prisma.notification.create({
+      data: {
+        id: crypto.randomUUID(),
+        userId: updatedOrder.customerId,
+        title: `Order Status: ${status}`,
+        message: note || `Your order ${updatedOrder.orderNumber} is now ${status.replace(/_/g, ' ')}`,
+        type: 'ORDER_STATUS_UPDATE'
+      }
+    }).catch(e => console.warn('Notification warning:', e.message));
+
+    const formatted = formatOrderObj(updatedOrder);
 
     try {
       const io = getIO();
-      io.to(`order_${order.id}`).emit('order:status_updated', {
-        orderId: order.id,
-        status: order.status,
+      io.to(`order_${updatedOrder.id}`).emit('order:status_updated', {
+        orderId: updatedOrder.id,
+        orderNumber: updatedOrder.orderNumber,
+        status: updatedOrder.status,
         timeline: formatted.timeline
       });
     } catch (e) {
@@ -391,8 +468,14 @@ exports.updateOrderStatus = async (req, res) => {
 exports.acceptDeliveryJob = async (req, res) => {
   try {
     const { id } = req.params;
+    const targetOrder = await prisma.order.findFirst({
+      where: { OR: [{ id }, { orderNumber: id }] }
+    });
+
+    if (!targetOrder) return res.status(404).json({ success: false, message: 'Order not found' });
+
     const order = await prisma.order.update({
-      where: { id },
+      where: { id: targetOrder.id },
       data: {
         vendorUserId: req.user.id,
         status: 'ASSIGNED',
@@ -408,11 +491,25 @@ exports.acceptDeliveryJob = async (req, res) => {
         Vendor: true,
         User_Order_customerIdToUser: true,
         User_Order_vendorUserIdToUser: true,
+        Delivery: true,
         OrderItem: true,
         OrderTimeline: true,
         Payment: true
       }
     });
+
+    // Upsert delivery record
+    await prisma.delivery.upsert({
+      where: { orderId: order.id },
+      update: { deliveryPartnerId: req.user.id, status: 'ASSIGNED' },
+      create: {
+        id: crypto.randomUUID(),
+        orderId: order.id,
+        deliveryPartnerId: req.user.id,
+        status: 'ASSIGNED'
+      }
+    });
+
     res.json({ success: true, order: formatOrderObj(order), message: 'Delivery job accepted' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -423,8 +520,14 @@ exports.assignDeliveryPartner = async (req, res) => {
   try {
     const { id } = req.params;
     const { deliveryPartnerId } = req.body;
+    const targetOrder = await prisma.order.findFirst({
+      where: { OR: [{ id }, { orderNumber: id }] }
+    });
+
+    if (!targetOrder) return res.status(404).json({ success: false, message: 'Order not found' });
+
     const order = await prisma.order.update({
-      where: { id },
+      where: { id: targetOrder.id },
       data: {
         vendorUserId: deliveryPartnerId,
         status: 'ASSIGNED',
@@ -440,11 +543,24 @@ exports.assignDeliveryPartner = async (req, res) => {
         Vendor: true,
         User_Order_customerIdToUser: true,
         User_Order_vendorUserIdToUser: true,
+        Delivery: true,
         OrderItem: true,
         OrderTimeline: true,
         Payment: true
       }
     });
+
+    await prisma.delivery.upsert({
+      where: { orderId: order.id },
+      update: { deliveryPartnerId, status: 'ASSIGNED' },
+      create: {
+        id: crypto.randomUUID(),
+        orderId: order.id,
+        deliveryPartnerId,
+        status: 'ASSIGNED'
+      }
+    });
+
     res.json({ success: true, order: formatOrderObj(order), message: 'Delivery partner assigned' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

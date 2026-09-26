@@ -25,6 +25,7 @@ const couponRoutes = require('./modules/coupon/couponRoutes');
 const reviewRoutes = require('./modules/review/reviewRoutes');
 const adminRoutes = require('./modules/admin/adminRoutes');
 const analyticsRoutes = require('./modules/analytics/analyticsRoutes');
+const notificationRoutes = require('./modules/notification/notificationRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -88,6 +89,7 @@ app.use('/api/coupons', couponRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Error Handling Middlewares
 app.use(notFound);

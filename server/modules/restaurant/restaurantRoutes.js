@@ -4,13 +4,19 @@ const {
   getRestaurants,
   getRestaurantById,
   getMyVendorRestaurant,
-  updateRestaurant
+  updateRestaurant,
+  submitVendorApplication,
+  getMyVendorApplication
 } = require('./restaurantController');
 const { protect, authorize } = require('../../middlewares/authMiddleware');
 
 router.get('/', getRestaurants);
-router.get('/vendor/me', protect, authorize('vendor', 'admin'), getMyVendorRestaurant);
+
+router.post('/application', protect, submitVendorApplication);
+router.get('/application/me', protect, getMyVendorApplication);
+
+router.get('/vendor/me', protect, authorize('VENDOR', 'ADMIN', 'vendor', 'admin'), getMyVendorRestaurant);
 router.get('/:id', getRestaurantById);
-router.put('/:id', protect, authorize('vendor', 'admin'), updateRestaurant);
+router.put('/:id', protect, authorize('VENDOR', 'ADMIN', 'vendor', 'admin'), updateRestaurant);
 
 module.exports = router;

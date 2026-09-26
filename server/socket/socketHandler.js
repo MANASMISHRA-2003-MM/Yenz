@@ -43,26 +43,44 @@ const initSocket = (io) => {
     // Real-time GPS Location Push from Delivery App
     socket.on('driver:update_location', async ({ orderId, lat, lng }) => {
       try {
-        const order = await prisma.order.findUnique({
-          where: { id: orderId },
-          include: { Vendor: true }
+        const order = await prisma.order.findFirst({
+          where: {
+            OR: [
+              { id: orderId },
+              { orderNumber: orderId }
+            ]
+          },
+          include: { Vendor: true, Address: true, Delivery: true }
         });
 
         if (order) {
-          const vendorLat = order.Vendor?.latitude ? Number(order.Vendor.latitude) : 28.5700;
-          const vendorLng = order.Vendor?.longitude ? Number(order.Vendor.longitude) : 77.3200;
-          const customerLat = 28.5355;
-          const customerLng = 77.3910;
+          const dropLat = order.Delivery?.dropLat ? Number(order.Delivery.dropLat) : (order.Address?.latitude ? Number(order.Address.latitude) : 28.5355);
+          const dropLng = order.Delivery?.dropLng ? Number(order.Delivery.dropLng) : (order.Address?.longitude ? Number(order.Address.longitude) : 77.3910);
 
-          const distanceToCustomer = calculateDistance(lat, lng, customerLat, customerLng);
+          const distanceToCustomer = calculateDistance(lat, lng, dropLat, dropLng);
+          const etaMinutes = Math.max(2, Math.round(distanceToCustomer * 3));
 
-          io.to(`order_${orderId}`).emit('courier:location_update', {
-            orderId,
+          // Update delivery current location in DB throttled or async
+          if (order.Delivery) {
+            prisma.delivery.update({
+              where: { id: order.Delivery.id },
+              data: {
+                currentLat: lat,
+                currentLng: lng,
+                distanceKm: distanceToCustomer,
+                estimatedMinutes: etaMinutes
+              }
+            }).catch(e => console.warn('Delivery current location update warning:', e.message));
+          }
+
+          io.to(`order_${order.id}`).emit('courier:location_update', {
+            orderId: order.id,
+            orderNumber: order.orderNumber,
             lat,
             lng,
             distanceToCustomer,
-            etaMinutes: Math.max(3, Math.round(distanceToCustomer * 4)),
-            statusText: `Driver is ${distanceToCustomer} km away (${Math.max(3, Math.round(distanceToCustomer * 4))} mins)`
+            etaMinutes,
+            statusText: `Driver is ${distanceToCustomer} km away (~${etaMinutes} mins)`
           });
         }
       } catch (err) {

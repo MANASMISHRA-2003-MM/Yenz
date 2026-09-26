@@ -7,175 +7,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model addresses {
-  address_id   BigInt   @id @default(autoincrement())
-  user_id      BigInt
-  label        String?  @db.VarChar(30)
-  address_line String   @db.VarChar(255)
-  city         String   @db.VarChar(100)
-  state        String   @db.VarChar(100)
-  pincode      String   @db.VarChar(10)
-  latitude     Decimal? @db.Decimal(10, 7)
-  longitude    Decimal? @db.Decimal(10, 7)
-  is_default   Boolean  @default(false)
-  users        users    @relation(fields: [user_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_addresses_user")
-  orders       orders[]
-}
-
-model categories {
-  category_id BigInt     @id @default(autoincrement())
-  name        String     @db.VarChar(100)
-  slug        String     @unique @db.VarChar(120)
-  is_active   Boolean    @default(true)
-  products    products[]
-}
-
-model coupons {
-  coupon_id       BigInt    @id @default(autoincrement())
-  code            String    @unique @db.VarChar(50)
-  discount_type   String    @db.VarChar(20)
-  discount_value  Decimal   @db.Decimal(10, 2)
-  min_order_value Decimal   @default(0) @db.Decimal(10, 2)
-  max_discount    Decimal?  @db.Decimal(10, 2)
-  valid_from      DateTime? @db.Timestamptz(6)
-  valid_to        DateTime? @db.Timestamptz(6)
-  is_active       Boolean   @default(true)
-  orders          orders[]
-}
-
-model deliveries {
-  delivery_id         BigInt            @id @default(autoincrement())
-  order_id            BigInt            @unique
-  delivery_partner_id BigInt
-  status              String            @default("assigned") @db.VarChar(30)
-  pickup_at           DateTime?         @db.Timestamptz(6)
-  delivered_at        DateTime?         @db.Timestamptz(6)
-  current_latitude    Decimal?          @db.Decimal(10, 7)
-  current_longitude   Decimal?          @db.Decimal(10, 7)
-  orders              orders            @relation(fields: [order_id], references: [order_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_deliveries_order")
-  delivery_partners   delivery_partners @relation(fields: [delivery_partner_id], references: [delivery_partner_id], onUpdate: NoAction, map: "fk_deliveries_partner")
-}
-
-model delivery_partners {
-  delivery_partner_id BigInt       @id @default(autoincrement())
-  name                String       @db.VarChar(100)
-  phone               String       @unique @db.VarChar(15)
-  vehicle_type        String?      @db.VarChar(30)
-  vehicle_number      String?      @unique @db.VarChar(30)
-  status              String       @default("offline") @db.VarChar(30)
-  latitude            Decimal?     @db.Decimal(10, 7)
-  longitude           Decimal?     @db.Decimal(10, 7)
-  deliveries          deliveries[]
-}
-
-model order_items {
-  order_item_id BigInt   @id @default(autoincrement())
-  order_id      BigInt
-  product_id    BigInt
-  quantity      Int
-  unit_price    Decimal  @db.Decimal(10, 2)
-  line_total    Decimal  @db.Decimal(10, 2)
-  orders        orders   @relation(fields: [order_id], references: [order_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_order_items_order")
-  products      products @relation(fields: [product_id], references: [product_id], onUpdate: NoAction, map: "fk_order_items_product")
-}
-
-model orders {
-  order_id       BigInt        @id @default(autoincrement())
-  user_id        BigInt
-  vendor_id      BigInt
-  address_id     BigInt
-  coupon_id      BigInt?
-  subtotal       Decimal       @db.Decimal(10, 2)
-  delivery_fee   Decimal       @default(0) @db.Decimal(10, 2)
-  discount       Decimal       @default(0) @db.Decimal(10, 2)
-  tax            Decimal       @default(0) @db.Decimal(10, 2)
-  total_amount   Decimal       @db.Decimal(10, 2)
-  status         String        @default("placed") @db.VarChar(30)
-  payment_status String        @default("pending") @db.VarChar(30)
-  placed_at      DateTime      @default(now()) @db.Timestamptz(6)
-  deliveries     deliveries?
-  order_items    order_items[]
-  addresses      addresses     @relation(fields: [address_id], references: [address_id], onUpdate: NoAction, map: "fk_orders_address")
-  coupons        coupons?      @relation(fields: [coupon_id], references: [coupon_id], onUpdate: NoAction, map: "fk_orders_coupon")
-  users          users         @relation(fields: [user_id], references: [user_id], onUpdate: NoAction, map: "fk_orders_user")
-  vendors        vendors       @relation(fields: [vendor_id], references: [vendor_id], onUpdate: NoAction, map: "fk_orders_vendor")
-  payments       payments[]
-  reviews        reviews?
-}
-
-model payments {
-  payment_id     BigInt    @id @default(autoincrement())
-  order_id       BigInt
-  transaction_id String?   @unique @db.VarChar(100)
-  provider       String?   @db.VarChar(50)
-  method         String?   @db.VarChar(30)
-  amount         Decimal   @db.Decimal(10, 2)
-  status         String    @db.VarChar(30)
-  paid_at        DateTime? @db.Timestamptz(6)
-  orders         orders    @relation(fields: [order_id], references: [order_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_payments_order")
-}
-
-model products {
-  product_id     BigInt        @id @default(autoincrement())
-  vendor_id      BigInt
-  category_id    BigInt
-  name           String        @db.VarChar(150)
-  description    String?
-  price          Decimal       @db.Decimal(10, 2)
-  discount_price Decimal?      @db.Decimal(10, 2)
-  image_url      String?
-  is_veg         Boolean       @default(true)
-  is_available   Boolean       @default(true)
-  created_at     DateTime      @default(now()) @db.Timestamptz(6)
-  order_items    order_items[]
-  categories     categories    @relation(fields: [category_id], references: [category_id], onUpdate: NoAction, map: "fk_products_category")
-  vendors        vendors       @relation(fields: [vendor_id], references: [vendor_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_products_vendor")
-}
-
-model reviews {
-  review_id  BigInt   @id @default(autoincrement())
-  user_id    BigInt
-  vendor_id  BigInt
-  order_id   BigInt   @unique
-  rating     Int
-  comment    String?
-  created_at DateTime @default(now()) @db.Timestamptz(6)
-  orders     orders   @relation(fields: [order_id], references: [order_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_reviews_order")
-  users      users    @relation(fields: [user_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_reviews_user")
-  vendors    vendors  @relation(fields: [vendor_id], references: [vendor_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_reviews_vendor")
-}
-
-model users {
-  user_id       BigInt      @id @default(autoincrement())
-  full_name     String      @db.VarChar(100)
-  email         String      @unique @db.VarChar(150)
-  phone         String      @unique @db.VarChar(15)
-  password_hash String      @db.VarChar(255)
-  role          String      @default("customer") @db.VarChar(20)
-  status        String      @default("active") @db.VarChar(20)
-  created_at    DateTime    @default(now()) @db.Timestamptz(6)
-  addresses     addresses[]
-  orders        orders[]
-  reviews       reviews[]
-}
-
-model vendors {
-  vendor_id   BigInt     @id @default(autoincrement())
-  owner_name  String     @db.VarChar(100)
-  vendor_name String     @db.VarChar(150)
-  phone       String     @unique @db.VarChar(15)
-  email       String?    @unique @db.VarChar(150)
-  address     String?    @db.VarChar(255)
-  city        String?    @db.VarChar(100)
-  latitude    Decimal?   @db.Decimal(10, 7)
-  longitude   Decimal?   @db.Decimal(10, 7)
-  rating      Decimal    @default(0) @db.Decimal(2, 1)
-  status      String     @default("open") @db.VarChar(20)
-  orders      orders[]
-  products    products[]
-  reviews     reviews[]
-}
-
 model Address {
   id          String   @id @default(uuid()) @db.VarChar(36)
   userId      String   @db.VarChar(36)
@@ -345,6 +176,7 @@ model OrderItem {
   quantity       Int
   selectedWeight String? @db.VarChar(50)
   isVeg          Boolean @default(true)
+  image          String?
   Order          Order   @relation(fields: [orderId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   Product        Product @relation(fields: [productId], references: [id], onUpdate: NoAction)
 
@@ -378,33 +210,116 @@ model Payment {
 }
 
 model Product {
-  id             String      @id @default(uuid()) @db.VarChar(36)
-  vendorId       String      @db.VarChar(36)
-  categoryId     String      @db.VarChar(36)
-  productType    ProductType @default(FOOD)
-  name           String      @db.VarChar(150)
-  description    String?
-  price          Decimal     @db.Decimal(10, 2)
-  discountPrice  Decimal?    @db.Decimal(10, 2)
-  unit           String      @default("portion") @db.VarChar(20)
-  weightOptions  Json?
-  isVeg          Boolean     @default(true)
-  isAvailable    Boolean     @default(true)
-  image          String
-  rating         Decimal     @default(4.5) @db.Decimal(2, 1)
-  prepTime       String?     @default("15-20 min") @db.VarChar(20)
-  freshnessBadge String?     @db.VarChar(50)
-  stockKg        Decimal?    @default(100.00) @db.Decimal(10, 2)
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @default(now())
-  CartItem       CartItem[]
-  OrderItem      OrderItem[]
-  Category       Category    @relation(fields: [categoryId], references: [id], onUpdate: NoAction)
-  Vendor         Vendor      @relation(fields: [vendorId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  id                  String                @id @default(uuid()) @db.VarChar(36)
+  vendorId            String                @db.VarChar(36)
+  categoryId          String                @db.VarChar(36)
+  productType         ProductType           @default(FOOD)
+  name                String                @db.VarChar(150)
+  description         String?
+  price               Decimal               @db.Decimal(10, 2)
+  discountPrice       Decimal?              @db.Decimal(10, 2)
+  unit                String                @default("portion") @db.VarChar(20)
+  weightOptions       Json?
+  isVeg               Boolean               @default(true)
+  isAvailable         Boolean               @default(true)
+  image               String
+  rating              Decimal               @default(4.5) @db.Decimal(2, 1)
+  prepTime            String?               @default("15-20 min") @db.VarChar(20)
+  freshnessBadge      String?               @db.VarChar(50)
+  stockKg             Decimal?              @default(100.00) @db.Decimal(10, 2)
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @default(now())
+  CartItem            CartItem[]
+  OrderItem           OrderItem[]
+  ProductVariant      ProductVariant[]
+  ProductPriceHistory ProductPriceHistory[]
+  Category            Category              @relation(fields: [categoryId], references: [id], onUpdate: NoAction)
+  Vendor              Vendor                @relation(fields: [vendorId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([categoryId], map: "idx_product_category")
   @@index([productType], map: "idx_product_type")
   @@index([vendorId], map: "idx_product_vendor")
+}
+
+model ProductVariant {
+  id                  String                @id @default(uuid()) @db.VarChar(36)
+  productId           String                @db.VarChar(36)
+  name                String                @db.VarChar(100)
+  quantity            Decimal               @db.Decimal(10, 2)
+  unit                ProductUnit           @default(KG)
+  price               Decimal               @db.Decimal(10, 2)
+  discountPrice       Decimal?              @db.Decimal(10, 2)
+  stockQuantity       Decimal?              @default(100.00) @db.Decimal(10, 2)
+  isAvailable         Boolean               @default(true)
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  Product             Product               @relation(fields: [productId], references: [id], onDelete: Cascade)
+  ProductPriceHistory ProductPriceHistory[]
+
+  @@index([productId], map: "idx_variant_product")
+}
+
+model ProductPriceHistory {
+  id             String          @id @default(uuid()) @db.VarChar(36)
+  variantId      String?         @db.VarChar(36)
+  productId      String?         @db.VarChar(36)
+  oldPrice       Decimal         @db.Decimal(10, 2)
+  newPrice       Decimal         @db.Decimal(10, 2)
+  changedBy      String          @db.VarChar(36)
+  reason         String?
+  createdAt      DateTime        @default(now())
+  ProductVariant ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  Product        Product?        @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model VendorApplication {
+  id           String            @id @default(uuid()) @db.VarChar(36)
+  userId       String            @db.VarChar(36)
+  fullName     String            @db.VarChar(120)
+  phone        String            @db.VarChar(20)
+  email        String?           @db.VarChar(150)
+  businessName String            @db.VarChar(150)
+  vendorType   VendorType        @default(CRAVINGS)
+  address      String            @db.VarChar(255)
+  city         String            @db.VarChar(100)
+  state        String            @default("Haryana") @db.VarChar(100)
+  pincode      String            @default("121009") @db.VarChar(10)
+  fssaiNumber  String?           @db.VarChar(50)
+  gstNumber    String?           @db.VarChar(50)
+  documents    Json?
+  status       ApplicationStatus @default(PENDING)
+  adminNotes   String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  User         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model DeliveryPartnerApplication {
+  id            String            @id @default(uuid()) @db.VarChar(36)
+  userId        String            @db.VarChar(36)
+  fullName      String            @db.VarChar(120)
+  phone         String            @db.VarChar(20)
+  email         String?           @db.VarChar(150)
+  address       String            @db.VarChar(255)
+  vehicleType   String            @default("Bike") @db.VarChar(30)
+  vehicleNumber String            @db.VarChar(30)
+  dlNumber      String?           @db.VarChar(50)
+  bankDetails   Json?
+  documents     Json?
+  status        ApplicationStatus @default(PENDING)
+  adminNotes    String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  User          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationAuditLog {
+  id        String   @id @default(uuid()) @db.VarChar(36)
+  actorId   String   @db.VarChar(36)
+  action    String   @db.VarChar(100)
+  targetId  String   @db.VarChar(36)
+  metadata  Json?
+  createdAt DateTime @default(now())
 }
 
 model Refund {
@@ -437,28 +352,30 @@ model Review {
 }
 
 model User {
-  id                                    String         @id @default(uuid()) @db.VarChar(36)
-  fullName                              String         @db.VarChar(120)
-  email                                 String         @unique @db.VarChar(150)
-  phone                                 String         @unique @db.VarChar(20)
-  passwordHash                          String         @db.VarChar(255)
-  role                                  UserRole       @default(CUSTOMER)
-  status                                String         @default("active") @db.VarChar(20)
-  isOnline                              Boolean        @default(true)
-  avatar                                String?        @default("https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250")
-  vehicleType                           String?        @default("Bike") @db.VarChar(30)
-  ratings                               Float?         @default(4.8)
-  createdAt                             DateTime       @default(now())
-  updatedAt                             DateTime       @default(now())
+  id                                    String                       @id @default(uuid()) @db.VarChar(36)
+  fullName                              String                       @db.VarChar(120)
+  email                                 String                       @unique @db.VarChar(150)
+  phone                                 String                       @unique @db.VarChar(20)
+  passwordHash                          String                       @db.VarChar(255)
+  role                                  UserRole                     @default(CUSTOMER)
+  status                                String                       @default("active") @db.VarChar(20)
+  isOnline                              Boolean                      @default(true)
+  avatar                                String?                      @default("https://img.icons8.com/?size=100&id=85147&format=png&color=000000")
+  vehicleType                           String?                      @default("Bike") @db.VarChar(30)
+  ratings                               Float?                       @default(4.8)
+  createdAt                             DateTime                     @default(now())
+  updatedAt                             DateTime                     @default(now())
   Address                               Address[]
   Cart                                  Cart[]
   Delivery                              Delivery[]
   Notification                          Notification[]
-  Order_Order_customerIdToUser          Order[]        @relation("Order_customerIdToUser")
-  Order_Order_vendorUserIdToUser        Order[]        @relation("Order_vendorUserIdToUser")
-  Review_Review_deliveryPartnerIdToUser Review[]       @relation("Review_deliveryPartnerIdToUser")
-  Review_Review_userIdToUser            Review[]       @relation("Review_userIdToUser")
+  Order_Order_customerIdToUser          Order[]                      @relation("Order_customerIdToUser")
+  Order_Order_vendorUserIdToUser        Order[]                      @relation("Order_vendorUserIdToUser")
+  Review_Review_deliveryPartnerIdToUser Review[]                     @relation("Review_deliveryPartnerIdToUser")
+  Review_Review_userIdToUser            Review[]                     @relation("Review_userIdToUser")
   Vendor                                Vendor[]
+  VendorApplication                     VendorApplication[]
+  DeliveryPartnerApplication            DeliveryPartnerApplication[]
 
   @@index([role], map: "idx_user_role")
   @@index([status], map: "idx_user_status")
@@ -526,6 +443,7 @@ enum OrderStatus {
   PENDING
   CONFIRMED
   PREPARING
+  PACKING
   READY_FOR_PICKUP
   ASSIGNED
   PICKED_UP
@@ -553,6 +471,25 @@ enum ProductType {
   GROCERY
 }
 
+enum ProductUnit {
+  GRAM
+  KG
+  ML
+  LITRE
+  PIECE
+  PACK
+  PORTION
+}
+
+enum ApplicationStatus {
+  PENDING
+  UNDER_REVIEW
+  PHYSICAL_VERIFICATION
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
 enum RefundStatus {
   PENDING
   PROCESSED
@@ -570,3 +507,4 @@ enum VendorType {
   CRAVINGS
   FRESH
 }
+
