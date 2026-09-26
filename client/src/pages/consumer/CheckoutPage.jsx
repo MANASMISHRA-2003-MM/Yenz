@@ -5,13 +5,13 @@ import { useCart } from '../../context/CartContext';
 import { useMode } from '../../context/ModeContext';
 import Navbar from '../../components/Navbar';
 import AddressModal, { getSavedAddresses } from '../../components/AddressModal';
-import { MapPin, CreditCard, ShieldCheck, CheckCircle2, ArrowRight, Navigation, Plus, Bookmark, Store, Clock, Scale, Tag } from 'lucide-react';
+import { MapPin, CreditCard, ShieldCheck, CheckCircle2, ArrowRight, Navigation, Plus, Minus, Trash2, Bookmark, Store, Clock, Scale, Tag, ShoppingBag } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function CheckoutPage({ modeOverride }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { carts, cravingsCart, freshCart, fetchCart } = useCart();
+  const { carts, cravingsCart, freshCart, fetchCart, updateQuantity, clearCart } = useCart();
   const { isFresh: defaultIsFresh } = useMode();
 
   // Determine current mode from prop, pathname or active global mode
@@ -408,30 +408,91 @@ export default function CheckoutPage({ modeOverride }) {
               </p>
             </div>
 
-            {/* Itemized List */}
-            <div className="divide-y divide-slate-100 max-h-56 overflow-y-auto pr-1">
-              {cart.items && cart.items.length > 0 ? (
-                cart.items.map((item) => (
-                  <div key={item.id || item._id} className="py-2.5 flex items-center justify-between text-xs">
-                    <div>
-                      <span className="font-extrabold text-slate-800">{item.name}</span>
-                      <div className="flex items-center gap-2 text-[11px] text-slate-500">
-                        <span>Qty: {item.quantity}</span>
-                        {item.selectedWeight && (
-                          <span className="px-1.5 py-0.5 rounded bg-slate-100 font-bold text-slate-700 text-[10px]">
-                            {item.selectedWeight}
-                          </span>
-                        )}
+            {/* Itemized List with Removal & Quantity Modifier Controls */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
+                <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">Basket Items</span>
+                {cart.items && cart.items.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => clearCart(activeMode)}
+                    className="text-[10px] font-bold text-rose-600 hover:text-rose-700 hover:underline transition flex items-center gap-1"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    <span>Clear All</span>
+                  </button>
+                )}
+              </div>
+
+              <div className="divide-y divide-slate-100 max-h-60 overflow-y-auto pr-1">
+                {cart.items && cart.items.length > 0 ? (
+                  cart.items.map((item) => {
+                    const targetFoodId = item.foodId || item.productId || item.id || item._id;
+                    const itemTotal = (item.price || 0) * item.quantity;
+
+                    return (
+                      <div key={item.id || item._id} className="py-3 flex items-center justify-between text-xs gap-3">
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-extrabold text-slate-800 truncate">{item.name}</h4>
+                          <div className="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5">
+                            <span className="font-semibold text-slate-700">₹{item.price} each</span>
+                            {item.selectedWeight && (
+                              <span className="px-1.5 py-0.5 rounded bg-slate-100 font-bold text-slate-700 text-[10px]">
+                                {item.selectedWeight}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Interactive Quantity Stepper & Remove Button */}
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center border border-slate-200 bg-slate-50 rounded-xl p-0.5 shadow-sm">
+                            <button
+                              type="button"
+                              onClick={() => updateQuantity(targetFoodId, item.quantity - 1, item.selectedWeight, activeMode)}
+                              className="p-1 hover:bg-white text-slate-600 hover:text-rose-600 rounded-lg transition"
+                              title="Decrease / Remove"
+                            >
+                              <Minus className="w-3.5 h-3.5" />
+                            </button>
+                            <span className="w-6 text-center font-extrabold text-slate-900 text-xs">{item.quantity}</span>
+                            <button
+                              type="button"
+                              onClick={() => updateQuantity(targetFoodId, item.quantity + 1, item.selectedWeight, activeMode)}
+                              className="p-1 hover:bg-white text-slate-600 hover:text-emerald-600 rounded-lg transition"
+                              title="Increase Quantity"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => updateQuantity(targetFoodId, 0, item.selectedWeight, activeMode)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition"
+                            title="Remove product from basket"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+
+                          <span className="font-extrabold text-slate-900 min-w-[50px] text-right">₹{itemTotal}</span>
+                        </div>
                       </div>
-                    </div>
-                    <span className="font-extrabold text-slate-900">₹{item.price * item.quantity}</span>
+                    );
+                  })
+                ) : (
+                  <div className="py-8 text-center text-xs space-y-2">
+                    <ShoppingBag className="w-8 h-8 text-slate-300 mx-auto" />
+                    <p className="font-extrabold text-slate-500">Your basket is currently empty</p>
+                    <Link
+                      to={isFreshMode ? '/home' : '/home'}
+                      className="inline-block text-[11px] font-extrabold text-brand-600 hover:underline"
+                    >
+                      ← Explore & Add Items
+                    </Link>
                   </div>
-                ))
-              ) : (
-                <div className="py-4 text-center text-xs font-bold text-slate-400">
-                  No items in this shopping basket
-                </div>
-              )}
+                )}
+              </div>
             </div>
 
             <div className="space-y-2 text-xs font-medium text-slate-600 pt-2 border-t border-slate-100">

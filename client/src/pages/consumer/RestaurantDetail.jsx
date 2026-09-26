@@ -71,7 +71,8 @@ export default function RestaurantDetail() {
     if (vegFilter && !food.isVeg) return false;
     if (activeCategory === 'FRESH_PRODUCE') {
       return food.productType === 'VEGETABLE' || food.productType === 'FRUIT' ||
-        ['Vegetable', 'Fruit', 'Greens', 'Onion', 'Herb', 'Seasonal', 'Mandi'].some(k => 
+        food.categoryId === 'cat-veg-04' || food.categoryId === 'cat-fruits-05' ||
+        ['Vegetable', 'Fruit', 'Greens', 'Onion', 'Herb', 'Seasonal', 'Mandi', 'Sabzi'].some(k => 
           (food.category || '').toLowerCase().includes(k.toLowerCase()) || (food.name || '').toLowerCase().includes(k.toLowerCase())
         );
     }
@@ -81,7 +82,7 @@ export default function RestaurantDetail() {
           (food.category || '').toLowerCase().includes(k.toLowerCase()) || (food.name || '').toLowerCase().includes(k.toLowerCase())
         );
     }
-    if (activeCategory !== 'ALL' && food.category !== activeCategory) return false;
+    if (activeCategory !== 'ALL' && food.category !== activeCategory && food.categoryId !== activeCategory) return false;
     return true;
   });
 
