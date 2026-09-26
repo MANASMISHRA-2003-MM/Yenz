@@ -152,16 +152,16 @@ export default function LocationSelector({ variant = 'desktop', onLocationUpdate
     <>
       <button
         onClick={() => setIsModalOpen(true)}
-        className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-[#E8E9ED] text-left transition group"
+        className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-[#E8E9ED] text-left transition group max-w-[170px] sm:max-w-[200px] lg:max-w-[240px]"
       >
-        <MapPin className="w-4 h-4 text-[#E51B4B] fill-[#E51B4B]" />
-        <div>
+        <MapPin className="w-4 h-4 text-[#E51B4B] fill-[#E51B4B] flex-shrink-0" />
+        <div className="overflow-hidden min-w-0">
           <span className="text-[10px] font-extrabold uppercase text-[#9095A1] tracking-wider block leading-none">
             DELIVER TO
           </span>
-          <span className="text-xs font-extrabold text-[#17181C] group-hover:text-[#E51B4B] transition-colors flex items-center gap-1 leading-tight">
-            <span>{addressTitle}</span>
-            <ChevronDown className="w-3 h-3 text-slate-400" />
+          <span className="text-xs font-extrabold text-[#17181C] group-hover:text-[#E51B4B] transition-colors flex items-center gap-1 leading-tight truncate">
+            <span className="truncate">{addressTitle}</span>
+            <ChevronDown className="w-3 h-3 text-slate-400 flex-shrink-0" />
           </span>
         </div>
       </button>
