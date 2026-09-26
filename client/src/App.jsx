@@ -16,9 +16,11 @@ import SearchPage from './pages/consumer/SearchPage';
 
 // Vendor Pages
 import VendorDashboard from './pages/vendor/VendorDashboard';
+import VendorOnboarding from './pages/vendor/VendorOnboarding';
 
 // Delivery Pages
 import DeliveryDashboard from './pages/delivery/DeliveryDashboard';
+import DeliveryOnboarding from './pages/delivery/DeliveryOnboarding';
 
 // Admin Pages
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -110,6 +112,7 @@ export default function App() {
               />
 
               {/* Vendor Routes */}
+              <Route path="/vendor/onboarding" element={<ProtectedRoute allowedRoles={['customer', 'consumer', 'vendor', 'admin']}><VendorOnboarding /></ProtectedRoute>} />
               <Route
                 path="/vendor/dashboard"
                 element={
@@ -120,6 +123,7 @@ export default function App() {
               />
 
               {/* Delivery Routes */}
+              <Route path="/delivery/onboarding" element={<ProtectedRoute allowedRoles={['customer', 'consumer', 'delivery_partner', 'admin']}><DeliveryOnboarding /></ProtectedRoute>} />
               <Route
                 path="/delivery/dashboard"
                 element={
