@@ -11,7 +11,7 @@ import {
   Compass, ArrowRight, ShieldCheck, RefreshCw, Clock, Timer, History, Store
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { startRepeatingAlert, stopAlertSound, playActionSound, playCashRegisterSound, unlockAudio, triggerHaptics } from '../../utils/alertSound';
+import { startRepeatingAlert, stopAlertSound, playActionSound, unlockAudio, triggerHaptics } from '../../utils/alertSound';
 import { requestNotificationPermission, showBrowserAlert } from '../../utils/browserNotification';
 import { reverseGeocode } from '../../utils/reverseGeocode';
 
@@ -524,7 +524,7 @@ export default function DeliveryDashboard() {
             type="button"
             onClick={() => {
               unlockAudio();
-              playCashRegisterSound();
+              playActionSound();
               triggerHaptics();
               toast.success('🔔 Sound ring & mobile vibration tested successfully!');
             }}

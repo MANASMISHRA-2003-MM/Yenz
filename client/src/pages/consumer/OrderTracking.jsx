@@ -137,19 +137,26 @@ export default function OrderTracking() {
 
   const isFresh = order.orderType === 'FRESH' || order.shoppingMode === 'FRESH_MANDI';
 
-  const steps = [
+  const steps = isFresh ? [
     { key: 'PENDING', label: 'Order Placed' },
-    { key: 'CONFIRMED', label: 'Store Accepted' },
-    { key: 'READY_FOR_PICKUP', label: 'Order Prepared' },
+    { key: 'CONFIRMED', label: 'Vendor Packing' },
+    { key: 'OUT_FOR_DELIVERY', label: 'Out for Delivery' },
+    { key: 'DELIVERED', label: 'Delivered' }
+  ] : [
+    { key: 'PENDING', label: 'Order Placed' },
+    { key: 'PREPARING', label: 'Kitchen Preparing' },
     { key: 'OUT_FOR_DELIVERY', label: 'Out for Delivery' },
     { key: 'DELIVERED', label: 'Delivered' }
   ];
 
-  let currentStepIndex = 0;
-  if (['CONFIRMED'].includes(order.status)) currentStepIndex = 1;
-  else if (['PREPARING', 'PACKING', 'READY_FOR_PICKUP', 'ASSIGNED', 'WAITING_PICKUP', 'ARRIVED_AT_PICKUP'].includes(order.status)) currentStepIndex = 2;
-  else if (['PICKED_UP', 'OUT_FOR_DELIVERY', 'ARRIVED_AT_CUSTOMER'].includes(order.status)) currentStepIndex = 3;
-  else if (['DELIVERED'].includes(order.status)) currentStepIndex = 4;
+  let currentStepIndex = steps.findIndex(s => s.key === order.status);
+  if (currentStepIndex === -1) {
+    if (['ASSIGNED', 'PICKED_UP', 'READY_FOR_PICKUP'].includes(order.status)) {
+      currentStepIndex = 2; // Map to Out for Delivery step range
+    } else {
+      currentStepIndex = 0;
+    }
+  }
 
   const rawPin = order.deliveryPin ? String(order.deliveryPin).trim() : '';
   const pinDigits = rawPin ? rawPin.padStart(4, '0').slice(0, 4).split('') : [];
@@ -279,34 +286,6 @@ export default function OrderTracking() {
                 </div>
               );
             })}
-          </div>
-        </div>
-
-        {/* Live Order Timeline Logs */}
-        <div className="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-soft space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-            <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400">Order Updates & Timeline History</h3>
-            <OrderStatusBadge status={order.status} />
-          </div>
-
-          <div className="space-y-3">
-            {(order.timeline || order.OrderTimeline || []).length > 0 ? (
-              (order.timeline || order.OrderTimeline).map((item, idx) => (
-                <div key={idx} className="flex items-start gap-3 text-xs">
-                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0 mt-1 ring-4 ring-emerald-100" />
-                  <div className="flex-1">
-                    <p className="font-extrabold text-slate-900">{item.note || item.status}</p>
-                    <p className="text-[10px] text-slate-400 font-medium">
-                      {item.timestamp ? new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : 'Just now'}
-                    </p>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="text-xs text-slate-500 italic">
-                Status updated to {order.status.replace(/_/g, ' ')}
-              </div>
-            )}
           </div>
         </div>
 
