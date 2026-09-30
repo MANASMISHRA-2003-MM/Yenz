@@ -1,0 +1,693 @@
+{
+  "stages": [
+    {
+      "name": "All Accounts Login",
+      "status": "PASS",
+      "expected": "4 tokens",
+      "actual": "customer=true, foodhub=true, mandi=true, rider=true",
+      "timestamp": "2026-09-29T14:03:03.766Z"
+    },
+    {
+      "name": "Customer Socket Connected",
+      "status": "PASS",
+      "expected": "true",
+      "actual": "true",
+      "timestamp": "2026-09-29T14:03:07.093Z"
+    },
+    {
+      "name": "FoodHub Vendor Socket Connected",
+      "status": "PASS",
+      "expected": "true",
+      "actual": "true",
+      "timestamp": "2026-09-29T14:03:07.093Z"
+    },
+    {
+      "name": "Mandi Vendor Socket Connected",
+      "status": "PASS",
+      "expected": "true",
+      "actual": "true",
+      "timestamp": "2026-09-29T14:03:07.094Z"
+    },
+    {
+      "name": "Rider Socket Connected",
+      "status": "PASS",
+      "expected": "true",
+      "actual": "true",
+      "timestamp": "2026-09-29T14:03:07.094Z"
+    },
+    {
+      "name": "Order 1 Created (FoodHub)",
+      "status": "PASS",
+      "expected": "HTTP 201",
+      "actual": "HTTP 201",
+      "details": "orderNumber=KRAW-590282",
+      "timestamp": "2026-09-29T14:03:12.912Z"
+    },
+    {
+      "name": "FoodHub Vendor RECEIVES order:created",
+      "status": "PASS",
+      "expected": "true (this is their order)",
+      "actual": "true",
+      "details": "The target vendor MUST be notified",
+      "timestamp": "2026-09-29T14:03:15.920Z"
+    },
+    {
+      "name": "Mandi Vendor does NOT receive order:created",
+      "status": "PASS",
+      "expected": "false (not their order)",
+      "actual": "false",
+      "details": "Correctly isolated",
+      "timestamp": "2026-09-29T14:03:15.920Z"
+    },
+    {
+      "name": "Customer does NOT receive spurious order:created",
+      "status": "PASS",
+      "expected": "false (not in order room)",
+      "actual": "false",
+      "details": "Correctly scoped",
+      "timestamp": "2026-09-29T14:03:15.920Z"
+    },
+    {
+      "name": "Rider does NOT receive order:created",
+      "status": "PASS",
+      "expected": "false (riders get delivery:new_job_available only)",
+      "actual": "false",
+      "details": "Correctly scoped",
+      "timestamp": "2026-09-29T14:03:15.920Z"
+    },
+    {
+      "name": "Bystander Admin does NOT receive order:created",
+      "status": "PASS",
+      "expected": "false (bystander should not see other orders)",
+      "actual": "false",
+      "details": "Correctly isolated",
+      "timestamp": "2026-09-29T14:03:15.920Z"
+    },
+    {
+      "name": "Rider RECEIVES delivery:new_job_available",
+      "status": "PASS",
+      "expected": "true",
+      "actual": "true",
+      "timestamp": "2026-09-29T14:03:22.418Z"
+    },
+    {
+      "name": "Customer does NOT receive delivery:new_job_available",
+      "status": "PASS",
+      "expected": "false",
+      "actual": "false",
+      "details": "Correctly scoped",
+      "timestamp": "2026-09-29T14:03:22.418Z"
+    },
+    {
+      "name": "Mandi Vendor does NOT receive delivery:new_job_available",
+      "status": "PASS",
+      "expected": "false",
+      "actual": "false",
+      "timestamp": "2026-09-29T14:03:22.418Z"
+    },
+    {
+      "name": "Customer RECEIVES order:status_updated",
+      "status": "PASS",
+      "expected": "true",
+      "actual": "true",
+      "timestamp": "2026-09-29T14:03:22.419Z"
+    },
+    {
+      "name": "Unauthorized Vendor Rejected from Order Room",
+      "status": "PASS",
+      "expected": "error:forbidden event",
+      "actual": "true",
+      "details": "Mandi correctly denied access to FoodHub order",
+      "timestamp": "2026-09-29T14:03:23.930Z"
+    },
+    {
+      "name": "Order Delivered",
+      "status": "PASS",
+      "expected": "HTTP 200",
+      "actual": "HTTP 200",
+      "timestamp": "2026-09-29T14:03:32.323Z"
+    },
+    {
+      "name": "No Location Updates After Delivery",
+      "status": "PASS",
+      "expected": "false (terminal state)",
+      "actual": "false",
+      "details": "Correctly ignored",
+      "timestamp": "2026-09-29T14:03:35.337Z"
+    },
+    {
+      "name": "Customer CAN See PIN",
+      "status": "PASS",
+      "expected": "3030",
+      "actual": "3030",
+      "timestamp": "2026-09-29T14:03:37.538Z"
+    },
+    {
+      "name": "Vendor CANNOT See PIN",
+      "status": "PASS",
+      "expected": "null",
+      "actual": "null",
+      "details": "Correctly hidden",
+      "timestamp": "2026-09-29T14:03:38.004Z"
+    },
+    {
+      "name": "Rider CANNOT See PIN",
+      "status": "PASS",
+      "expected": "null",
+      "actual": "null",
+      "details": "Correctly hidden",
+      "timestamp": "2026-09-29T14:03:42.164Z"
+    },
+    {
+      "name": "Vendor Disconnected",
+      "status": "PASS",
+      "expected": "disconnected",
+      "actual": "false",
+      "timestamp": "2026-09-29T14:03:44.415Z"
+    },
+    {
+      "name": "Vendor Reconnected",
+      "status": "PASS",
+      "expected": "connected",
+      "actual": "true",
+      "timestamp": "2026-09-29T14:03:47.430Z"
+    },
+    {
+      "name": "Vendor Gets Orders After Reconnect",
+      "status": "PASS",
+      "expected": "true (auto-rejoin vendor room)",
+      "actual": "true",
+      "details": "Auto-join vendor room works after reconnect",
+      "timestamp": "2026-09-29T14:03:52.886Z"
+    },
+    {
+      "name": "Cannot Update DELIVERED Order",
+      "status": "PASS",
+      "expected": "HTTP 400",
+      "actual": "HTTP 400",
+      "details": "This order is already delivered and cannot be updated further.",
+      "timestamp": "2026-09-29T14:03:55.348Z"
+    },
+    {
+      "name": "Invalid Status Name Rejected",
+      "status": "PASS",
+      "expected": "HTTP 400",
+      "actual": "HTTP 400",
+      "details": "Invalid order status",
+      "timestamp": "2026-09-29T14:03:55.445Z"
+    },
+    {
+      "name": "Driver Rejects Job Successfully",
+      "status": "PASS",
+      "expected": "HTTP 200 success: true",
+      "actual": "HTTP 200",
+      "details": "Job declined successfully. You will not be alerted for this order again.",
+      "timestamp": "2026-09-29T14:04:01.174Z"
+    }
+  ],
+  "socketEvents": {
+    "customer1": [],
+    "vendorFoodHub": [
+      {
+        "event": "order:created",
+        "data": {
+          "order": {
+            "_id": "5362b74e-68c7-40db-afbf-80412576eeba",
+            "id": "5362b74e-68c7-40db-afbf-80412576eeba",
+            "orderId": "KRAW-629374",
+            "orderNumber": "KRAW-629374",
+            "orderType": "CRAVINGS",
+            "shoppingMode": "CRAVINGS",
+            "status": "PENDING",
+            "deliveryPin": "8790",
+            "subtotal": 399,
+            "deliveryFee": 30,
+            "tax": 20,
+            "discount": 0,
+            "totalAmount": 449,
+            "deliveryNotes": "",
+            "placedAt": "2026-09-29T14:03:49.606Z",
+            "vendorReceivedAt": "2026-09-29T14:03:49.606Z",
+            "locationName": "H.No 142, Sector 15, Gurugram",
+            "customerLocationName": "H.No 142, Sector 15, Gurugram",
+            "estimatedPrepMinutes": 17,
+            "predictedDeliveryMinutes": 32,
+            "estimatedDeliveryTime": "2026-09-29T14:35:49.606Z",
+            "updatedAt": "2026-09-29T14:03:49.606Z",
+            "restaurant": {
+              "_id": "vnd-foodhub-01",
+              "id": "vnd-foodhub-01",
+              "name": "Wow Momos",
+              "phone": "9811111111",
+              "address": "Sarai {Crown Interior Mall)",
+              "city": "Faridabad",
+              "latitude": 28.459,
+              "longitude": 77.039,
+              "lat": 28.459,
+              "lng": 77.039,
+              "image": "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&q=80&w=800",
+              "vendorType": "CRAVINGS"
+            },
+            "restaurantId": "vnd-foodhub-01",
+            "vendorId": "vnd-foodhub-01",
+            "customer": {
+              "_id": "usr-rahul-01",
+              "id": "usr-rahul-01",
+              "name": "Rahul Sharma",
+              "email": "rahul@gmail.com",
+              "phone": "9876543210",
+              "avatar": "https://res.cloudinary.com/milegafood/image/upload/f_auto,q_auto,w_200/krawing/shared/avatars/user-avatar.jpg"
+            },
+            "customerId": "usr-rahul-01",
+            "address": {
+              "addressLine": "H.No 142, Sector 15",
+              "street": "H.No 142, Sector 15",
+              "city": "Gurugram",
+              "state": "Haryana",
+              "pincode": "122001",
+              "latitude": 28.4595,
+              "longitude": 77.0266,
+              "lat": 28.4595,
+              "lng": 77.0266
+            },
+            "deliveryPartner": null,
+            "deliveryPartnerId": null,
+            "paymentMethod": "COD",
+            "paymentStatus": "PENDING",
+            "payment": {
+              "id": "49d1b7e2-9fde-4120-a082-88e0d5ee1874",
+              "provider": "COD",
+              "method": "COD",
+              "amount": 449,
+              "status": "PENDING",
+              "paidAt": null
+            },
+            "items": [
+              {
+                "_id": "8221dc35-9b4b-4800-9f67-8cc3135ac9b3",
+                "id": "8221dc35-9b4b-4800-9f67-8cc3135ac9b3",
+                "foodId": "prd-pizza-01",
+                "productId": "prd-pizza-01",
+                "name": "Farmhouse Pizza",
+                "price": 399,
+                "quantity": 1,
+                "selectedWeight": null,
+                "isVeg": true,
+                "image": "https://loremflickr.com/800/600/pizza,food?lock=226513981"
+              }
+            ],
+            "timeline": [
+              {
+                "status": "PENDING",
+                "timestamp": "2026-09-29T14:03:49.606Z",
+                "note": "Cravings Food order placed"
+              }
+            ]
+          }
+        },
+        "ts": 1790690630884
+      },
+      {
+        "event": "order:created",
+        "data": {
+          "order": {
+            "_id": "00533004-5c7b-4881-b03c-0795bf04527e",
+            "id": "00533004-5c7b-4881-b03c-0795bf04527e",
+            "orderId": "KRAW-637003",
+            "orderNumber": "KRAW-637003",
+            "orderType": "CRAVINGS",
+            "shoppingMode": "CRAVINGS",
+            "status": "PENDING",
+            "deliveryPin": "8259",
+            "subtotal": 399,
+            "deliveryFee": 30,
+            "tax": 20,
+            "discount": 0,
+            "totalAmount": 449,
+            "deliveryNotes": "",
+            "placedAt": "2026-09-29T14:03:57.099Z",
+            "vendorReceivedAt": "2026-09-29T14:03:57.099Z",
+            "locationName": "H.No 142, Sector 15, Gurugram",
+            "customerLocationName": "H.No 142, Sector 15, Gurugram",
+            "estimatedPrepMinutes": 17,
+            "predictedDeliveryMinutes": 32,
+            "estimatedDeliveryTime": "2026-09-29T14:35:57.099Z",
+            "updatedAt": "2026-09-29T14:03:57.099Z",
+            "restaurant": {
+              "_id": "vnd-foodhub-01",
+              "id": "vnd-foodhub-01",
+              "name": "Wow Momos",
+              "phone": "9811111111",
+              "address": "Sarai {Crown Interior Mall)",
+              "city": "Faridabad",
+              "latitude": 28.459,
+              "longitude": 77.039,
+              "lat": 28.459,
+              "lng": 77.039,
+              "image": "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&q=80&w=800",
+              "vendorType": "CRAVINGS"
+            },
+            "restaurantId": "vnd-foodhub-01",
+            "vendorId": "vnd-foodhub-01",
+            "customer": {
+              "_id": "usr-rahul-01",
+              "id": "usr-rahul-01",
+              "name": "Rahul Sharma",
+              "email": "rahul@gmail.com",
+              "phone": "9876543210",
+              "avatar": "https://res.cloudinary.com/milegafood/image/upload/f_auto,q_auto,w_200/krawing/shared/avatars/user-avatar.jpg"
+            },
+            "customerId": "usr-rahul-01",
+            "address": {
+              "addressLine": "H.No 142, Sector 15",
+              "street": "H.No 142, Sector 15",
+              "city": "Gurugram",
+              "state": "Haryana",
+              "pincode": "122001",
+              "latitude": 28.4595,
+              "longitude": 77.0266,
+              "lat": 28.4595,
+              "lng": 77.0266
+            },
+            "deliveryPartner": null,
+            "deliveryPartnerId": null,
+            "paymentMethod": "COD",
+            "paymentStatus": "PENDING",
+            "payment": {
+              "id": "00927cf1-95f3-4a5d-b948-84e890de3284",
+              "provider": "COD",
+              "method": "COD",
+              "amount": 449,
+              "status": "PENDING",
+              "paidAt": null
+            },
+            "items": [
+              {
+                "_id": "29d5ab09-93bc-4353-a9e3-e530c62cd06b",
+                "id": "29d5ab09-93bc-4353-a9e3-e530c62cd06b",
+                "foodId": "prd-pizza-01",
+                "productId": "prd-pizza-01",
+                "name": "Farmhouse Pizza",
+                "price": 399,
+                "quantity": 1,
+                "selectedWeight": null,
+                "isVeg": true,
+                "image": "https://loremflickr.com/800/600/pizza,food?lock=226513981"
+              }
+            ],
+            "timeline": [
+              {
+                "status": "PENDING",
+                "timestamp": "2026-09-29T14:03:57.099Z",
+                "note": "Cravings Food order placed"
+              }
+            ]
+          }
+        },
+        "ts": 1790690637812
+      }
+    ],
+    "vendorMandi": [
+      {
+        "event": "error:forbidden",
+        "data": {
+          "message": "Not authorized to join this order tracking room."
+        },
+        "ts": 1790690602558
+      }
+    ],
+    "rider1": [
+      {
+        "event": "delivery:new_job_available",
+        "data": {
+          "orderId": "0a387fa6-7134-4eeb-a30b-0cc7db6db235",
+          "orderNumber": "KRAW-590282",
+          "restaurantName": "Wow Momos",
+          "restaurantAddress": "Sarai {Crown Interior Mall)",
+          "pickupLat": 28.459,
+          "pickupLng": 77.039,
+          "dropLat": 28.4595,
+          "dropLng": 77.0266,
+          "customerAddress": "H.No 142, Sector 15, Gurugram",
+          "customerLocationName": "H.No 142, Sector 15, Gurugram",
+          "customerName": "Rahul Sharma",
+          "customerPhone": "9876543210",
+          "placedAt": "2026-09-29T14:03:10.594Z",
+          "vendorReceivedAt": "2026-09-29T14:03:10.594Z",
+          "estimatedMinutes": 25,
+          "predictedDeliveryMinutes": 25,
+          "distanceKm": 3.2,
+          "payout": 114,
+          "orderType": "CRAVINGS",
+          "totalAmount": 449
+        },
+        "ts": 1790690600363
+      },
+      {
+        "event": "delivery:new_job_available",
+        "data": {
+          "orderId": "0a387fa6-7134-4eeb-a30b-0cc7db6db235",
+          "orderNumber": "KRAW-590282",
+          "restaurantName": "Wow Momos",
+          "restaurantAddress": "Sarai {Crown Interior Mall)",
+          "pickupLat": 28.459,
+          "pickupLng": 77.039,
+          "dropLat": 28.4595,
+          "dropLng": 77.0266,
+          "customerAddress": "H.No 142, Sector 15, Gurugram",
+          "customerLocationName": "H.No 142, Sector 15, Gurugram",
+          "customerName": "Rahul Sharma",
+          "customerPhone": "9876543210",
+          "placedAt": "2026-09-29T14:03:10.594Z",
+          "vendorReceivedAt": "2026-09-29T14:03:10.594Z",
+          "estimatedMinutes": 25,
+          "predictedDeliveryMinutes": 25,
+          "distanceKm": 3.2,
+          "payout": 114,
+          "orderType": "CRAVINGS",
+          "totalAmount": 449
+        },
+        "ts": 1790690605311
+      },
+      {
+        "event": "order:status_updated",
+        "data": {
+          "orderId": "0a387fa6-7134-4eeb-a30b-0cc7db6db235",
+          "orderNumber": "KRAW-590282",
+          "status": "PICKED_UP",
+          "timeline": [
+            {
+              "status": "PENDING",
+              "timestamp": "2026-09-29T14:03:10.594Z",
+              "note": "Cravings Food order placed"
+            },
+            {
+              "status": "CONFIRMED",
+              "timestamp": "2026-09-29T14:03:17.144Z",
+              "note": "Order status updated to CONFIRMED"
+            },
+            {
+              "status": "PREPARING",
+              "timestamp": "2026-09-29T14:03:19.041Z",
+              "note": "Store accepted order and is preparing. Delivery partner notified for pickup."
+            },
+            {
+              "status": "READY_FOR_PICKUP",
+              "timestamp": "2026-09-29T14:03:24.341Z",
+              "note": "Order status updated to READY FOR PICKUP"
+            },
+            {
+              "status": "ASSIGNED",
+              "timestamp": "2026-09-29T14:03:26.102Z",
+              "note": "Delivery partner Arjun Delivery Partner assigned for pickup."
+            },
+            {
+              "status": "PICKED_UP",
+              "timestamp": "2026-09-29T14:03:28.181Z",
+              "note": "Order status updated to PICKED UP"
+            }
+          ],
+          "deliveryPartner": {
+            "_id": "usr-driver-01",
+            "id": "usr-driver-01",
+            "name": "Arjun Delivery Partner",
+            "phone": "9000000002",
+            "vehicleType": "Bike",
+            "ratings": 4.8,
+            "avatar": "https://res.cloudinary.com/milegafood/image/upload/f_auto,q_auto,w_200/krawing/shared/avatars/delivery-partner-avatar.jpg"
+          }
+        },
+        "ts": 1790690609011
+      },
+      {
+        "event": "order:status_updated",
+        "data": {
+          "orderId": "0a387fa6-7134-4eeb-a30b-0cc7db6db235",
+          "orderNumber": "KRAW-590282",
+          "status": "OUT_FOR_DELIVERY",
+          "timeline": [
+            {
+              "status": "PENDING",
+              "timestamp": "2026-09-29T14:03:10.594Z",
+              "note": "Cravings Food order placed"
+            },
+            {
+              "status": "CONFIRMED",
+              "timestamp": "2026-09-29T14:03:17.144Z",
+              "note": "Order status updated to CONFIRMED"
+            },
+            {
+              "status": "PREPARING",
+              "timestamp": "2026-09-29T14:03:19.041Z",
+              "note": "Store accepted order and is preparing. Delivery partner notified for pickup."
+            },
+            {
+              "status": "READY_FOR_PICKUP",
+              "timestamp": "2026-09-29T14:03:24.341Z",
+              "note": "Order status updated to READY FOR PICKUP"
+            },
+            {
+              "status": "ASSIGNED",
+              "timestamp": "2026-09-29T14:03:26.102Z",
+              "note": "Delivery partner Arjun Delivery Partner assigned for pickup."
+            },
+            {
+              "status": "PICKED_UP",
+              "timestamp": "2026-09-29T14:03:28.181Z",
+              "note": "Order status updated to PICKED UP"
+            },
+            {
+              "status": "OUT_FOR_DELIVERY",
+              "timestamp": "2026-09-29T14:03:29.277Z",
+              "note": "Order given to delivery partner and dispatched for delivery."
+            }
+          ],
+          "deliveryPartner": {
+            "_id": "usr-driver-01",
+            "id": "usr-driver-01",
+            "name": "Arjun Delivery Partner",
+            "phone": "9000000002",
+            "vehicleType": "Bike",
+            "ratings": 4.8,
+            "avatar": "https://res.cloudinary.com/milegafood/image/upload/f_auto,q_auto,w_200/krawing/shared/avatars/delivery-partner-avatar.jpg"
+          }
+        },
+        "ts": 1790690610052
+      },
+      {
+        "event": "order:status_updated",
+        "data": {
+          "orderId": "0a387fa6-7134-4eeb-a30b-0cc7db6db235",
+          "orderNumber": "KRAW-590282",
+          "status": "DELIVERED",
+          "timeline": [
+            {
+              "status": "PENDING",
+              "timestamp": "2026-09-29T14:03:10.594Z",
+              "note": "Cravings Food order placed"
+            },
+            {
+              "status": "CONFIRMED",
+              "timestamp": "2026-09-29T14:03:17.144Z",
+              "note": "Order status updated to CONFIRMED"
+            },
+            {
+              "status": "PREPARING",
+              "timestamp": "2026-09-29T14:03:19.041Z",
+              "note": "Store accepted order and is preparing. Delivery partner notified for pickup."
+            },
+            {
+              "status": "READY_FOR_PICKUP",
+              "timestamp": "2026-09-29T14:03:24.341Z",
+              "note": "Order status updated to READY FOR PICKUP"
+            },
+            {
+              "status": "ASSIGNED",
+              "timestamp": "2026-09-29T14:03:26.102Z",
+              "note": "Delivery partner Arjun Delivery Partner assigned for pickup."
+            },
+            {
+              "status": "PICKED_UP",
+              "timestamp": "2026-09-29T14:03:28.181Z",
+              "note": "Order status updated to PICKED UP"
+            },
+            {
+              "status": "OUT_FOR_DELIVERY",
+              "timestamp": "2026-09-29T14:03:29.277Z",
+              "note": "Order given to delivery partner and dispatched for delivery."
+            },
+            {
+              "status": "DELIVERED",
+              "timestamp": "2026-09-29T14:03:31.325Z",
+              "note": "Order delivered successfully. Verified with 4-digit PIN."
+            }
+          ],
+          "deliveryPartner": {
+            "_id": "usr-driver-01",
+            "id": "usr-driver-01",
+            "name": "Arjun Delivery Partner",
+            "phone": "9000000002",
+            "vehicleType": "Bike",
+            "ratings": 4.8,
+            "avatar": "https://res.cloudinary.com/milegafood/image/upload/f_auto,q_auto,w_200/krawing/shared/avatars/delivery-partner-avatar.jpg"
+          }
+        },
+        "ts": 1790690612321
+      },
+      {
+        "event": "delivery:new_job_available",
+        "data": {
+          "orderId": "6cc3193f-7a55-430b-95ab-55e20412c4db",
+          "orderNumber": "KRAW-616264",
+          "restaurantName": "Wow Momos",
+          "restaurantAddress": "Sarai {Crown Interior Mall)",
+          "pickupLat": 28.459,
+          "pickupLng": 77.039,
+          "dropLat": 28.4595,
+          "dropLng": 77.0266,
+          "customerAddress": "H.No 142, Sector 15, Gurugram",
+          "customerLocationName": "H.No 142, Sector 15, Gurugram",
+          "customerName": "Rahul Sharma",
+          "customerPhone": "9876543210",
+          "placedAt": "2026-09-29T14:03:36.352Z",
+          "vendorReceivedAt": "2026-09-29T14:03:36.352Z",
+          "estimatedMinutes": 25,
+          "predictedDeliveryMinutes": 25,
+          "distanceKm": 3.2,
+          "payout": 114,
+          "orderType": "CRAVINGS",
+          "totalAmount": 449
+        },
+        "ts": 1790690620695
+      },
+      {
+        "event": "delivery:new_job_available",
+        "data": {
+          "orderId": "00533004-5c7b-4881-b03c-0795bf04527e",
+          "orderNumber": "KRAW-637003",
+          "restaurantName": "Wow Momos",
+          "restaurantAddress": "Sarai {Crown Interior Mall)",
+          "pickupLat": 28.459,
+          "pickupLng": 77.039,
+          "dropLat": 28.4595,
+          "dropLng": 77.0266,
+          "customerAddress": "H.No 142, Sector 15, Gurugram",
+          "customerLocationName": "H.No 142, Sector 15, Gurugram",
+          "customerName": "Rahul Sharma",
+          "customerPhone": "9876543210",
+          "placedAt": "2026-09-29T14:03:57.099Z",
+          "vendorReceivedAt": "2026-09-29T14:03:57.099Z",
+          "estimatedMinutes": 25,
+          "predictedDeliveryMinutes": 25,
+          "distanceKm": 3.2,
+          "payout": 114,
+          "orderType": "CRAVINGS",
+          "totalAmount": 449
+        },
+        "ts": 1790690639458
+      }
+    ],
+    "admin_bystander": []
+  },
+  "failedRequests": []
+}

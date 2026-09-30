@@ -1,0 +1,564 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Address {
+  id          String   @id @default(uuid()) @db.VarChar(36)
+  userId      String   @db.VarChar(36)
+  label       String?  @default("Home") @db.VarChar(30)
+  addressLine String   @db.VarChar(255)
+  city        String   @db.VarChar(100)
+  state       String   @db.VarChar(100)
+  pincode     String   @db.VarChar(10)
+  latitude    Decimal? @db.Decimal(10, 7)
+  longitude   Decimal? @db.Decimal(10, 7)
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now())
+  User        User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  Order       Order[]
+
+  @@index([userId], map: "idx_address_user")
+}
+
+model Cart {
+  id         String     @id @default(uuid()) @db.VarChar(36)
+  userId     String     @db.VarChar(36)
+  vendorId   String?    @db.VarChar(36)
+  cartType   VendorType @default(CRAVINGS)
+  couponCode String?    @db.VarChar(50)
+  discount   Decimal    @default(0.00) @db.Decimal(10, 2)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @default(now())
+  User       User       @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  Vendor     Vendor?    @relation(fields: [vendorId], references: [id], onUpdate: NoAction)
+  CartItem   CartItem[]
+
+  @@unique([userId, cartType], map: "uniq_user_cart_type")
+}
+
+model CartItem {
+  id             String  @id @default(uuid()) @db.VarChar(36)
+  cartId         String  @db.VarChar(36)
+  productId      String  @db.VarChar(36)
+  name           String  @db.VarChar(150)
+  price          Decimal @db.Decimal(10, 2)
+  selectedWeight String? @db.VarChar(50)
+  quantity       Int     @default(1)
+  isVeg          Boolean @default(true)
+  image          String?
+  Cart           Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  Product        Product @relation(fields: [productId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model Category {
+  id        String    @id @default(uuid()) @db.VarChar(36)
+  name      String    @db.VarChar(100)
+  slug      String    @unique @db.VarChar(120)
+  icon      String    @default("Utensils") @db.VarChar(50)
+  image     String?   @default("")
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @default(now())
+  Product   Product[]
+}
+
+model Coupon {
+  id            String    @id @default(uuid()) @db.VarChar(36)
+  code          String    @unique @db.VarChar(50)
+  title         String    @db.VarChar(100)
+  discountType  String    @default("PERCENTAGE") @db.VarChar(20)
+  discountValue Decimal   @db.Decimal(10, 2)
+  minOrderValue Decimal   @default(199.00) @db.Decimal(10, 2)
+  maxDiscount   Decimal?  @default(120.00) @db.Decimal(10, 2)
+  validFrom     DateTime?
+  validTo       DateTime?
+  isActive      Boolean   @default(true)
+  usageLimit    Int       @default(1000)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @default(now())
+  Order         Order[]
+}
+
+model Delivery {
+  id                String             @id @default(uuid()) @db.VarChar(36)
+  orderId           String             @unique @db.VarChar(36)
+  deliveryPartnerId String             @db.VarChar(36)
+  status            DeliveryStatus     @default(ASSIGNED)
+  pickupLat         Decimal?           @db.Decimal(10, 7)
+  pickupLng         Decimal?           @db.Decimal(10, 7)
+  dropLat           Decimal?           @db.Decimal(10, 7)
+  dropLng           Decimal?           @db.Decimal(10, 7)
+  currentLat        Decimal?           @db.Decimal(10, 7)
+  currentLng        Decimal?           @db.Decimal(10, 7)
+  earnings          Decimal            @default(65.00) @db.Decimal(10, 2)
+  distanceKm        Decimal            @default(3.40) @db.Decimal(5, 2)
+  estimatedMinutes  Int                @default(20)
+  pickupAt          DateTime?
+  deliveredAt       DateTime?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @default(now())
+  User              User               @relation(fields: [deliveryPartnerId], references: [id], onUpdate: NoAction)
+  Order             Order              @relation(fields: [orderId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  DeliveryLocation  DeliveryLocation[]
+
+  @@index([deliveryPartnerId], map: "idx_delivery_driver")
+  @@index([status], map: "idx_delivery_status")
+}
+
+model DeliveryLocation {
+  id         String   @id @default(uuid()) @db.VarChar(36)
+  deliveryId String   @db.VarChar(36)
+  latitude   Decimal  @db.Decimal(10, 7)
+  longitude  Decimal  @db.Decimal(10, 7)
+  recordedAt DateTime @default(now())
+  Delivery   Delivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model Notification {
+  id        String   @id @default(uuid()) @db.VarChar(36)
+  userId    String   @db.VarChar(36)
+  title     String   @db.VarChar(150)
+  message   String
+  type      String   @default("ORDER_UPDATE") @db.VarChar(50)
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model Order {
+  id                            String          @id @default(uuid()) @db.VarChar(36)
+  orderNumber                   String          @unique @db.VarChar(50)
+  orderType                     VendorType      @default(CRAVINGS)
+  customerId                    String          @db.VarChar(36)
+  vendorId                      String          @db.VarChar(36)
+  vendorUserId                  String?         @db.VarChar(36)
+  deliveryPartnerId             String?         @db.VarChar(36)
+  addressId                     String?         @db.VarChar(36)
+  couponId                      String?         @db.VarChar(36)
+  subtotal                      Decimal         @db.Decimal(10, 2)
+  deliveryFee                   Decimal         @default(30.00) @db.Decimal(10, 2)
+  tax                           Decimal         @default(0.00) @db.Decimal(10, 2)
+  discount                      Decimal         @default(0.00) @db.Decimal(10, 2)
+  totalAmount                   Decimal         @db.Decimal(10, 2)
+  status                        OrderStatus     @default(PENDING)
+  deliveryNotes                 String?
+  deliveryPin                   String?         @db.VarChar(10)
+  pickupLat                     Decimal?        @db.Decimal(10, 7)
+  pickupLng                     Decimal?        @db.Decimal(10, 7)
+  dropLat                       Decimal?        @db.Decimal(10, 7)
+  dropLng                       Decimal?        @db.Decimal(10, 7)
+  placedAt                      DateTime        @default(now())
+  updatedAt                     DateTime        @default(now())
+  Delivery                      Delivery?
+  DeliveryOffer                 DeliveryOffer[]
+  Address                       Address?        @relation(fields: [addressId], references: [id], onUpdate: NoAction)
+  Coupon                        Coupon?         @relation(fields: [couponId], references: [id], onUpdate: NoAction)
+  User_Order_customerIdToUser   User            @relation("Order_customerIdToUser", fields: [customerId], references: [id], onUpdate: NoAction)
+  Vendor                        Vendor          @relation(fields: [vendorId], references: [id], onUpdate: NoAction)
+  User_Order_vendorUserIdToUser User?           @relation("Order_vendorUserIdToUser", fields: [vendorUserId], references: [id], onUpdate: NoAction)
+  User_Order_deliveryPartnerIdToUser User?      @relation("Order_deliveryPartnerIdToUser", fields: [deliveryPartnerId], references: [id], onUpdate: NoAction)
+  OrderItem                     OrderItem[]
+  OrderTimeline                 OrderTimeline[]
+  Payment                       Payment?
+  Refund                        Refund[]
+  Review                        Review?
+
+  @@index([customerId], map: "idx_order_customer")
+  @@index([status], map: "idx_order_status")
+  @@index([vendorId], map: "idx_order_vendor")
+}
+
+model OrderItem {
+  id             String  @id @default(uuid()) @db.VarChar(36)
+  orderId        String  @db.VarChar(36)
+  productId      String  @db.VarChar(36)
+  name           String  @db.VarChar(150)
+  unitPrice      Decimal @db.Decimal(10, 2)
+  lineTotal      Decimal @db.Decimal(10, 2)
+  quantity       Int
+  selectedWeight String? @db.VarChar(50)
+  isVeg          Boolean @default(true)
+  image          String?
+  Order          Order   @relation(fields: [orderId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  Product        Product @relation(fields: [productId], references: [id], onUpdate: NoAction)
+
+  @@index([orderId], map: "idx_order_item_order")
+}
+
+model OrderTimeline {
+  id        String      @id @default(uuid()) @db.VarChar(36)
+  orderId   String      @db.VarChar(36)
+  status    OrderStatus
+  note      String?
+  timestamp DateTime    @default(now())
+  Order     Order       @relation(fields: [orderId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model Payment {
+  id            String        @id @default(uuid()) @db.VarChar(36)
+  orderId       String        @unique @db.VarChar(36)
+  transactionId String?       @unique @db.VarChar(100)
+  provider      String?       @default("COD") @db.VarChar(50)
+  method        PaymentMethod @default(COD)
+  amount        Decimal       @db.Decimal(10, 2)
+  status        PaymentStatus @default(PENDING)
+  collectedBy   String?       @db.VarChar(36)
+  paidAt        DateTime?
+  createdAt     DateTime      @default(now())
+  Order         Order         @relation(fields: [orderId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  Refund        Refund[]
+
+  @@index([status], map: "idx_payment_status")
+}
+
+model Product {
+  id                  String                @id @default(uuid()) @db.VarChar(36)
+  vendorId            String                @db.VarChar(36)
+  categoryId          String                @db.VarChar(36)
+  productType         ProductType           @default(FOOD)
+  name                String                @db.VarChar(150)
+  description         String?
+  price               Decimal               @db.Decimal(10, 2)
+  discountPrice       Decimal?              @db.Decimal(10, 2)
+  unit                String                @default("portion") @db.VarChar(20)
+  weightOptions       Json?
+  isVeg               Boolean               @default(true)
+  isAvailable         Boolean               @default(true)
+  image               String
+  imagePublicId       String?               @db.VarChar(255)
+  rating              Decimal               @default(4.5) @db.Decimal(2, 1)
+  prepTime            String?               @default("15-20 min") @db.VarChar(20)
+  freshnessBadge      String?               @db.VarChar(50)
+  stockKg             Decimal?              @default(100.00) @db.Decimal(10, 2)
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @default(now())
+  CartItem            CartItem[]
+  OrderItem           OrderItem[]
+  ProductVariant      ProductVariant[]
+  ProductPriceHistory ProductPriceHistory[]
+  Category            Category              @relation(fields: [categoryId], references: [id], onUpdate: NoAction)
+  Vendor              Vendor                @relation(fields: [vendorId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([categoryId], map: "idx_product_category")
+  @@index([productType], map: "idx_product_type")
+  @@index([vendorId], map: "idx_product_vendor")
+}
+
+model ProductVariant {
+  id                  String                @id @default(uuid()) @db.VarChar(36)
+  productId           String                @db.VarChar(36)
+  name                String                @db.VarChar(100)
+  quantity            Decimal               @db.Decimal(10, 2)
+  unit                ProductUnit           @default(KG)
+  price               Decimal               @db.Decimal(10, 2)
+  discountPrice       Decimal?              @db.Decimal(10, 2)
+  stockQuantity       Decimal?              @default(100.00) @db.Decimal(10, 2)
+  isAvailable         Boolean               @default(true)
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  Product             Product               @relation(fields: [productId], references: [id], onDelete: Cascade)
+  ProductPriceHistory ProductPriceHistory[]
+
+  @@index([productId], map: "idx_variant_product")
+}
+
+model ProductPriceHistory {
+  id             String          @id @default(uuid()) @db.VarChar(36)
+  variantId      String?         @db.VarChar(36)
+  productId      String?         @db.VarChar(36)
+  oldPrice       Decimal         @db.Decimal(10, 2)
+  newPrice       Decimal         @db.Decimal(10, 2)
+  changedBy      String          @db.VarChar(36)
+  reason         String?
+  createdAt      DateTime        @default(now())
+  ProductVariant ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  Product        Product?        @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model VendorApplication {
+  id           String            @id @default(uuid()) @db.VarChar(36)
+  userId       String            @db.VarChar(36)
+  fullName     String            @db.VarChar(120)
+  phone        String            @db.VarChar(20)
+  email        String?           @db.VarChar(150)
+  businessName String            @db.VarChar(150)
+  vendorType   VendorType        @default(CRAVINGS)
+  address      String            @db.VarChar(255)
+  city         String            @db.VarChar(100)
+  state        String            @default("Haryana") @db.VarChar(100)
+  pincode      String            @default("121009") @db.VarChar(10)
+  fssaiNumber  String?           @db.VarChar(50)
+  gstNumber    String?           @db.VarChar(50)
+  documents    Json?
+  status       ApplicationStatus @default(PENDING)
+  adminNotes   String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  User         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model DeliveryPartnerApplication {
+  id            String            @id @default(uuid()) @db.VarChar(36)
+  userId        String            @db.VarChar(36)
+  fullName      String            @db.VarChar(120)
+  phone         String            @db.VarChar(20)
+  email         String?           @db.VarChar(150)
+  address       String            @db.VarChar(255)
+  vehicleType   String            @default("Bike") @db.VarChar(30)
+  vehicleNumber String            @db.VarChar(30)
+  dlNumber      String?           @db.VarChar(50)
+  bankDetails   Json?
+  documents     Json?
+  status        ApplicationStatus @default(PENDING)
+  adminNotes    String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  User          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationAuditLog {
+  id        String   @id @default(uuid()) @db.VarChar(36)
+  actorId   String   @db.VarChar(36)
+  action    String   @db.VarChar(100)
+  targetId  String   @db.VarChar(36)
+  metadata  Json?
+  createdAt DateTime @default(now())
+}
+
+model Refund {
+  id           String       @id @default(uuid()) @db.VarChar(36)
+  orderId      String       @db.VarChar(36)
+  paymentId    String       @db.VarChar(36)
+  refundAmount Decimal      @db.Decimal(10, 2)
+  reason       String?
+  status       RefundStatus @default(PENDING)
+  gatewayTxnId String?      @db.VarChar(100)
+  processedAt  DateTime?
+  createdAt    DateTime     @default(now())
+  Order        Order        @relation(fields: [orderId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  Payment      Payment      @relation(fields: [paymentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model Review {
+  id                                  String   @id @default(uuid()) @db.VarChar(36)
+  userId                              String   @db.VarChar(36)
+  vendorId                            String   @db.VarChar(36)
+  orderId                             String   @unique @db.VarChar(36)
+  deliveryPartnerId                   String?  @db.VarChar(36)
+  rating                              Int
+  comment                             String?
+  createdAt                           DateTime @default(now())
+  User_Review_deliveryPartnerIdToUser User?    @relation("Review_deliveryPartnerIdToUser", fields: [deliveryPartnerId], references: [id], onUpdate: NoAction)
+  Order                               Order    @relation(fields: [orderId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  User_Review_userIdToUser            User     @relation("Review_userIdToUser", fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  Vendor                              Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model User {
+  id                                    String                       @id @default(uuid()) @db.VarChar(36)
+  fullName                              String                       @db.VarChar(120)
+  email                                 String                       @unique @db.VarChar(150)
+  phone                                 String                       @unique @db.VarChar(20)
+  passwordHash                          String                       @db.VarChar(255)
+  role                                  UserRole                     @default(CUSTOMER)
+  status                                String                       @default("active") @db.VarChar(20)
+  isOnline                              Boolean                      @default(true)
+  avatar                                String?                      @default("https://img.icons8.com/?size=100&id=85147&format=png&color=000000")
+  vehicleType                           String?                      @default("Bike") @db.VarChar(30)
+  ratings                               Float?                       @default(4.8)
+  createdAt                             DateTime                     @default(now())
+  updatedAt                             DateTime                     @default(now())
+  Address                               Address[]
+  Cart                                  Cart[]
+  Delivery                              Delivery[]
+  Notification                          Notification[]
+  Order_Order_customerIdToUser          Order[]                      @relation("Order_customerIdToUser")
+  Order_Order_vendorUserIdToUser        Order[]                      @relation("Order_vendorUserIdToUser")
+  Order_Order_deliveryPartnerIdToUser   Order[]                      @relation("Order_deliveryPartnerIdToUser")
+  Review_Review_deliveryPartnerIdToUser Review[]                     @relation("Review_deliveryPartnerIdToUser")
+  Review_Review_userIdToUser            Review[]                     @relation("Review_userIdToUser")
+  Vendor                                Vendor[]
+  VendorApplication                     VendorApplication[]
+  DeliveryPartnerApplication            DeliveryPartnerApplication[]
+  DeliveryOffer                         DeliveryOffer[]
+  RiderLocation                         RiderLocation?
+
+  @@index([role], map: "idx_user_role")
+  @@index([status], map: "idx_user_status")
+}
+
+model Vendor {
+  id           String        @id @default(uuid()) @db.VarChar(36)
+  ownerUserId  String        @db.VarChar(36)
+  vendorType   VendorType    @default(CRAVINGS)
+  name         String        @db.VarChar(150)
+  phone        String        @unique @db.VarChar(20)
+  email        String?       @unique @db.VarChar(150)
+  address      String        @db.VarChar(255)
+  city         String        @db.VarChar(100)
+  state        String?       @default("Haryana") @db.VarChar(100)
+  pincode      String?       @default("121009") @db.VarChar(10)
+  latitude     Decimal?      @db.Decimal(10, 7)
+  longitude    Decimal?      @db.Decimal(10, 7)
+  rating       Decimal       @default(4.5) @db.Decimal(2, 1)
+  numRatings   Int           @default(100)
+  deliveryTime String?       @default("25-35 min") @db.VarChar(30)
+  deliveryFee  Decimal       @default(30.00) @db.Decimal(10, 2)
+  priceRange   String?       @default("₹₹") @db.VarChar(10)
+  isVegOnly    Boolean       @default(false)
+  status       String        @default("open") @db.VarChar(20)
+  image        String
+  imagePublicId String?       @db.VarChar(255)
+  bannerImage  String?
+  bannerImagePublicId String? @db.VarChar(255)
+  offers       String[]
+  freshTagline String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @default(now())
+  Cart         Cart[]
+  Order        Order[]
+  Product      Product[]
+  Review       Review[]
+  User         User          @relation(fields: [ownerUserId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  VendorHours  VendorHours[]
+
+  @@index([status], map: "idx_vendor_status")
+  @@index([vendorType], map: "idx_vendor_type")
+}
+
+model VendorHours {
+  id        String  @id @default(uuid()) @db.VarChar(36)
+  vendorId  String  @db.VarChar(36)
+  dayOfWeek Int
+  openTime  String? @default("09:00") @db.VarChar(10)
+  closeTime String? @default("23:00") @db.VarChar(10)
+  isClosed  Boolean @default(false)
+  Vendor    Vendor  @relation(fields: [vendorId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([vendorId, dayOfWeek], map: "uniq_vendor_day")
+}
+
+enum DeliveryStatus {
+  ASSIGNED
+  WAITING_PICKUP
+  PICKED_UP
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PREPARING
+  PACKING
+  READY_FOR_PICKUP
+  ASSIGNED
+  PICKED_UP
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  COD
+  ONLINE
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum ProductType {
+  FOOD
+  VEGETABLE
+  FRUIT
+  GROCERY
+}
+
+enum ProductUnit {
+  GRAM
+  KG
+  ML
+  LITRE
+  PIECE
+  PACK
+  PORTION
+}
+
+enum ApplicationStatus {
+  PENDING
+  UNDER_REVIEW
+  PHYSICAL_VERIFICATION
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum RefundStatus {
+  PENDING
+  PROCESSED
+  FAILED
+}
+
+enum UserRole {
+  CUSTOMER
+  VENDOR
+  DELIVERY_PARTNER
+  ADMIN
+}
+
+enum VendorType {
+  CRAVINGS
+  FRESH
+}
+
+model DeliveryOffer {
+  id                     String      @id @default(uuid()) @db.VarChar(36)
+  orderId                String      @db.VarChar(36)
+  riderId                String      @db.VarChar(36)
+  status                 OfferStatus @default(PENDING)
+  offeredAt              DateTime    @default(now())
+  expiresAt              DateTime
+  respondedAt            DateTime?
+  distanceToShop         Decimal     @db.Decimal(5, 2)
+  estimatedPickupMinutes Int         @default(5)
+  payout                 Decimal     @db.Decimal(10, 2)
+  createdAt              DateTime    @default(now())
+  updatedAt              DateTime    @updatedAt
+  Order                  Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  User                   User        @relation(fields: [riderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId], map: "idx_offer_order")
+  @@index([riderId], map: "idx_offer_rider")
+  @@index([status], map: "idx_offer_status")
+}
+
+model RiderLocation {
+  id        String   @id @default(uuid()) @db.VarChar(36)
+  riderId   String   @unique @db.VarChar(36)
+  latitude  Decimal  @db.Decimal(10, 7)
+  longitude Decimal  @db.Decimal(10, 7)
+  updatedAt DateTime @default(now())
+  User      User     @relation(fields: [riderId], references: [id], onDelete: Cascade)
+
+  @@index([riderId], map: "idx_rider_location_rider")
+}
+
+enum OfferStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  CANCELLED
+}
+

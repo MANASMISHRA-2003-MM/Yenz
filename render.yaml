@@ -1,0 +1,39 @@
+# Render.com deployment config
+# Two services: backend (Web Service) + frontend (Static Site)
+
+services:
+  # -- Backend API + Socket.IO (Node.js Web Service) --------------------------
+  - type: web
+    name: krawing-backend
+    runtime: node
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        sync: false          # Set in Render dashboard — your Aiven PostgreSQL URL
+      - key: JWT_SECRET
+        sync: false          # Set in Render dashboard
+      - key: TRUST_PROXY
+        value: 1             # Required for express-rate-limit behind Render's proxy
+
+  # -- Frontend React (Static Site) -------------------------------------------
+  - type: web
+    name: krawing-frontend
+    runtime: static
+    rootDir: client
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        # Set this to your backend service URL, e.g. https://krawing-backend.onrender.com
+        sync: false
+    routes:
+      # SPA fallback — all routes serve index.html
+      - type: rewrite
+        source: /*
+        destination: /index.html

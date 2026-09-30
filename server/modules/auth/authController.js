@@ -1,0 +1,172 @@
+const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const prisma = require('../../utils/prisma');
+const { formatWithId } = require('../../utils/formatters');
+
+const generateToken = (id) => {
+  return jwt.sign({ id }, process.env.JWT_SECRET || 'krawing_hyperlocal_secret_key_2026_jwt_token_auth', {
+    expiresIn: '7d'
+  });
+};
+
+const mapToPrismaRole = (inputRole) => {
+  if (!inputRole) return 'CUSTOMER';
+  const r = inputRole.toLowerCase();
+  if (r === 'vendor') return 'VENDOR';
+  if (r === 'delivery_partner' || r === 'driver') return 'DELIVERY_PARTNER';
+  if (r === 'admin') return 'ADMIN';
+  if (r === 'consumer' || r === 'customer') return 'CUSTOMER';
+  return 'CUSTOMER';
+};
+
+const mapToFrontendRole = (prismaRole) => {
+  if (!prismaRole) return 'consumer';
+  const r = prismaRole.toUpperCase();
+  if (r === 'CUSTOMER') return 'consumer';
+  if (r === 'VENDOR') return 'vendor';
+  if (r === 'DELIVERY_PARTNER') return 'delivery_partner';
+  if (r === 'ADMIN') return 'admin';
+  return prismaRole.toLowerCase();
+};
+
+const formatUserResponse = (user) => {
+  return formatWithId({
+    id: user.id,
+    name: user.fullName || user.name || '',
+    fullName: user.fullName || user.name || '',
+    email: user.email,
+    role: mapToFrontendRole(user.role),
+    phone: user.phone || '',
+    avatar: 'https://img.icons8.com/?size=100&id=85147&format=png&color=000000',
+    vehicleType: user.vehicleType || 'Bike'
+  });
+};
+
+// @desc Register User
+// @route POST /api/auth/register
+const registerUser = async (req, res, next) => {
+  try {
+    const { name, email, password, role, phone, vehicleType } = req.body;
+
+    if (!name || !email || !password) {
+      return res.status(400).json({ success: false, message: 'Please provide name, email, and password' });
+    }
+
+    const rawPhone = phone ? phone.toString().trim() : '';
+    const digitsOnly = rawPhone.replace(/\D/g, '');
+    if (!rawPhone || digitsOnly.length < 10) {
+      return res.status(400).json({
+        success: false,
+        message: 'A valid mobile phone number (at least 10 digits) is strictly required to register.'
+      });
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+    const existingUser = await prisma.user.findUnique({ where: { email: cleanEmail } });
+    if (existingUser) {
+      return res.status(400).json({ success: false, message: 'An account with this email address already exists. Please login instead.' });
+    }
+
+    const formattedPhone = rawPhone.startsWith('+') ? rawPhone : (digitsOnly.length === 10 ? `+91${digitsOnly}` : `+${digitsOnly}`);
+    const existingPhone = await prisma.user.findFirst({ where: { phone: formattedPhone } });
+    if (existingPhone) {
+      return res.status(400).json({ success: false, message: 'This mobile phone number is already registered. Please login or use another number.' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+    const prismaRole = mapToPrismaRole(role);
+
+    const user = await prisma.user.create({
+      data: {
+        id: crypto.randomUUID(),
+        fullName: name,
+        email: cleanEmail,
+        phone: formattedPhone,
+        passwordHash: hashedPassword,
+        role: prismaRole,
+        vehicleType: vehicleType || 'Bike'
+      }
+    });
+
+    const token = generateToken(user.id);
+    const formattedUser = formatUserResponse(user);
+
+    res.status(201).json({
+      success: true,
+      token,
+      user: formattedUser
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc Login User
+// @route POST /api/auth/login
+const loginUser = async (req, res, next) => {
+  try {
+    const { email, password, requestedRole } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ success: false, message: 'Please provide email and password' });
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+    const user = await prisma.user.findUnique({ where: { email: cleanEmail } });
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Invalid credentials' });
+    }
+
+    const isMatch = await bcrypt.compare(password, user.passwordHash || user.password || '');
+    if (!isMatch) {
+      return res.status(401).json({ success: false, message: 'Invalid credentials' });
+    }
+
+    if (requestedRole && requestedRole !== 'any' && requestedRole !== 'all') {
+      const targetPrismaRole = mapToPrismaRole(requestedRole);
+      if (user.role !== targetPrismaRole) {
+        return res.status(401).json({
+          success: false,
+          message: `Role mismatch: This account is registered as ${user.role}, not ${targetPrismaRole}`
+        });
+      }
+    }
+
+    const token = generateToken(user.id);
+    const formattedUser = formatUserResponse(user);
+
+    res.json({
+      success: true,
+      token,
+      user: formattedUser
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc Quick Demo Login disabled for security
+// @route POST /api/auth/demo-login
+const demoLogin = async (req, res) => {
+  return res.status(400).json({ success: false, message: 'Demo role switching is disabled. Authenticate with actual credentials.' });
+};
+
+// @desc Get Current Logged In User
+// @route GET /api/auth/me
+const getMe = async (req, res, next) => {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const formattedUser = formatUserResponse(user);
+    res.json({ success: true, user: formattedUser });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { registerUser, loginUser, demoLogin, getMe };
