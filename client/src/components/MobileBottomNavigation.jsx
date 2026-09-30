@@ -17,7 +17,7 @@ export default function MobileBottomNavigation() {
     { label: 'Home', path: '/', icon: Home },
     { label: 'Search', path: '/search', icon: Search },
     { label: 'Orders', path: '/orders', icon: Clock },
-    { label: 'Cart', path: isFresh ? '/checkout/fresh-mandi' : '/checkout/cravings', icon: ShoppingBag, badge: itemCount },
+    { label: 'Cart', path: '/cart', icon: ShoppingBag, badge: itemCount },
     { label: 'Profile', path: user ? '/profile' : '/login', icon: User }
   ];
 

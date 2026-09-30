@@ -10,6 +10,8 @@ const {
 } = require('../../utils/deliveryVerification');
 const { acceptOffer, rejectOffer } = require('../../services/dispatchService');
 
+const { calculateDeliveryPayout } = require('../../utils/payoutCalculator');
+
 // Helper to format delivery object for frontend
 const formatDeliveryObj = (d) => {
   if (!d) return null;
@@ -23,8 +25,16 @@ const formatDeliveryObj = (d) => {
   const dropLat = d.dropLat ? Number(d.dropLat) : (ord?.dropLat ? Number(ord.dropLat) : (addressObj?.latitude ? Number(addressObj.latitude) : null));
   const dropLng = d.dropLng ? Number(d.dropLng) : (ord?.dropLng ? Number(ord.dropLng) : (addressObj?.longitude ? Number(addressObj.longitude) : null));
 
+  // Compute exact distance from vendor shop location to user deliverable address
+  const realDistance = (pickupLat !== null && pickupLng !== null && dropLat !== null && dropLng !== null)
+    ? calculateDistance(pickupLat, pickupLng, dropLat, dropLng)
+    : null;
+
+  const distKm = (realDistance !== null && realDistance > 0) ? realDistance : Number(d.distanceKm || 3.4);
+  const computedEarnings = calculateDeliveryPayout(distKm);
+  const earningsVal = (d.earnings && Number(d.earnings) > 0) ? Number(d.earnings) : computedEarnings;
+
   const placedTime = ord?.placedAt ? new Date(ord.placedAt) : new Date(d.createdAt);
-  const distKm = Number(d.distanceKm || 3.4);
   const estDeliveryMinutes = Math.round(15 + distKm * 4);
   const estDeliveryAt = new Date(placedTime.getTime() + (estDeliveryMinutes + 15) * 60000);
   const customerLocName = addressObj
@@ -44,10 +54,10 @@ const formatDeliveryObj = (d) => {
     dropLng,
     currentLat: d.currentLat ? Number(d.currentLat) : null,
     currentLng: d.currentLng ? Number(d.currentLng) : null,
-    earnings: Number(d.earnings || 65),
+    earnings: earningsVal,
     distanceKm: distKm,
     tripDistanceKm: distKm,
-    predictedPayout: Number(d.earnings || 65),
+    predictedPayout: earningsVal,
     estimatedMinutes: estDeliveryMinutes,
     predictedDeliveryMinutes: estDeliveryMinutes,
     estimatedCompletionTime: estDeliveryAt.toISOString(),
@@ -352,10 +362,10 @@ const updateDeliveryStatus = async (req, res, next) => {
 
     // Enforce valid delivery state machine
     const validDeliveryTransitions = {
-      'ASSIGNED': ['WAITING_PICKUP', 'ARRIVED_AT_PICKUP', 'PICKED_UP', 'OUT_FOR_DELIVERY'],
-      'WAITING_PICKUP': ['PICKED_UP', 'OUT_FOR_DELIVERY'],
-      'ARRIVED_AT_PICKUP': ['PICKED_UP', 'OUT_FOR_DELIVERY'],
-      'PICKED_UP': ['OUT_FOR_DELIVERY', 'ARRIVED_AT_CUSTOMER'],
+      'ASSIGNED': ['WAITING_PICKUP', 'ARRIVED_AT_PICKUP', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'ARRIVED_AT_CUSTOMER', 'DELIVERED'],
+      'WAITING_PICKUP': ['PICKED_UP', 'OUT_FOR_DELIVERY', 'ARRIVED_AT_CUSTOMER', 'DELIVERED'],
+      'ARRIVED_AT_PICKUP': ['PICKED_UP', 'OUT_FOR_DELIVERY', 'ARRIVED_AT_CUSTOMER', 'DELIVERED'],
+      'PICKED_UP': ['OUT_FOR_DELIVERY', 'ARRIVED_AT_CUSTOMER', 'DELIVERED'],
       'OUT_FOR_DELIVERY': ['ARRIVED_AT_CUSTOMER', 'DELIVERED'],
       'ARRIVED_AT_CUSTOMER': ['DELIVERED']
     };
@@ -508,15 +518,24 @@ const updateDeliveryStatus = async (req, res, next) => {
       });
     }
 
-    // Socket notification to customer & tracking rooms
+    // Socket notification to customer, vendor & driver rooms
     try {
       const io = getIO();
-      io.to(`order_${delivery.orderId}`).emit('order:status_updated', {
+      const statusPayload = {
         orderId: delivery.orderId,
+        orderNumber: delivery.Order?.orderNumber,
         status: orderStatus,
         deliveryStatus: status,
-        timelineNote
-      });
+        timelineNote,
+        deliveryPartner: formatDeliveryObj(updatedDelivery)?.deliveryPartner || null
+      };
+      io.to(`order_${delivery.orderId}`).emit('order:status_updated', statusPayload);
+      if (delivery.Order?.vendorId) {
+        io.to(`vendor_${delivery.Order.vendorId}`).emit('order:status_updated', statusPayload);
+      }
+      if (delivery.deliveryPartnerId) {
+        io.to(`driver_${delivery.deliveryPartnerId}`).emit('order:status_updated', statusPayload);
+      }
     } catch (e) {
       console.log('Socket emit warning:', e.message);
     }

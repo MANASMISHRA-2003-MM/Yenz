@@ -5,13 +5,14 @@ import { socket } from '../../services/socket';
 import Navbar from '../../components/Navbar';
 import MapSimulator from '../../components/MapSimulator';
 import OrderStatusBadge from '../../components/OrderStatusBadge';
+import DeliveryTimeline from '../../components/DeliveryTimeline';
 import {
   Bike, MapPin, Navigation, ToggleLeft, ToggleRight,
   BellRing, CheckCircle2, AlertTriangle, Phone, KeyRound,
   Compass, ArrowRight, ShieldCheck, RefreshCw, Clock, Timer, History, Store
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { startRepeatingAlert, stopAlertSound, playActionSound, unlockAudio, triggerHaptics } from '../../utils/alertSound';
+import { startRepeatingAlert, stopAlertSound, playActionSound, unlockAudio, triggerHaptics, playCashRegisterSound } from '../../utils/alertSound';
 import { requestNotificationPermission, showBrowserAlert } from '../../utils/browserNotification';
 import { reverseGeocode } from '../../utils/reverseGeocode';
 
@@ -32,6 +33,29 @@ const getPredictedETA = (dateStr, deliveryMinutes = 20) => {
   const etaDate = new Date(base.getTime() + deliveryMinutes * 60000);
   const etaTime = etaDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
   return { etaTime, durationMinutes: deliveryMinutes };
+};
+
+const calculateDistanceMeters = (lat1, lon1, lat2, lon2) => {
+  if (lat1 === undefined || lat1 === null || lon1 === undefined || lon1 === null ||
+      lat2 === undefined || lat2 === null || lon2 === undefined || lon2 === null) {
+    return null;
+  }
+  const nLat1 = Number(lat1);
+  const nLon1 = Number(lon1);
+  const nLat2 = Number(lat2);
+  const nLon2 = Number(lon2);
+  if (isNaN(nLat1) || isNaN(nLon1) || isNaN(nLat2) || isNaN(nLon2) || (nLat1 === 0 && nLon1 === 0) || (nLat2 === 0 && nLon2 === 0)) return null;
+
+  const R = 6371e3; // Earth's radius in meters
+  const toRad = (x) => (x * Math.PI) / 180;
+  const dLat = toRad(nLat2 - nLat1);
+  const dLon = toRad(nLon2 - nLon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(nLat1)) * Math.cos(toRad(nLat2)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.round(R * c);
 };
 
 export default function DeliveryDashboard() {
@@ -524,7 +548,7 @@ export default function DeliveryDashboard() {
             type="button"
             onClick={() => {
               unlockAudio();
-              playActionSound();
+              playCashRegisterSound();
               triggerHaptics();
               toast.success('🔔 Sound ring & mobile vibration tested successfully!');
             }}
@@ -767,6 +791,11 @@ export default function DeliveryDashboard() {
                 <OrderStatusBadge status={activeDelivery.status} />
               </div>
 
+              {/* Compact Timeline Progress Tracker */}
+              <div className="pt-2 border-t border-slate-100">
+                <DeliveryTimeline status={activeDelivery.status} compact={true} />
+              </div>
+
               {/* LIVE NAVIGATION MAP LAYOUT: Driver -> Vendor -> Customer */}
               <MapSimulator
                 orderId={activeDelivery.orderId || activeDelivery.id}
@@ -841,36 +870,92 @@ export default function DeliveryDashboard() {
 
               </div>
 
-              {/* 4-DIGIT DELIVERY PIN VERIFICATION INTERFACE */}
-              {['OUT_FOR_DELIVERY', 'PICKED_UP'].includes(activeDelivery.status) && (
-                <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-cyan-50 border-2 border-emerald-300 p-5 rounded-3xl space-y-3 shadow-sm">
-                  <div className="flex items-center gap-2">
-                    <KeyRound className="w-5 h-5 text-emerald-700" />
-                    <h4 className="text-sm font-extrabold text-slate-900">Enter Customer's 4-Digit Delivery PIN</h4>
+              {/* 4-DIGIT DELIVERY PIN VERIFICATION INTERFACE WITH 350M LIVE GEOFENCE LOCK */}
+              {['OUT_FOR_DELIVERY', 'PICKED_UP', 'ARRIVED_AT_CUSTOMER'].includes(activeDelivery.status) && (() => {
+                const dropLat = activeDelivery.dropLat || activeDelivery.customerAddress?.latitude || activeDelivery.address?.latitude;
+                const dropLng = activeDelivery.dropLng || activeDelivery.customerAddress?.longitude || activeDelivery.address?.longitude;
+                const distMeters = (riderCoords?.lat && riderCoords?.lng && dropLat && dropLng)
+                  ? calculateDistanceMeters(riderCoords.lat, riderCoords.lng, dropLat, dropLng)
+                  : null;
+                const isWithin350m = distMeters !== null ? distMeters <= 350 : true;
+
+                return (
+                  <div className={`p-5 rounded-3xl space-y-3 shadow-sm border-2 transition-all ${
+                    isWithin350m
+                      ? 'bg-gradient-to-r from-emerald-50 via-teal-50 to-cyan-50 border-emerald-300'
+                      : 'bg-amber-50/90 border-amber-300'
+                  }`}>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/60 pb-2">
+                      <div className="flex items-center gap-2">
+                        <KeyRound className="w-5 h-5 text-emerald-700" />
+                        <h4 className="text-sm font-extrabold text-slate-900">Enter Customer's 4-Digit Delivery PIN</h4>
+                      </div>
+
+                      {distMeters !== null && (
+                        <div className={`px-3 py-1 rounded-full text-xs font-black border flex items-center gap-1.5 ${
+                          isWithin350m
+                            ? 'bg-emerald-100 text-emerald-800 border-emerald-300 animate-pulse'
+                            : 'bg-amber-100 text-amber-900 border-amber-300'
+                        }`}>
+                          {isWithin350m ? (
+                            <>
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>📍 Within 350m Dropoff Geofence ({distMeters}m away) — UNLOCKED</span>
+                            </>
+                          ) : (
+                            <>
+                              <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                              <span>🔒 Geofence Locked ({distMeters}m from Customer)</span>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {!isWithin350m && (
+                      <div className="p-3 bg-amber-100/70 border border-amber-300 rounded-2xl text-xs text-amber-950 font-bold space-y-1">
+                        <p className="flex items-center gap-1.5 text-amber-900">
+                          <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
+                          <span>📍 Live Device GPS Match Required:</span>
+                          <span>Move closer to the customer's delivery location to unlock PIN entry.</span>
+                        </p>
+                        <p className="text-[11px] text-amber-800 font-medium pl-5">
+                          Rider live location distance: <strong>{distMeters} meters (Max allowed: 350 meters)</strong>. Drive remaining {distMeters - 350}m to unlock.
+                        </p>
+                      </div>
+                    )}
+
+                    <p className="text-xs text-slate-600 font-medium">
+                      The customer must provide their unique 4-digit PIN (shown on their order tracking screen) upon handing over the order.
+                    </p>
+
+                    <div className="flex flex-col sm:flex-row items-center gap-3">
+                      <input
+                        type="text"
+                        maxLength={4}
+                        placeholder={isWithin350m ? "e.g. 4821" : `Locked (${distMeters || '350+'}m away)`}
+                        disabled={!isWithin350m || pinSubmitting}
+                        value={deliveryPinInput}
+                        onChange={(e) => setDeliveryPinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                        className="w-full sm:w-44 text-center tracking-widest text-2xl font-mono font-black py-2.5 px-4 bg-white border-2 border-emerald-400 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-inner disabled:bg-slate-100 disabled:border-slate-300 disabled:text-slate-400 disabled:cursor-not-allowed"
+                      />
+                      <button
+                        onClick={() => handleVerifyPinAndComplete(activeDelivery)}
+                        disabled={!isWithin350m || deliveryPinInput.length !== 4 || pinSubmitting}
+                        className="w-full sm:flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-extrabold text-xs rounded-2xl shadow-md transition flex items-center justify-center gap-1.5"
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>
+                          {!isWithin350m
+                            ? `Arrive within 350m of customer (${distMeters}m away) to unlock PIN`
+                            : (pinSubmitting ? 'Verifying PIN with Server...' : 'Verify PIN & Complete Delivery')
+                          }
+                        </span>
+                      </button>
+                    </div>
                   </div>
-                  <p className="text-xs text-slate-600 font-medium">
-                    The customer must provide their unique 4-digit PIN (shown on their order tracking screen) upon handing over the order.
-                  </p>
-                  <div className="flex flex-col sm:flex-row items-center gap-3">
-                    <input
-                      type="text"
-                      maxLength={4}
-                      placeholder="e.g. 4821"
-                      value={deliveryPinInput}
-                      onChange={(e) => setDeliveryPinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                      className="w-full sm:w-44 text-center tracking-widest text-2xl font-mono font-black py-2.5 px-4 bg-white border-2 border-emerald-400 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-inner"
-                    />
-                    <button
-                      onClick={() => handleVerifyPinAndComplete(activeDelivery)}
-                      disabled={deliveryPinInput.length !== 4 || pinSubmitting}
-                      className="w-full sm:flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-extrabold text-xs rounded-2xl shadow-md transition flex items-center justify-center gap-1.5"
-                    >
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>{pinSubmitting ? 'Verifying PIN with Server...' : 'Verify PIN & Complete Delivery'}</span>
-                    </button>
-                  </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Progressive Driver Trip Lifecycle Actions */}
               <div className="pt-2 flex flex-wrap gap-3">

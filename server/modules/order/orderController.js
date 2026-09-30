@@ -594,13 +594,13 @@ exports.updateOrderStatus = async (req, res) => {
 
     // Enforce server-side State Machine transition rules
     const validTransitions = {
-      'PENDING': ['CONFIRMED', 'CANCELLED'],
-      'CONFIRMED': ['PREPARING', 'PACKING', 'READY_FOR_PICKUP', 'CANCELLED'],
-      'PREPARING': ['PACKING', 'READY_FOR_PICKUP', 'CANCELLED'],
-      'PACKING': ['READY_FOR_PICKUP', 'CANCELLED'],
+      'PENDING': ['CONFIRMED', 'PREPARING', 'PACKING', 'READY_FOR_PICKUP', 'ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'CANCELLED'],
+      'CONFIRMED': ['PREPARING', 'PACKING', 'READY_FOR_PICKUP', 'ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'CANCELLED'],
+      'PREPARING': ['PACKING', 'READY_FOR_PICKUP', 'ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'CANCELLED'],
+      'PACKING': ['READY_FOR_PICKUP', 'ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'CANCELLED'],
       'READY_FOR_PICKUP': ['ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'CANCELLED'],
       'ASSIGNED': ['PICKED_UP', 'OUT_FOR_DELIVERY', 'CANCELLED'],
-      'PICKED_UP': ['OUT_FOR_DELIVERY', 'CANCELLED'],
+      'PICKED_UP': ['OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'],
       'OUT_FOR_DELIVERY': ['DELIVERED', 'CANCELLED']
     };
 
@@ -622,9 +622,9 @@ exports.updateOrderStatus = async (req, res) => {
       if (!isStoreVendor && !isAdmin) {
         return res.status(403).json({ success: false, message: 'You do not own the store for this order' });
       }
-      const vendorAllowedStatuses = ['CONFIRMED', 'PREPARING', 'PACKING', 'READY_FOR_PICKUP', 'CANCELLED'];
+      const vendorAllowedStatuses = ['CONFIRMED', 'PREPARING', 'PACKING', 'READY_FOR_PICKUP', 'ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'CANCELLED'];
       if (!vendorAllowedStatuses.includes(status) && !isAdmin) {
-        return res.status(403).json({ success: false, message: 'Vendors may only update status to CONFIRMED, PREPARING, PACKING, READY_FOR_PICKUP, or CANCELLED.' });
+        return res.status(403).json({ success: false, message: 'Vendors may only update status to CONFIRMED, PREPARING, PACKING, READY_FOR_PICKUP, DISPATCHED, or CANCELLED.' });
       }
     } else if (updaterRole === 'CONSUMER' || updaterRole === 'CUSTOMER') {
       if (!isOwnerCustomer && !isAdmin) {
@@ -780,13 +780,20 @@ exports.updateOrderStatus = async (req, res) => {
     // Socket status update
     try {
       const io = getIO();
-      io.to(`order_${updatedOrder.id}`).emit('order:status_updated', {
+      const statusPayload = {
         orderId: updatedOrder.id,
         orderNumber: updatedOrder.orderNumber,
         status: updatedOrder.status,
         timeline: formatted.timeline,
         deliveryPartner: formatted.deliveryPartner
-      });
+      };
+      io.to(`order_${updatedOrder.id}`).emit('order:status_updated', statusPayload);
+      if (updatedOrder.vendorId) {
+        io.to(`vendor_${updatedOrder.vendorId}`).emit('order:status_updated', statusPayload);
+      }
+      if (updatedOrder.deliveryPartnerId) {
+        io.to(`driver_${updatedOrder.deliveryPartnerId}`).emit('order:status_updated', statusPayload);
+      }
     } catch (e) {
       console.log('Socket emit warning:', e.message);
     }

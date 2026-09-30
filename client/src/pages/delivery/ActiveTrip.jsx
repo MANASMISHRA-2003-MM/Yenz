@@ -5,6 +5,7 @@ import { socket } from '../../services/socket';
 import Navbar from '../../components/Navbar';
 import MapSimulator from '../../components/MapSimulator';
 import OrderStatusBadge from '../../components/OrderStatusBadge';
+import DeliveryTimeline from '../../components/DeliveryTimeline';
 import {
   Bike, MapPin, Navigation, Phone, KeyRound, Package, Store,
   CheckCircle2, ArrowLeft, ArrowRight, Clock, Timer, Compass,
@@ -24,6 +25,29 @@ const formatOrderTiming = (dateStr) => {
   else if (diffMinutes > 1 && diffMinutes < 60) elapsed = `${diffMinutes}m ago`;
   else if (diffMinutes >= 60) elapsed = `${Math.floor(diffMinutes / 60)}h ${diffMinutes % 60}m ago`;
   return { time, elapsed, diffMinutes };
+};
+
+const calculateDistanceMeters = (lat1, lon1, lat2, lon2) => {
+  if (lat1 === undefined || lat1 === null || lon1 === undefined || lon1 === null ||
+      lat2 === undefined || lat2 === null || lon2 === undefined || lon2 === null) {
+    return null;
+  }
+  const nLat1 = Number(lat1);
+  const nLon1 = Number(lon1);
+  const nLat2 = Number(lat2);
+  const nLon2 = Number(lon2);
+  if (isNaN(nLat1) || isNaN(nLon1) || isNaN(nLat2) || isNaN(nLon2) || (nLat1 === 0 && nLon1 === 0) || (nLat2 === 0 && nLon2 === 0)) return null;
+
+  const R = 6371e3; // Earth's radius in meters
+  const toRad = (x) => (x * Math.PI) / 180;
+  const dLat = toRad(nLat2 - nLat1);
+  const dLon = toRad(nLon2 - nLon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(nLat1)) * Math.cos(toRad(nLat2)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.round(R * c);
 };
 
 // Delivery lifecycle steps for the progress tracker
@@ -330,38 +354,8 @@ export default function ActiveTrip() {
 
       <main className="max-w-5xl mx-auto px-4 py-4 space-y-5">
 
-        {/* Trip Progress Stepper */}
-        <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-5">
-          <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-4">Trip Progress</h3>
-          <div className="flex items-center gap-1 overflow-x-auto pb-2">
-            {TRIP_STEPS.map((step, idx) => {
-              const isCompleted = idx < currentStepIdx;
-              const isCurrent = idx === currentStepIdx;
-              const isFuture = idx > currentStepIdx;
-              return (
-                <React.Fragment key={step.key}>
-                  <div className="flex flex-col items-center min-w-[52px]">
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-base font-bold transition-all duration-300 ${
-                      isCompleted ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' :
-                      isCurrent ? `${step.color} text-white shadow-lg shadow-${step.color}/30 scale-110 ring-2 ring-white/20` :
-                      'bg-slate-800 text-slate-600 border border-slate-700'
-                    }`}>
-                      {isCompleted ? '✓' : step.emoji}
-                    </div>
-                    <span className={`text-[9px] font-bold mt-1.5 text-center leading-tight ${
-                      isCurrent ? 'text-white' : isCompleted ? 'text-emerald-400' : 'text-slate-600'
-                    }`}>{step.label}</span>
-                  </div>
-                  {idx < TRIP_STEPS.length - 1 && (
-                    <div className={`flex-1 h-0.5 min-w-[16px] rounded-full transition-all ${
-                      isCompleted ? 'bg-emerald-500/50' : 'bg-slate-800'
-                    }`} />
-                  )}
-                </React.Fragment>
-              );
-            })}
-          </div>
-        </div>
+        {/* Modern Live Delivery Timeline */}
+        <DeliveryTimeline status={delivery.status} isFresh={delivery.orderType === 'FRESH'} />
 
         {/* Navigation Direction Banner */}
         <div className={`rounded-3xl p-5 border-2 transition-all ${
@@ -571,40 +565,95 @@ export default function ActiveTrip() {
           </details>
         )}
 
-        {/* 4-Digit PIN Verification */}
-        {showPinInterface && (
-          <div className="bg-gradient-to-br from-emerald-950/80 to-teal-950/80 border-2 border-emerald-500/40 rounded-3xl p-6 space-y-4 shadow-2xl">
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-2xl bg-emerald-500/20 flex items-center justify-center">
-                <KeyRound className="w-5 h-5 text-emerald-400" />
+        {/* 4-Digit PIN Verification with 350m Live Geofence Lock */}
+        {showPinInterface && (() => {
+          const dropLat = delivery.dropLat || delivery.customerAddress?.latitude || delivery.address?.latitude;
+          const dropLng = delivery.dropLng || delivery.customerAddress?.longitude || delivery.address?.longitude;
+          const distMeters = (riderCoords?.lat && riderCoords?.lng && dropLat && dropLng)
+            ? calculateDistanceMeters(riderCoords.lat, riderCoords.lng, dropLat, dropLng)
+            : null;
+          const isWithin350m = distMeters !== null ? distMeters <= 350 : true;
+
+          return (
+            <div className={`border-2 rounded-3xl p-6 space-y-4 shadow-2xl transition-all ${
+              isWithin350m
+                ? 'bg-gradient-to-br from-emerald-950/80 to-teal-950/80 border-emerald-500/40'
+                : 'bg-amber-950/60 border-amber-500/40'
+            }`}>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-emerald-500/20 flex items-center justify-center">
+                    <KeyRound className="w-5 h-5 text-emerald-400" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-white">Customer Delivery PIN</h4>
+                    <p className="text-xs text-emerald-400/80 font-medium">
+                      Ask customer for their 4-digit secret PIN upon handing over the order.
+                    </p>
+                  </div>
+                </div>
+
+                {distMeters !== null && (
+                  <div className={`px-3.5 py-1 rounded-full text-xs font-black border flex items-center gap-1.5 ${
+                    isWithin350m
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 animate-pulse'
+                      : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                  }`}>
+                    {isWithin350m ? (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>📍 Within 350m ({distMeters}m away) — UNLOCKED</span>
+                      </>
+                    ) : (
+                      <>
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                        <span>🔒 Geofence Locked ({distMeters}m away)</span>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
-              <div>
-                <h4 className="text-sm font-black text-white">Customer Delivery PIN</h4>
-                <p className="text-xs text-emerald-400/80 font-medium">
-                  Ask the customer for their 4-digit PIN to verify and complete the delivery.
-                </p>
+
+              {!isWithin350m && (
+                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-xs text-amber-200 font-bold space-y-1">
+                  <p className="flex items-center gap-1.5 text-amber-300">
+                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span>📍 Live Device GPS Match Required:</span>
+                    <span>Move closer to the customer's delivery location to unlock PIN entry.</span>
+                  </p>
+                  <p className="text-[11px] text-amber-300/80 font-medium pl-5">
+                    Rider live location distance: <strong>{distMeters} meters (Max allowed: 350 meters)</strong>. Drive remaining {distMeters - 350}m to unlock.
+                  </p>
+                </div>
+              )}
+
+              <div className="flex flex-col sm:flex-row items-center gap-3">
+                <input
+                  type="text"
+                  maxLength={4}
+                  placeholder={isWithin350m ? "• • • •" : `Locked (${distMeters || '350+'}m away)`}
+                  disabled={!isWithin350m || pinSubmitting}
+                  value={deliveryPinInput}
+                  onChange={(e) => setDeliveryPinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                  className="w-full sm:w-48 text-center tracking-[0.5em] text-3xl font-mono font-black py-3 px-4 bg-slate-950 border-2 border-emerald-500/50 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-white placeholder:text-slate-600 shadow-inner disabled:bg-slate-900 disabled:border-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed"
+                />
+                <button
+                  onClick={handleVerifyPinAndComplete}
+                  disabled={!isWithin350m || deliveryPinInput.length !== 4 || pinSubmitting}
+                  className="w-full sm:flex-1 py-3.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-black text-xs uppercase tracking-wider rounded-2xl shadow-lg shadow-emerald-500/25 transition flex items-center justify-center gap-2 active:scale-95"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>
+                    {!isWithin350m
+                      ? `Arrive within 350m of customer (${distMeters}m away) to unlock PIN`
+                      : (pinSubmitting ? 'Verifying...' : 'Verify PIN & Complete Delivery')
+                    }
+                  </span>
+                </button>
               </div>
             </div>
-            <div className="flex flex-col sm:flex-row items-center gap-3">
-              <input
-                type="text"
-                maxLength={4}
-                placeholder="• • • •"
-                value={deliveryPinInput}
-                onChange={(e) => setDeliveryPinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                className="w-full sm:w-48 text-center tracking-[0.5em] text-3xl font-mono font-black py-3 px-4 bg-slate-950 border-2 border-emerald-500/50 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-white placeholder:text-slate-600 shadow-inner"
-              />
-              <button
-                onClick={handleVerifyPinAndComplete}
-                disabled={deliveryPinInput.length !== 4 || pinSubmitting}
-                className="w-full sm:flex-1 py-3.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-black text-xs uppercase tracking-wider rounded-2xl shadow-lg shadow-emerald-500/25 transition flex items-center justify-center gap-2 active:scale-95"
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                <span>{pinSubmitting ? 'Verifying...' : 'Verify PIN & Complete Delivery'}</span>
-              </button>
-            </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Next Action Buttons — Large & Prominent */}
         {nextAction && !nextAction.showPinVerification && (

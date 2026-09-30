@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import API from '../../services/api';
 import Navbar from '../../components/Navbar';
 import OrderStatusBadge from '../../components/OrderStatusBadge';
+import DeliveryTimeline from '../../components/DeliveryTimeline';
 import { useAuth } from '../../context/AuthContext';
 import { ShoppingBag, ArrowRight, Utensils, Sprout, Store, Bike, ArrowLeft, MapPin, Phone, User, Clock, CheckCircle2 } from 'lucide-react';
 import MobileBottomNavigation from '../../components/MobileBottomNavigation';
@@ -263,6 +264,11 @@ export default function OrderHistory() {
                       {rawItems.map(i => `${i.quantity}x ${i.name || i.title}${i.selectedWeight ? ` (${i.selectedWeight})` : ''}`).join(', ')}
                     </div>
                   )}
+
+                  {/* Compact Delivery Timeline for live status tracking */}
+                  <div className="pt-2 border-t border-slate-100">
+                    <DeliveryTimeline status={ord.status} isFresh={isFreshOrder} compact={true} />
+                  </div>
 
                   <div className="flex items-center justify-between pt-2 border-t border-slate-100">
                     <div className="text-[11px] text-slate-400 font-medium flex items-center gap-1">

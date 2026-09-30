@@ -4,7 +4,8 @@ import API from '../../services/api';
 import { socket } from '../../services/socket';
 import Navbar from '../../components/Navbar';
 import OrderStatusBadge from '../../components/OrderStatusBadge';
-import { Store, Flame, RefreshCw, PackageCheck, Tag, BellRing, CheckCircle2, XCircle, Bike, Volume2, Clock, MapPin, Timer, History, ArrowRight } from 'lucide-react';
+import DeliveryTimeline from '../../components/DeliveryTimeline';
+import { Store, Flame, RefreshCw, PackageCheck, Tag, BellRing, CheckCircle2, XCircle, Bike, Volume2, Clock, MapPin, Timer, History, ArrowRight, Navigation } from 'lucide-react';
 import { toast } from 'sonner';
 import { startRepeatingAlert, stopAlertSound, playActionSound, unlockAudio } from '../../utils/alertSound';
 import { requestNotificationPermission, showBrowserAlert } from '../../utils/browserNotification';
@@ -563,51 +564,64 @@ export default function VendorDashboard() {
                       </div>
                     </div>
 
-                    <div className="pt-2 border-t border-slate-100 space-y-2">
-                      {ord.status === 'PENDING' && (
-                        <div className="grid grid-cols-2 gap-2">
-                          <button
-                            onClick={() => handleUpdateStatus(ord._id || ord.id, 'CONFIRMED', 'Vendor accepted order. Dispatching nearby delivery partners.')}
-                            className="py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-md transition flex items-center justify-center gap-1.5"
-                          >
-                            <CheckCircle2 className="w-4 h-4" />
-                            <span>Accept • ₹{ord.totalAmount}</span>
-                          </button>
-                          <button
-                            onClick={() => handleUpdateStatus(ord._id || ord.id, 'CANCELLED', 'Order rejected by store due to unavailability.')}
-                            className="py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-black text-xs rounded-xl shadow-md transition flex items-center justify-center gap-1.5"
-                          >
-                            <XCircle className="w-4 h-4" />
-                            <span>Reject • ₹{ord.totalAmount}</span>
-                          </button>
-                        </div>
-                      )}
+                      <div className="pt-2 border-t border-slate-100">
+                        <DeliveryTimeline status={ord.status} compact={true} />
+                      </div>
 
-                      {['CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP', 'ASSIGNED'].includes(ord.status) && (
-                        <div className="space-y-2">
-                          {ord.deliveryPartner ? (
-                            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 space-y-1">
-                              <div className="flex items-center justify-between font-extrabold">
-                                <span className="flex items-center gap-1.5">
-                                  <Bike className="w-4 h-4 text-emerald-600" />
-                                  <span>Rider Assigned: {ord.deliveryPartner.name}</span>
-                                </span>
-                                {ord.deliveryPartner.phone && (
-                                  <a href={`tel:${ord.deliveryPartner.phone}`} className="font-bold text-emerald-700 underline bg-emerald-100 px-2 py-0.5 rounded-md text-[11px]">
-                                    Call Rider
-                                  </a>
-                                )}
+                      <div className="pt-2 border-t border-slate-100 space-y-2">
+                        {ord.status === 'PENDING' && (
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              onClick={() => handleUpdateStatus(ord._id || ord.id, 'CONFIRMED', 'Vendor accepted order. Dispatching nearby delivery partners.')}
+                              className="py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-md transition flex items-center justify-center gap-1.5"
+                            >
+                              <CheckCircle2 className="w-4 h-4" />
+                              <span>Accept • ₹{ord.totalAmount}</span>
+                            </button>
+                            <button
+                              onClick={() => handleUpdateStatus(ord._id || ord.id, 'CANCELLED', 'Order rejected by store due to unavailability.')}
+                              className="py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-black text-xs rounded-xl shadow-md transition flex items-center justify-center gap-1.5"
+                            >
+                              <XCircle className="w-4 h-4" />
+                              <span>Reject • ₹{ord.totalAmount}</span>
+                            </button>
+                          </div>
+                        )}
+
+                        {['CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP', 'ASSIGNED'].includes(ord.status) && (
+                          <div className="space-y-2">
+                            {ord.deliveryPartner ? (
+                              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 space-y-1">
+                                <div className="flex items-center justify-between font-extrabold">
+                                  <span className="flex items-center gap-1.5">
+                                    <Bike className="w-4 h-4 text-emerald-600" />
+                                    <span>Rider Assigned: {ord.deliveryPartner.name}</span>
+                                  </span>
+                                  {ord.deliveryPartner.phone && (
+                                    <a href={`tel:${ord.deliveryPartner.phone}`} className="font-bold text-emerald-700 underline bg-emerald-100 px-2 py-0.5 rounded-md text-[11px]">
+                                      Call Rider
+                                    </a>
+                                  )}
+                                </div>
+                                <p className="text-[11px] text-emerald-700 font-medium">Verify rider name <strong>"{ord.deliveryPartner.name}"</strong> when they arrive to pick up the package.</p>
                               </div>
-                              <p className="text-[11px] text-emerald-700 font-medium">Verify rider name <strong>"{ord.deliveryPartner.name}"</strong> when they arrive to pick up the package.</p>
-                            </div>
-                          ) : (
-                            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-center gap-2 font-bold animate-pulse">
-                              <span className="shrink-0">📡</span>
-                              <span>Order Accepted! Finding & Ringing nearest 3km riders...</span>
-                            </div>
-                          )}
-                        </div>
-                      )}
+                            ) : (
+                              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-center gap-2 font-bold animate-pulse">
+                                <span className="shrink-0">📡</span>
+                                <span>Order Accepted! Finding & Ringing nearest 3km riders...</span>
+                              </div>
+                            )}
+
+                            {/* Vendor Dispatch Button when delivery rider takes order */}
+                            <button
+                              onClick={() => handleUpdateStatus(ord._id || ord.id, 'OUT_FOR_DELIVERY', 'Order marked dispatched by store. Delivery driver took the order.')}
+                              className="w-full py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-1.5 active:scale-95"
+                            >
+                              <Navigation className="w-4 h-4" />
+                              <span>🚀 Mark Order Dispatched</span>
+                            </button>
+                          </div>
+                        )}
 
                       {['PICKED_UP', 'OUT_FOR_DELIVERY'].includes(ord.status) && (
                         <div className="py-2.5 px-3 bg-purple-50 text-purple-800 text-xs font-extrabold rounded-xl border border-purple-200 flex items-center justify-center gap-1.5">

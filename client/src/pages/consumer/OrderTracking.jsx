@@ -5,6 +5,7 @@ import { socket } from '../../services/socket';
 import Navbar from '../../components/Navbar';
 import MapSimulator from '../../components/MapSimulator';
 import OrderStatusBadge from '../../components/OrderStatusBadge';
+import DeliveryTimeline from '../../components/DeliveryTimeline';
 import { useAuth } from '../../context/AuthContext';
 import { Phone, CheckCircle2, PackageX, ShoppingBag, Key, Bike } from 'lucide-react';
 import { getUniversalProfileIcon } from '../../utils/imageUtils';
@@ -256,38 +257,10 @@ export default function OrderTracking() {
           </>
         )}
 
-        {/* Progress Tracker Steps */}
-        <div className="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-soft">
-          <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400 mb-6">Delivery Progress</h3>
-          
-          <div className="relative flex items-center justify-between">
-            <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-1 bg-slate-100 -z-0" />
-            <div
-              className={`absolute left-0 top-1/2 -translate-y-1/2 h-1 transition-all duration-500 ${isFresh ? 'bg-emerald-600' : 'bg-brand-500'}`}
-              style={{ width: `${Math.max(0, currentStepIndex) / (steps.length - 1) * 100}%` }}
-            />
-
-            {steps.map((step, idx) => {
-              const isCompleted = currentStepIndex >= idx;
-              return (
-                <div key={step.key} className="relative z-10 flex flex-col items-center">
-                  <div
-                    className={`w-9 h-9 rounded-full flex items-center justify-center border-2 transition-all ${
-                      isCompleted
-                        ? isFresh ? 'bg-emerald-600 border-emerald-600 text-white shadow-md' : 'bg-brand-500 border-brand-500 text-white shadow-md'
-                        : 'bg-white border-slate-300 text-slate-400'
-                    }`}
-                  >
-                    <CheckCircle2 className="w-5 h-5" />
-                  </div>
-                  <span className={`mt-2 text-xs font-extrabold ${isCompleted ? 'text-slate-900' : 'text-slate-400'}`}>
-                    {step.label}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        {/* Modern Delivery Timeline with automatic step completion fallback */}
+        {!isCancelled && (
+          <DeliveryTimeline status={order.status} isFresh={isFresh} />
+        )}
 
         {/* Delivery Partner Details Card */}
         {order.deliveryPartner ? (
