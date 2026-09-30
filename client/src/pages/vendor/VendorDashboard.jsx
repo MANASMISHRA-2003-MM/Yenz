@@ -6,7 +6,7 @@ import Navbar from '../../components/Navbar';
 import OrderStatusBadge from '../../components/OrderStatusBadge';
 import { Store, Flame, RefreshCw, PackageCheck, Tag, BellRing, CheckCircle2, XCircle, Bike, Volume2, Clock, MapPin, Timer, History, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
-import { startRepeatingAlert, stopAlertSound, playActionSound, unlockAudio } from '../../utils/alertSound';
+import { startRepeatingAlert, stopAlertSound, playActionSound, playCashRegisterSound, unlockAudio } from '../../utils/alertSound';
 import { requestNotificationPermission, showBrowserAlert } from '../../utils/browserNotification';
 
 import StoreStatusSlider from '../../components/StoreStatusSlider';
@@ -236,7 +236,7 @@ export default function VendorDashboard() {
             type="button"
             onClick={() => {
               unlockAudio();
-              playActionSound();
+              playCashRegisterSound();
               triggerHaptics();
               toast.success('🔔 Sound alarm & mobile vibration tested successfully!');
             }}
@@ -585,6 +585,23 @@ export default function VendorDashboard() {
 
                       {['CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP', 'ASSIGNED'].includes(ord.status) && (
                         <div className="space-y-2">
+                          {['CONFIRMED', 'PREPARING', 'ASSIGNED'].includes(ord.status) && (
+                            <button
+                              onClick={() => handleUpdateStatus(ord._id || ord.id, 'READY_FOR_PICKUP', 'Order prepared by store and ready for pickup.')}
+                              className="w-full py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-black text-xs rounded-xl shadow-md transition flex items-center justify-center gap-1.5 active:scale-95"
+                            >
+                              <PackageCheck className="w-4 h-4" />
+                              <span>Mark Order Prepared (Ready for Pickup)</span>
+                            </button>
+                          )}
+
+                          {ord.status === 'READY_FOR_PICKUP' && (
+                            <div className="py-2 px-3 bg-teal-50 text-teal-800 text-xs font-extrabold rounded-xl border border-teal-200 flex items-center justify-center gap-1.5">
+                              <CheckCircle2 className="w-4 h-4 text-teal-600" />
+                              <span>Order Prepared & Ready for Pickup</span>
+                            </div>
+                          )}
+
                           {ord.deliveryPartner ? (
                             <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 space-y-1">
                               <div className="flex items-center justify-between font-extrabold">

@@ -223,6 +223,7 @@ export default function ActiveTrip() {
   // Current step index for progress bar
   const getCurrentStepIndex = () => {
     if (!delivery) return 0;
+    if (delivery.status === 'WAITING_PICKUP') return 1; // At Store
     const idx = TRIP_STEPS.findIndex(s => s.key === delivery.status);
     return idx >= 0 ? idx : 0;
   };
@@ -235,16 +236,19 @@ export default function ActiveTrip() {
       case 'PREPARING':
       case 'READY_FOR_PICKUP':
         return {
-          primary: { label: '🏪 Arrived at Store', status: 'ARRIVED_AT_PICKUP', color: 'from-amber-500 to-orange-500' },
-          secondary: { label: '📦 Skip to Picked Up', status: 'PICKED_UP', color: 'bg-cyan-600 hover:bg-cyan-700' }
+          primary: { label: '📦 Confirm Order Picked Up', status: 'PICKED_UP', color: 'from-cyan-500 to-blue-500' },
+          secondary: { label: '🏪 Arrived at Store', status: 'ARRIVED_AT_PICKUP', color: 'bg-amber-600 hover:bg-amber-700' }
         };
       case 'ARRIVED_AT_PICKUP':
+      case 'WAITING_PICKUP':
         return {
-          primary: { label: '📦 Confirm Order Picked Up', status: 'PICKED_UP', color: 'from-cyan-500 to-blue-500' }
+          primary: { label: '📦 Confirm Order Picked Up', status: 'PICKED_UP', color: 'from-cyan-500 to-blue-500' },
+          secondary: { label: '🛵 Start Delivery Trip', status: 'OUT_FOR_DELIVERY', color: 'bg-purple-600 hover:bg-purple-700' }
         };
       case 'PICKED_UP':
         return {
-          primary: { label: '🛵 Start Delivery Trip', status: 'OUT_FOR_DELIVERY', color: 'from-purple-500 to-indigo-500' }
+          primary: { label: '🛵 Start Delivery Trip', status: 'OUT_FOR_DELIVERY', color: 'from-purple-500 to-indigo-500' },
+          secondary: { label: '📍 Arrived at Customer', status: 'ARRIVED_AT_CUSTOMER', color: 'bg-emerald-600 hover:bg-emerald-700' }
         };
       case 'OUT_FOR_DELIVERY':
         return {

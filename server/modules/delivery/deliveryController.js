@@ -384,9 +384,23 @@ const updateDeliveryStatus = async (req, res, next) => {
         });
       }
 
-      // 2. Geofence Proximity Check (Use ONLY server-stored rider GPS)
-      const riderLat = delivery.currentLat ? Number(delivery.currentLat) : null;
-      const riderLng = delivery.currentLng ? Number(delivery.currentLng) : null;
+      // 2. Geofence Proximity Check (Use request body, delivery table, or RiderLocation DB table)
+      let riderLat = (req.body.currentLat !== undefined && req.body.currentLat !== null) ? Number(req.body.currentLat) : null;
+      let riderLng = (req.body.currentLng !== undefined && req.body.currentLng !== null) ? Number(req.body.currentLng) : null;
+
+      if (riderLat === null || isNaN(riderLat)) {
+        riderLat = delivery.currentLat ? Number(delivery.currentLat) : null;
+        riderLng = delivery.currentLng ? Number(delivery.currentLng) : null;
+      }
+
+      if (riderLat === null || isNaN(riderLat)) {
+        const storedLoc = await prisma.riderLocation.findUnique({ where: { riderId: req.user.id } });
+        if (storedLoc) {
+          riderLat = Number(storedLoc.latitude);
+          riderLng = Number(storedLoc.longitude);
+        }
+      }
+
       const dropLat = delivery.dropLat ? Number(delivery.dropLat) : (delivery.Order?.Address?.latitude ? Number(delivery.Order.Address.latitude) : null);
       const dropLng = delivery.dropLng ? Number(delivery.dropLng) : (delivery.Order?.Address?.longitude ? Number(delivery.Order.Address.longitude) : null);
 
@@ -447,12 +461,12 @@ const updateDeliveryStatus = async (req, res, next) => {
 
     if (status === 'ARRIVED_AT_PICKUP') {
       deliveryStatus = 'WAITING_PICKUP';
-      orderStatus = delivery.Order.status;
+      orderStatus = delivery.Order.status === 'PENDING' ? 'CONFIRMED' : delivery.Order.status;
       timelineNote = 'Rider arrived at restaurant for pickup';
     } else if (status === 'PICKED_UP') {
       deliveryStatus = 'PICKED_UP';
       orderStatus = 'PICKED_UP';
-      timelineNote = 'Order picked up from store';
+      timelineNote = 'Order picked up from store by delivery partner';
     } else if (status === 'OUT_FOR_DELIVERY') {
       deliveryStatus = 'OUT_FOR_DELIVERY';
       orderStatus = 'OUT_FOR_DELIVERY';
@@ -508,15 +522,36 @@ const updateDeliveryStatus = async (req, res, next) => {
       });
     }
 
-    // Socket notification to customer & tracking rooms
+    // Socket notification to customer, vendor & tracking rooms
     try {
       const io = getIO();
+      const updatedOrd = await prisma.order.findUnique({
+        where: { id: delivery.orderId },
+        include: { OrderTimeline: true }
+      });
+      const timelineData = updatedOrd?.OrderTimeline?.map(t => ({
+        status: t.status,
+        timestamp: t.timestamp,
+        note: t.note || ''
+      })) || [];
+
       io.to(`order_${delivery.orderId}`).emit('order:status_updated', {
         orderId: delivery.orderId,
         status: orderStatus,
         deliveryStatus: status,
+        timeline: timelineData,
         timelineNote
       });
+
+      if (delivery.Order?.vendorId) {
+        io.to(`vendor_${delivery.Order.vendorId}`).emit('order:status_updated', {
+          orderId: delivery.orderId,
+          status: orderStatus,
+          deliveryStatus: status,
+          timeline: timelineData,
+          timelineNote
+        });
+      }
     } catch (e) {
       console.log('Socket emit warning:', e.message);
     }
@@ -576,6 +611,18 @@ const updateRiderLocation = async (req, res, next) => {
       where: { riderId: req.user.id },
       update: { latitude: lat, longitude: lng, updatedAt: new Date() },
       create: { id: crypto.randomUUID(), riderId: req.user.id, latitude: lat, longitude: lng }
+    });
+
+    // Update active deliveries for this rider in real-time
+    await prisma.delivery.updateMany({
+      where: {
+        deliveryPartnerId: req.user.id,
+        status: { in: ['ASSIGNED', 'WAITING_PICKUP', 'ARRIVED_AT_PICKUP', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'ARRIVED_AT_CUSTOMER'] }
+      },
+      data: {
+        currentLat: lat,
+        currentLng: lng
+      }
     });
 
     const { onlineDrivers } = require('../../socket/socketHandler');

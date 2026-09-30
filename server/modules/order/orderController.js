@@ -598,10 +598,12 @@ exports.updateOrderStatus = async (req, res) => {
       'CONFIRMED': ['PREPARING', 'PACKING', 'READY_FOR_PICKUP', 'CANCELLED'],
       'PREPARING': ['PACKING', 'READY_FOR_PICKUP', 'CANCELLED'],
       'PACKING': ['READY_FOR_PICKUP', 'CANCELLED'],
-      'READY_FOR_PICKUP': ['ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'CANCELLED'],
-      'ASSIGNED': ['PICKED_UP', 'OUT_FOR_DELIVERY', 'CANCELLED'],
-      'PICKED_UP': ['OUT_FOR_DELIVERY', 'CANCELLED'],
-      'OUT_FOR_DELIVERY': ['DELIVERED', 'CANCELLED']
+      'READY_FOR_PICKUP': ['ASSIGNED', 'WAITING_PICKUP', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'CANCELLED'],
+      'ASSIGNED': ['WAITING_PICKUP', 'ARRIVED_AT_PICKUP', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'],
+      'WAITING_PICKUP': ['PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'],
+      'PICKED_UP': ['OUT_FOR_DELIVERY', 'ARRIVED_AT_CUSTOMER', 'DELIVERED', 'CANCELLED'],
+      'OUT_FOR_DELIVERY': ['ARRIVED_AT_CUSTOMER', 'DELIVERED', 'CANCELLED'],
+      'ARRIVED_AT_CUSTOMER': ['DELIVERED', 'CANCELLED']
     };
 
     if (!isAdmin) {
@@ -651,8 +653,17 @@ exports.updateOrderStatus = async (req, res) => {
       }
 
       // 2. Geofence Proximity Check (Rider must be within 350m of dropoff)
-      const riderLat = targetOrder.Delivery?.currentLat;
-      const riderLng = targetOrder.Delivery?.currentLng;
+      let riderLat = (req.body.currentLat !== undefined && req.body.currentLat !== null) ? Number(req.body.currentLat) : targetOrder.Delivery?.currentLat;
+      let riderLng = (req.body.currentLng !== undefined && req.body.currentLng !== null) ? Number(req.body.currentLng) : targetOrder.Delivery?.currentLng;
+
+      if (riderLat === undefined || riderLat === null || isNaN(Number(riderLat))) {
+        const storedLoc = await prisma.riderLocation.findUnique({ where: { riderId: req.user.id } });
+        if (storedLoc) {
+          riderLat = Number(storedLoc.latitude);
+          riderLng = Number(storedLoc.longitude);
+        }
+      }
+
       const dropLat = targetOrder.dropLat ?? targetOrder.Address?.latitude;
       const dropLng = targetOrder.dropLng ?? targetOrder.Address?.longitude;
 
@@ -701,6 +712,10 @@ exports.updateOrderStatus = async (req, res) => {
         note = 'Vendor rejected the order.';
       } else if (status === 'PREPARING') {
         note = 'Store accepted order and is preparing. Delivery partner notified for pickup.';
+      } else if (status === 'READY_FOR_PICKUP') {
+        note = 'Order prepared by store and ready for pickup.';
+      } else if (status === 'PICKED_UP') {
+        note = 'Order picked up from store by delivery partner.';
       } else if (status === 'OUT_FOR_DELIVERY') {
         note = 'Order given to delivery partner and dispatched for delivery.';
       } else if (status === 'DELIVERED') {
@@ -787,6 +802,15 @@ exports.updateOrderStatus = async (req, res) => {
         timeline: formatted.timeline,
         deliveryPartner: formatted.deliveryPartner
       });
+      if (updatedOrder.vendorId) {
+        io.to(`vendor_${updatedOrder.vendorId}`).emit('order:status_updated', {
+          orderId: updatedOrder.id,
+          orderNumber: updatedOrder.orderNumber,
+          status: updatedOrder.status,
+          timeline: formatted.timeline,
+          deliveryPartner: formatted.deliveryPartner
+        });
+      }
     } catch (e) {
       console.log('Socket emit warning:', e.message);
     }
