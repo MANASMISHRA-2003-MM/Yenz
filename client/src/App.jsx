@@ -114,6 +114,14 @@ export default function App() {
                   }
                 />
                 <Route
+                  path="/checkout/craving"
+                  element={
+                    <ProtectedRoute allowedRoles={['customer', 'consumer']}>
+                      <CheckoutPage modeOverride="CRAVINGS" />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
                   path="/checkout/fresh-mandi"
                   element={
                     <ProtectedRoute allowedRoles={['customer', 'consumer']}>

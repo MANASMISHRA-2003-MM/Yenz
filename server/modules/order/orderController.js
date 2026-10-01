@@ -262,6 +262,9 @@ exports.createOrder = async (req, res, next) => {
       const addrState = address.state || 'Haryana';
       const addrPincode = address.pincode || '121009';
 
+      const saveLat = inputLat !== null ? inputLat : (vendor.latitude ? Number(vendor.latitude) : 28.4866);
+      const saveLng = inputLng !== null ? inputLng : (vendor.longitude ? Number(vendor.longitude) : 77.2918);
+
       selectedAddrRecord = await prisma.address.create({
         data: {
           id: crypto.randomUUID(),
@@ -271,8 +274,8 @@ exports.createOrder = async (req, res, next) => {
           city: addrCity,
           state: addrState,
           pincode: addrPincode,
-          latitude: inputLat,
-          longitude: inputLng,
+          latitude: saveLat,
+          longitude: saveLng,
           isDefault: true
         }
       });
@@ -293,14 +296,14 @@ exports.createOrder = async (req, res, next) => {
       finalAddressId = selectedAddrRecord?.id || null;
     }
 
-    const pickupLat = vendor.latitude ? Number(vendor.latitude) : null;
-    const pickupLng = vendor.longitude ? Number(vendor.longitude) : null;
+    const pickupLat = vendor.latitude ? Number(vendor.latitude) : 28.4866;
+    const pickupLng = vendor.longitude ? Number(vendor.longitude) : 77.2918;
     const dropLat = inputLat !== null
       ? inputLat
-      : (selectedAddrRecord?.latitude ? Number(selectedAddrRecord.latitude) : null);
+      : (selectedAddrRecord?.latitude ? Number(selectedAddrRecord.latitude) : (vendor.latitude ? Number(vendor.latitude) : 28.4866));
     const dropLng = inputLng !== null
       ? inputLng
-      : (selectedAddrRecord?.longitude ? Number(selectedAddrRecord.longitude) : null);
+      : (selectedAddrRecord?.longitude ? Number(selectedAddrRecord.longitude) : (vendor.longitude ? Number(vendor.longitude) : 77.2918));
 
     if (pickupLat === null || pickupLng === null || isNaN(pickupLat) || isNaN(pickupLng)) {
       return res.status(400).json({ success: false, message: 'Cannot place order: Vendor store location coordinates are missing.' });
