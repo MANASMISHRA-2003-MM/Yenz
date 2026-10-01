@@ -24,14 +24,15 @@ const DeliveryOnboarding = lazy(() => import('./pages/delivery/DeliveryOnboardin
 const ActiveTrip = lazy(() => import('./pages/delivery/ActiveTrip'));
 
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
+const AdminApplications = lazy(() => import('./pages/admin/AdminApplications'));
 
 const Login = lazy(() => import('./pages/auth/Login'));
 const Register = lazy(() => import('./pages/auth/Register'));
 const Profile = lazy(() => import('./pages/consumer/Profile'));
 
 const PageFallback = () => (
-  <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center">
-    <div className="w-10 h-10 border-4 border-brand-500 border-t-transparent rounded-full animate-spin" />
+  <div className="fc-page flex items-center justify-center">
+    <div className="w-9 h-9 rounded-full border-4 border-gray-200 border-t-[var(--fc-green)] animate-spin" aria-label="Loading" />
   </div>
 );
 
@@ -232,6 +233,22 @@ export default function App() {
                   element={
                     <ProtectedRoute allowedRoles={['admin']}>
                       <AdminDashboard />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/applications"
+                  element={
+                    <ProtectedRoute allowedRoles={['admin']}>
+                      <AdminApplications />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/onboarding"
+                  element={
+                    <ProtectedRoute allowedRoles={['admin']}>
+                      <AdminApplications />
                     </ProtectedRoute>
                   }
                 />

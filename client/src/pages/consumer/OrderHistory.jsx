@@ -7,6 +7,7 @@ import DeliveryTimeline from '../../components/DeliveryTimeline';
 import { useAuth } from '../../context/AuthContext';
 import { ShoppingBag, ArrowRight, Utensils, Sprout, Store, Bike, ArrowLeft, MapPin, Phone, User, Clock, CheckCircle2 } from 'lucide-react';
 import MobileBottomNavigation from '../../components/MobileBottomNavigation';
+import FreshCartFooter from '../../components/FreshCartFooter';
 
 export default function OrderHistory() {
   const { user } = useAuth();
@@ -61,260 +62,47 @@ export default function OrderHistory() {
     .reduce((sum, o) => sum + Number(o.totalAmount || 0), 0);
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-slate-900 pb-24">
+    <div className="min-h-screen bg-white text-gray-800">
       <Navbar />
-
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-        
-        {/* Back navigation & Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              {isVendor && (
-                <Link
-                  to="/vendor/dashboard"
-                  className="inline-flex items-center gap-1 text-xs font-bold text-amber-700 hover:text-amber-800 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200 transition"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5" />
-                  <span>Back to Vendor Dashboard</span>
-                </Link>
-              )}
-              {isDriver && (
-                <Link
-                  to="/delivery/dashboard"
-                  className="inline-flex items-center gap-1 text-xs font-bold text-cyan-700 hover:text-cyan-800 bg-cyan-50 px-2.5 py-1 rounded-lg border border-cyan-200 transition"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5" />
-                  <span>Back to Rider Dashboard</span>
-                </Link>
-              )}
-            </div>
-
-            <h1 className="text-2xl font-extrabold text-slate-900">
-              {isVendor ? 'Store Order History' : isDriver ? 'Delivery Trip History' : 'My Orders'}
-            </h1>
-            <p className="text-xs text-slate-500 font-medium">
-              {isVendor
-                ? `Total ${orders.length} orders recorded • ₹${totalRevenue} total revenue earned`
-                : isDriver
-                ? `Total ${orders.length} delivery trips • ${totalDelivered} completed handovers`
-                : 'Track active live orders or review your previous food & grocery deliveries'}
-            </p>
-          </div>
-
-          {/* Channel Filter Tabs */}
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center p-1 bg-slate-200/80 rounded-2xl">
-              <button
-                onClick={() => setActiveTab('ALL')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition ${
-                  activeTab === 'ALL' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                All ({orders.length})
-              </button>
-              <button
-                onClick={() => setActiveTab('CRAVINGS')}
-                className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-extrabold transition ${
-                  activeTab === 'CRAVINGS' ? 'bg-rose-500 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <Utensils className="w-3 h-3" />
-                <span>Cravings</span>
-              </button>
-              <button
-                onClick={() => setActiveTab('FRESH')}
-                className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-extrabold transition ${
-                  activeTab === 'FRESH' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <Sprout className="w-3 h-3" />
-                <span>Fresh</span>
-              </button>
-            </div>
-
-            {/* Status Filter for Vendors & Riders */}
-            {(isVendor || isDriver) && (
-              <div className="flex items-center p-1 bg-slate-200/80 rounded-2xl text-xs font-bold">
-                <button
-                  onClick={() => setStatusFilter('ALL')}
-                  className={`px-2.5 py-1 rounded-xl transition ${statusFilter === 'ALL' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'}`}
-                >
-                  All Status
-                </button>
-                <button
-                  onClick={() => setStatusFilter('ACTIVE')}
-                  className={`px-2.5 py-1 rounded-xl transition ${statusFilter === 'ACTIVE' ? 'bg-amber-500 text-white shadow-sm' : 'text-slate-600'}`}
-                >
-                  Active
-                </button>
-                <button
-                  onClick={() => setStatusFilter('DELIVERED')}
-                  className={`px-2.5 py-1 rounded-xl transition ${statusFilter === 'DELIVERED' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600'}`}
-                >
-                  Delivered
-                </button>
-              </div>
-            )}
-          </div>
+      <main className="fc-container py-7 sm:py-10 pb-24">
+        <div className="fc-page-heading">
+          <div><p className="fc-eyebrow">Orders</p><h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">{isVendor ? 'Store order history' : isDriver ? 'Delivery trip history' : 'My orders'}</h1><p className="text-sm text-gray-500 mt-1">{isVendor ? `Total ${orders.length} orders • ₹${totalRevenue} delivered revenue` : isDriver ? `${orders.length} delivery trips • ${totalDelivered} completed` : 'Review active and previous food & grocery deliveries.'}</p></div>
+          {(isVendor || isDriver) && <Link to={isVendor ? '/vendor/dashboard' : '/delivery/dashboard'} className="fc-btn-secondary">Back to dashboard</Link>}
         </div>
 
-        {/* Orders Listing */}
-        {loading ? (
-          <div className="space-y-4">
-            {[1, 2, 3].map(n => (
-              <div key={n} className="h-32 bg-slate-200/60 rounded-3xl animate-pulse border border-slate-200" />
-            ))}
-          </div>
-        ) : filteredOrders.length > 0 ? (
-          <div className="space-y-4">
-            {filteredOrders.map((ord) => {
-              const isFreshOrder = ord.orderType === 'FRESH';
-              const storeName = ord.restaurant?.name || ord.restaurantId?.name || ord.Vendor?.name || 'Local Store';
-              const storeImage = ord.restaurant?.image || ord.restaurantId?.image || ord.Vendor?.image || '/favicon.png';
-              const orderId = ord.orderNumber || ord.orderId || ord.id || ord._id;
-              const dateText = new Date(ord.placedAt || ord.createdAt || Date.now()).toLocaleDateString('en-IN', {
-                day: 'numeric',
-                month: 'short',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-              });
-              const rawItems = ord.items || ord.OrderItem || [];
+        <section className="fc-card p-2 mb-6 flex flex-wrap gap-2">
+          {[
+            ['ALL', `All (${orders.length})`],
+            ['CRAVINGS', 'Cravings'],
+            ['FRESH', 'Fresh Mandi']
+          ].map(([key,label]) => <button key={key} onClick={() => setActiveTab(key)} className={`px-4 py-2 rounded-md text-xs font-semibold transition ${activeTab === key ? (key === 'FRESH' ? 'text-white' : 'text-white') : 'text-gray-600 hover:bg-gray-50'}`} style={activeTab === key ? { background: key === 'FRESH' ? 'var(--fc-fresh)' : key === 'CRAVINGS' ? 'var(--fc-red)' : '#1f2937' } : {}}>{label}</button>)}
+          {(isVendor || isDriver) && <div className="w-px bg-gray-200 mx-1 hidden sm:block" />}
+          {(isVendor || isDriver) && ['ALL','ACTIVE','DELIVERED','CANCELLED'].map(key => <button key={key} onClick={() => setStatusFilter(key)} className={`px-3 py-2 rounded-md text-xs font-semibold ${statusFilter === key ? 'bg-gray-100 text-gray-900' : 'text-gray-500'}`}>{key[0] + key.slice(1).toLowerCase()}</button>)}
+        </section>
 
-              return (
-                <div key={ord._id || ord.id} className="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-soft space-y-4 hover:border-slate-300 transition">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
-                    <div className="flex items-center gap-3">
-                      <img
-                        src={storeImage}
-                        alt={storeName}
-                        className="w-12 h-12 rounded-2xl object-cover border border-slate-200"
-                        onError={(e) => {
-                          e.currentTarget.onerror = null;
-                          e.currentTarget.src = '/favicon.png';
-                        }}
-                      />
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="text-sm font-extrabold text-slate-900">{storeName}</h3>
-                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold border uppercase ${
-                            isFreshOrder ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-rose-50 text-rose-800 border-rose-200'
-                          }`}>
-                            {isFreshOrder ? '🥬 FRESH MANDI' : '🍔 CRAVINGS'}
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-slate-400 font-mono font-bold">Order #{orderId} • {dateText}</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <OrderStatusBadge status={ord.status} />
-                      <span className="text-base font-extrabold text-brand-600">₹{ord.totalAmount}</span>
-                    </div>
-                  </div>
-
-                  {/* Role-Specific details */}
-                  {isVendor && ord.customer && (
-                    <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-2xl flex flex-wrap items-center justify-between gap-2 text-xs">
-                      <div className="flex items-center gap-2 text-amber-900 font-bold">
-                        <User className="w-3.5 h-3.5 text-amber-700" />
-                        <span>Customer: {ord.customer.name || ord.customer.fullName}</span>
-                        {ord.customer.phone && <span className="text-amber-700 font-mono">({ord.customer.phone})</span>}
-                      </div>
-                      <div className="flex items-center gap-1 text-slate-500 font-medium">
-                        <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                        <span>{ord.customerLocationName || ord.locationName || 'Local Delivery'}</span>
-                      </div>
-                    </div>
-                  )}
-
-                  {isDriver && (
-                    <div className="p-3.5 bg-cyan-50/80 border border-cyan-200/90 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2 text-cyan-900 font-bold">
-                          <Store className="w-3.5 h-3.5 text-cyan-700" />
-                          <span>Pickup Store: {storeName}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 text-slate-600 font-medium">
-                          <MapPin className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                          <span>Dropoff: {ord.customerLocationName || ord.locationName || 'Customer Address'}</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 sm:text-right">
-                        <div>
-                          <p className="text-[10px] text-slate-400 font-bold uppercase">Rider Payout</p>
-                          <p className="text-sm font-extrabold text-emerald-700">₹{ord.deliveryFee || 65}</p>
-                        </div>
-                        <span className={`px-2.5 py-1 rounded-xl text-[10px] font-extrabold uppercase border ${
-                          ord.status === 'DELIVERED'
-                            ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                            : 'bg-amber-100 text-amber-800 border-amber-300'
-                        }`}>
-                          {ord.status === 'DELIVERED' ? '✓ Completed Trip' : 'In Transit'}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Items summary */}
-                  {rawItems.length > 0 && (
-                    <div className="text-xs text-slate-600 font-medium">
-                      <span className="font-bold text-slate-400">Items: </span>
-                      {rawItems.map(i => `${i.quantity}x ${i.name || i.title}${i.selectedWeight ? ` (${i.selectedWeight})` : ''}`).join(', ')}
-                    </div>
-                  )}
-
-                  {/* Compact Delivery Timeline for live status tracking */}
-                  <div className="pt-2 border-t border-slate-100">
-                    <DeliveryTimeline status={ord.status} isFresh={isFreshOrder} compact={true} />
-                  </div>
-
-                  <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                    <div className="text-[11px] text-slate-400 font-medium flex items-center gap-1">
-                      <Clock className="w-3.5 h-3.5" />
-                      <span>Placed: {dateText}</span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      {isDriver && ['ASSIGNED', 'WAITING_PICKUP', 'PICKED_UP', 'OUT_FOR_DELIVERY'].includes(ord.status) ? (
-                        <Link
-                          to="/delivery/dashboard"
-                          className="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-extrabold rounded-xl transition flex items-center gap-1.5 shadow-sm"
-                        >
-                          <Bike className="w-3.5 h-3.5" />
-                          <span>Open Live Navigator</span>
-                        </Link>
-                      ) : (
-                        <Link
-                          to={`/order-tracking/${ord._id || ord.id}`}
-                          className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-extrabold rounded-xl transition flex items-center gap-1.5 shadow-sm"
-                        >
-                          <span>{isDriver ? 'View Trip Details' : 'View Order Details'}</span>
-                          <ArrowRight className="w-3.5 h-3.5" />
-                        </Link>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="text-center py-16 bg-white rounded-3xl border border-slate-200 shadow-soft">
-            <ShoppingBag className="w-12 h-12 text-slate-400 mx-auto mb-3" />
-            <h3 className="text-base font-extrabold text-slate-800">No Orders Found</h3>
-            <p className="text-xs text-slate-500 mt-1 font-medium">
-              {isVendor
-                ? 'No past or active store orders match the selected filters.'
-                : isDriver
-                ? 'No delivery trips found in your account history. Only deliveries assigned to and completed by you will appear here.'
-                : 'You have not placed any orders yet.'}
-            </p>
-          </div>
-        )}
+        {loading ? <div className="space-y-3">{[1,2,3].map(n => <div key={n} className="h-36 rounded-lg bg-gray-100 animate-pulse" />)}</div> : filteredOrders.length ? <div className="space-y-4">
+          {filteredOrders.map(ord => {
+            const isFreshOrder = ord.orderType === 'FRESH';
+            const storeName = ord.restaurant?.name || ord.restaurantId?.name || ord.Vendor?.name || 'Local Store';
+            const storeImage = ord.restaurant?.image || ord.restaurantId?.image || ord.Vendor?.image || '/favicon.png';
+            const orderId = ord.orderNumber || ord.orderId || ord.id || ord._id;
+            const dateText = new Date(ord.placedAt || ord.createdAt || Date.now()).toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+            const rawItems = ord.items || ord.OrderItem || [];
+            return <article key={ord._id || ord.id} className="fc-card p-5 hover:border-gray-400 transition">
+              <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 pb-4 border-b border-gray-200">
+                <div className="flex gap-3 min-w-0"><img src={storeImage} alt={storeName} className="w-12 h-12 rounded-lg object-cover border border-gray-200 shrink-0" onError={e => { e.currentTarget.src = '/favicon.png'; }} /><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="text-sm font-semibold text-gray-900 truncate">{storeName}</h2><span className="text-[10px] px-2 py-1 rounded-full font-bold" style={isFreshOrder ? {color:'var(--fc-fresh)',background:'rgba(22,138,91,.08)'} : {color:'var(--fc-red)',background:'rgba(229,27,75,.08)'}}>{isFreshOrder ? 'Fresh Mandi' : 'Cravings'}</span></div><p className="text-xs text-gray-400 mt-1">#{orderId} • {dateText}</p></div></div>
+                <div className="flex items-center gap-3"><OrderStatusBadge status={ord.status} /><span className="text-base font-bold text-gray-900">₹{ord.totalAmount}</span></div>
+              </div>
+              {(isVendor && ord.customer) && <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"><span className="font-semibold">Customer:</span> {ord.customer.name || ord.customer.fullName}{ord.customer.phone ? ` • ${ord.customer.phone}` : ''} • {ord.customerLocationName || ord.locationName || 'Local Delivery'}</div>}
+              {isDriver && <div className="mt-4 rounded-md border px-3 py-3 text-xs" style={{ borderColor:'rgba(22,138,91,.25)', background:'rgba(22,138,91,.05)' }}><div className="font-semibold text-gray-900">Pickup: {storeName}</div><div className="mt-1 text-gray-500">Dropoff: {ord.customerLocationName || ord.locationName || 'Customer Address'}</div><div className="mt-2 flex items-center justify-between"><span className="font-semibold" style={{color:'var(--fc-fresh)'}}>Rider payout ₹{ord.deliveryFee || 65}</span><span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">{ord.status === 'DELIVERED' ? 'Completed' : 'In transit'}</span></div></div>}
+              {rawItems.length > 0 && <p className="mt-4 text-xs text-gray-600"><span className="font-semibold text-gray-400">Items: </span>{rawItems.map(i => `${i.quantity}x ${i.name || i.title}${i.selectedWeight ? ` (${i.selectedWeight})` : ''}`).join(', ')}</p>}
+              <div className="mt-4 pt-4 border-t border-gray-200"><DeliveryTimeline status={ord.status} isFresh={isFreshOrder} compact={true} /></div>
+              <div className="mt-4 flex justify-end"><Link to={`/order-tracking/${ord._id || ord.id}`} className="fc-btn" style={{ background: isFreshOrder ? 'var(--fc-fresh)' : 'var(--fc-red)' }}>{isDriver && ['ASSIGNED','WAITING_PICKUP','PICKED_UP','OUT_FOR_DELIVERY'].includes(ord.status) ? 'Open Live Navigator' : isDriver ? 'View Trip Details' : 'View Order'} <ArrowRight className="w-4 h-4" /></Link></div>
+            </article>;
+          })}
+        </div> : <div className="fc-card py-16 px-6 text-center"><ShoppingBag className="w-12 h-12 text-gray-300 mx-auto" /><h2 className="mt-4 font-semibold text-gray-900">No orders found</h2><p className="mt-1 text-sm text-gray-500">{isVendor ? 'No store orders match these filters.' : isDriver ? 'No assigned delivery trips match these filters.' : 'You have not placed an order yet.'}</p><Link to="/home" className="mt-5 inline-flex fc-btn" style={{background:'var(--fc-green)'}}>Start shopping <ArrowRight className="w-4 h-4" /></Link></div>}
       </main>
-
+      <FreshCartFooter />
       <MobileBottomNavigation />
     </div>
   );

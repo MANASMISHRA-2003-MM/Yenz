@@ -3,20 +3,33 @@ node_modules/
 client/node_modules/
 server/node_modules/
 
-# Production build outputs
+# Production Builds
+dist/
 client/dist/
 client/build/
 
-# Environment variables
+# Environment Variables & Secrets
 .env
 *.env
-client/.env
-server/.env
+.env.local
+client/.env*
+server/.env*
 
-# IDE & System files
+# Logs & Caches
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.eslintcache
+.cache/
+
+# IDE & System Files
 .DS_Store
+Thumbs.db
 .vscode/
 .idea/
-*.log
-# Test outputs
-client/test-results/
+
+# Temporary & Build artifacts
+*.tmp
+*.tmp*
+

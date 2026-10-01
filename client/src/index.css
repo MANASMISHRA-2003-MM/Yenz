@@ -1,110 +1,236 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  :root {
-    --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-    
-    /* Page & Neutral Surfaces */
-    --bg-page: #FAFAF8;
-    --bg-surface: #FFFFFF;
-    --bg-surface-secondary: #F5F6F7;
-    
-    /* Typography Tokens */
-    --text-primary: #17181C;
-    --text-secondary: #686D78;
-    --text-muted: #9095A1;
-    --border-color: #E8E9ED;
-
-    /* Cravings Palette (Warm Appetizing) */
-    --cravings-primary: #E51B4B;
-    --cravings-dark: #B90F38;
-    --cravings-accent: #FF6B35;
-    --cravings-soft: #FFF0F3;
-
-    /* Fresh Palette (Natural Emerald) */
-    --fresh-primary: #168A5B;
-    --fresh-dark: #0F6945;
-    --fresh-accent: #52B788;
-    --fresh-soft: #ECF8F1;
-  }
-
-  body {
-    font-family: var(--font-sans);
-    background-color: var(--bg-page);
-    color: var(--text-primary);
-    -webkit-tap-highlight-color: transparent;
-    text-rendering: optimizeLegibility;
-  }
-
-  h1, h2, h3, h4, .font-heading {
-    font-family: var(--font-sans);
-    letter-spacing: -0.02em;
-  }
+:root {
+  --fc-green: #0aad0a;
+  --fc-green-soft: #e8ffe6;
+  --fc-green-dark: #0d7e0f;
+  --fc-red: rgb(229, 27, 75);
+  --fc-red-soft: #fff0f3;
+  --fc-red-dark: #b90f38;
+  --fc-fresh: rgb(22, 138, 91);
+  --fc-fresh-soft: #ecf8f1;
+  --fc-fresh-dark: #0f6945;
+  --fc-gray-50: #f9f9f9;
+  --fc-gray-100: #f0f3f2;
+  --fc-gray-200: #ecf0ef;
+  --fc-gray-300: #dfe2e1;
+  --fc-gray-400: #c1c7c6;
+  --fc-gray-500: #889397;
+  --fc-gray-600: #5c6c75;
+  --fc-gray-700: #3d4f58;
+  --fc-gray-800: #21313c;
+  --fc-gray-900: #001e2b;
+  --fc-radius: .5rem;
 }
 
-/* Custom Scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  min-width: 320px;
+  font-family: 'Inter', sans-serif;
+  color: var(--fc-gray-800);
+  background: #fff;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
-::-webkit-scrollbar-track {
-  background: #F1F5F9;
-}
-::-webkit-scrollbar-thumb {
-  background: #CBD5E1;
-  border-radius: 9999px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #94A3B8;
+button, input, textarea, select { font: inherit; }
+a { color: inherit; text-decoration: none; }
+img { max-width: 100%; }
+
+/* FreshCart's compact ecommerce design language */
+@layer components {
+  .fc-container { @apply mx-auto w-full px-4; max-width: 1320px; }
+  .fc-card { @apply relative min-w-0 bg-white border; border-color: var(--fc-gray-300); border-radius: var(--fc-radius); }
+  .fc-card-hover { transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease; }
+  .fc-card-hover:hover { border-color: var(--fc-green); box-shadow: 0 8px 20px rgba(33,49,60,.08); transform: translateY(-1px); }
+  .fc-btn { @apply inline-flex items-center justify-center gap-2 font-semibold border; border-radius: .5rem; padding: .65rem 1rem; transition: .2s ease; }
+  .fc-btn-primary { background: var(--fc-green); border-color: var(--fc-green); color: #fff; }
+  .fc-btn-primary:hover { background: var(--fc-green-dark); border-color: var(--fc-green-dark); }
+  .fc-btn-cravings { background: var(--fc-red); border-color: var(--fc-red); color: #fff; }
+  .fc-btn-cravings:hover { background: var(--fc-red-dark); border-color: var(--fc-red-dark); }
+  .fc-btn-fresh { background: var(--fc-fresh); border-color: var(--fc-fresh); color: #fff; }
+  .fc-btn-fresh:hover { background: var(--fc-fresh-dark); border-color: var(--fc-fresh-dark); }
+  .fc-btn-soft { background: #fff; border-color: var(--fc-gray-300); color: var(--fc-gray-800); }
+  .fc-btn-soft:hover { background: var(--fc-gray-100); }
+  .fc-input { @apply w-full border bg-white outline-none; border-color: var(--fc-gray-300); border-radius: .5rem; padding: .7rem .85rem; color: var(--fc-gray-800); }
+  .fc-input:focus { border-color: var(--fc-green); box-shadow: 0 0 0 .25rem rgba(10,173,10,.12); }
+  .fc-muted { color: var(--fc-gray-600); }
+  .fc-eyebrow { color: var(--fc-gray-500); font-size: .7rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 }
 
-.scrollbar-none::-webkit-scrollbar {
-  display: none;
-}
-.scrollbar-none {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+.fc-page {
+  min-height: 100vh;
+  background: #fff;
 }
 
-/* Navigation Glass Header */
-.navigation-glass-header {
-  background: rgba(255, 255, 255, 0.94);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+/* FreshCart-inspired navigation */
+.fc-navbar { background: #fff; border-bottom: 1px solid var(--fc-gray-200); position: sticky; top: 0; z-index: 50; }
+.fc-topbar { background: var(--fc-gray-50); border-bottom: 1px solid var(--fc-gray-200); color: var(--fc-gray-600); }
+.fc-search { background: #fff; border: 1px solid var(--fc-gray-300); border-radius: .5rem; }
+.fc-nav-link { color: var(--fc-gray-700); font-size: .875rem; font-weight: 600; }
+.fc-nav-link:hover, .fc-nav-link.active { color: var(--fc-green); }
+
+/* Make existing Yenz cards read like FreshCart cards, not app-dashboard cards */
+body.freshcart-theme .restaurant-food-card,
+body.freshcart-theme .freshcart-card {
+  background: #fff !important;
+  border-color: var(--fc-gray-300) !important;
+  border-radius: .5rem !important;
+  box-shadow: 0 1px 2px rgba(33,49,60,.03) !important;
+}
+body.freshcart-theme .restaurant-food-card-hover:hover,
+body.freshcart-theme .freshcart-card-hover:hover {
+  border-color: var(--fc-green) !important;
+  box-shadow: 0 8px 20px rgba(33,49,60,.08) !important;
+  transform: translateY(-1px);
+}
+body.freshcart-theme [class*="rounded-3xl"] { border-radius: .5rem !important; }
+body.freshcart-theme [class*="rounded-2xl"] { border-radius: .5rem !important; }
+body.freshcart-theme [class*="shadow-soft"] { box-shadow: 0 1px 2px rgba(33,49,60,.04) !important; }
+body.freshcart-theme [class*="shadow-md"] { box-shadow: 0 2px 8px rgba(33,49,60,.06) !important; }
+body.freshcart-theme [class*="bg-\[#F8FAFC\]"],
+body.freshcart-theme [class*="bg-\[#FAFAF8\]"] { background: #fff !important; }
+body.freshcart-theme [class*="border-slate-200"],
+body.freshcart-theme [class*="border-slate-100"] { border-color: var(--fc-gray-300) !important; }
+body.freshcart-theme [class*="bg-slate-50"] { background: var(--fc-gray-50) !important; }
+body.freshcart-theme [class*="bg-slate-100"] { background: var(--fc-gray-100) !important; }
+body.freshcart-theme [class*="text-slate-900"] { color: var(--fc-gray-900) !important; }
+body.freshcart-theme [class*="text-slate-800"] { color: var(--fc-gray-800) !important; }
+body.freshcart-theme [class*="text-slate-700"] { color: var(--fc-gray-700) !important; }
+body.freshcart-theme [class*="text-slate-600"],
+body.freshcart-theme [class*="text-slate-500"] { color: var(--fc-gray-600) !important; }
+body.freshcart-theme [class*="text-slate-400"] { color: var(--fc-gray-500) !important; }
+body.freshcart-theme .btn { border-radius: .5rem; }
+
+/* Portal surfaces use FreshCart's same neutral system */
+body.freshcart-theme [class*="bg-white"] { --tw-bg-opacity: 1; }
+body.freshcart-theme table thead { background: var(--fc-gray-100) !important; }
+body.freshcart-theme table th { color: var(--fc-gray-500) !important; letter-spacing: .06em; text-transform: uppercase; font-size: .68rem; }
+body.freshcart-theme table td { border-color: var(--fc-gray-200) !important; }
+body.freshcart-theme input,
+body.freshcart-theme textarea,
+body.freshcart-theme select { border-radius: .5rem !important; }
+
+/* Preserve special mode colors while removing the old dashboard gradients */
+.fc-mode-cravings { --mode-primary: var(--fc-red); --mode-soft: var(--fc-red-soft); --mode-dark: var(--fc-red-dark); }
+.fc-mode-fresh { --mode-primary: var(--fc-fresh); --mode-soft: var(--fc-fresh-soft); --mode-dark: var(--fc-fresh-dark); }
+
+/* Shared mobile dock */
+.fc-mobile-dock { box-shadow: 0 -2px 12px rgba(33,49,60,.08); border-top: 1px solid var(--fc-gray-200); background: rgba(255,255,255,.98); backdrop-filter: blur(8px); }
+
+/* Leaflet */
+.custom-leaflet-marker { background: transparent !important; border: 0 !important; }
+
+/* scrollbar */
+::-webkit-scrollbar { width: 7px; height: 7px; }
+::-webkit-scrollbar-track { background: #f7f8f8; }
+::-webkit-scrollbar-thumb { background: #cfd5d4; border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: #aeb7b5; }
+.scrollbar-none::-webkit-scrollbar { display: none; }
+.scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
+
+*:focus-visible { outline: 2px solid var(--fc-green); outline-offset: 2px; }
+
+@layer components {
+  .fc-btn-secondary { @apply inline-flex items-center justify-center gap-2 border bg-white font-semibold; border-color: var(--fc-gray-300); color: var(--fc-gray-800); border-radius: .5rem; padding: .65rem 1rem; transition: .2s ease; }
+  .fc-btn-secondary:hover { background: var(--fc-gray-50); border-color: var(--fc-gray-400); }
+  .fc-label { @apply block mb-1.5 text-xs font-semibold; color: var(--fc-gray-700); }
+  .fc-page-heading { @apply mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between; }
+  .fc-section-title { @apply text-lg font-semibold text-gray-900; }
+  .fc-footer-heading { @apply text-sm font-semibold text-gray-900; }
+  .fc-footer-link { @apply block; color: var(--fc-gray-600); transition: color .2s ease; }
+  .fc-footer-link:hover { color: var(--fc-green); }
 }
 
-/* Restaurant & Food Card Utilities */
-.restaurant-food-card {
-  background-color: #FFFFFF;
-  border: 1px solid #E8E9ED;
-  box-shadow: 0 2px 8px rgba(20, 25, 35, 0.04);
-  border-radius: 16px;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
+/* Portal / operational pages: same FreshCart visual language, while retaining their existing DOM and action handlers. */
+/* Convert legacy dark hero/panel text to FreshCart's readable surface when the old gradient is flattened. */
+body.freshcart-theme [class*="from-slate-900"] .text-white,
+body.freshcart-theme [class*="from-cyan-900"] .text-white,
+body.freshcart-theme [class*="from-slate-900"] [class*="text-white"],
+body.freshcart-theme [class*="from-cyan-900"] [class*="text-white"] { color: var(--fc-gray-900) !important; }
+body.freshcart-theme [class*="from-slate-900"] .text-slate-300,
+body.freshcart-theme [class*="from-cyan-900"] .text-slate-300,
+body.freshcart-theme [class*="from-slate-900"] [class*="text-slate-300"],
+body.freshcart-theme [class*="from-cyan-900"] [class*="text-slate-300"] { color: var(--fc-gray-600) !important; }
 
-.restaurant-food-card-hover:hover {
-  transform: translateY(-2px);
-  border-color: #CBD5E1;
-  box-shadow: 0 8px 24px rgba(20, 25, 35, 0.08);
+body.freshcart-theme [class*="from-slate-900"],
+body.freshcart-theme [class*="from-cyan-900"] {
+  background-image: none !important;
+  background-color: #fff !important;
+  color: var(--fc-gray-900) !important;
+  border: 1px solid var(--fc-gray-300) !important;
+  box-shadow: 0 1px 2px rgba(33,49,60,.04) !important;
 }
+body.freshcart-theme [class*="to-slate-800"],
+body.freshcart-theme [class*="to-slate-900"],
+body.freshcart-theme [class*="to-transparent"] { --tw-gradient-to: transparent !important; }
+body.freshcart-theme [class*="bg-cyan-600"],
+body.freshcart-theme [class*="bg-cyan-500"] { background-color: var(--fc-fresh) !important; }
+body.freshcart-theme [class*="hover\\:bg-cyan-700"]:hover { background-color: var(--fc-fresh-dark) !important; }
+body.freshcart-theme [class*="text-cyan-700"],
+body.freshcart-theme [class*="text-cyan-600"],
+body.freshcart-theme [class*="text-cyan-500"] { color: var(--fc-fresh) !important; }
+body.freshcart-theme [class*="border-cyan-"] { border-color: rgba(22,138,91,.28) !important; }
+body.freshcart-theme [class*="bg-rose-600"],
+body.freshcart-theme [class*="bg-rose-500"] { background-color: var(--fc-red) !important; }
+body.freshcart-theme [class*="text-rose-600"],
+body.freshcart-theme [class*="text-rose-500"] { color: var(--fc-red) !important; }
+body.freshcart-theme [class*="border-rose-"] { border-color: rgba(229,27,75,.22) !important; }
+body.freshcart-theme [class*="bg-purple-600"],
+body.freshcart-theme [class*="bg-purple-500"] { background-color: var(--fc-fresh) !important; }
+body.freshcart-theme [class*="text-purple-600"],
+body.freshcart-theme [class*="text-purple-500"] { color: var(--fc-fresh) !important; }
+body.freshcart-theme [class*="bg-indigo-600"],
+body.freshcart-theme [class*="bg-indigo-500"] { background-color: var(--fc-green) !important; }
+body.freshcart-theme [class*="text-indigo-600"],
+body.freshcart-theme [class*="text-indigo-500"] { color: var(--fc-green-dark) !important; }
+body.freshcart-theme [class*="bg-cyan-50"],
+body.freshcart-theme [class*="bg-cyan-100"] { background-color: rgba(22,138,91,.06) !important; }
+body.freshcart-theme [class*="bg-rose-50"],
+body.freshcart-theme [class*="bg-rose-100"] { background-color: rgba(229,27,75,.06) !important; }
+body.freshcart-theme [class*="bg-emerald-50"],
+body.freshcart-theme [class*="bg-emerald-100"] { background-color: rgba(22,138,91,.06) !important; }
+body.freshcart-theme [class*="bg-amber-50"],
+body.freshcart-theme [class*="bg-amber-100"] { background-color: #fff9e8 !important; }
+body.freshcart-theme [class*="border-emerald-"] { border-color: rgba(22,138,91,.25) !important; }
+body.freshcart-theme [class*="text-emerald-600"],
+body.freshcart-theme [class*="text-emerald-700"] { color: var(--fc-fresh) !important; }
+body.freshcart-theme [class*="rounded-full"] { }
 
-/* Skeleton Loading Animation */
-@keyframes skeletonPulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}
+/* Old page primitives are visually flattened into FreshCart cards/buttons. */
+body.freshcart-theme .shadow-lg,
+body.freshcart-theme .shadow-xl,
+body.freshcart-theme .shadow-2xl { box-shadow: 0 8px 24px rgba(33,49,60,.08) !important; }
+body.freshcart-theme .bg-slate-900 { background-color: var(--fc-gray-900) !important; }
+body.freshcart-theme .bg-slate-800 { background-color: var(--fc-gray-800) !important; }
 
-.skeleton-loading-pulse {
-  animation: skeletonPulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-  background-color: #E8E9ED;
-}
 
-/* Accessible Focus Ring */
-*:focus-visible {
-  outline: 2px solid #E51B4B;
-  outline-offset: 2px;
+/* FreshCart surface normalization for legacy operational panels. */
+body.freshcart-theme [class*="bg-slate-950/"],
+body.freshcart-theme [class*="bg-slate-900/80"],
+body.freshcart-theme [class*="bg-slate-900/70"] {
+  background-color: #fff !important;
+  color: var(--fc-gray-900) !important;
+  border-color: var(--fc-gray-300) !important;
 }
+body.freshcart-theme [class*="bg-slate-950/"] .text-white,
+body.freshcart-theme [class*="bg-slate-900/80"] .text-white,
+body.freshcart-theme [class*="bg-slate-900/70"] .text-white { color: var(--fc-gray-900) !important; }
+body.freshcart-theme [class*="bg-emerald-950/"],
+body.freshcart-theme [class*="bg-amber-950/"] {
+  background-color: var(--fc-gray-50) !important;
+  color: var(--fc-gray-900) !important;
+}
+body.freshcart-theme [class*="bg-emerald-950/"] .text-white,
+body.freshcart-theme [class*="bg-amber-950/"] .text-white { color: var(--fc-gray-900) !important; }
+body.freshcart-theme [class*="bg-gradient-to-r"],
+body.freshcart-theme [class*="bg-gradient-to-br"],
+body.freshcart-theme [class*="bg-gradient-to-b"] {
+  background-image: none !important;
+}
+body.freshcart-theme [class*="shadow-2xl"] { box-shadow: 0 8px 24px rgba(33,49,60,.08) !important; }

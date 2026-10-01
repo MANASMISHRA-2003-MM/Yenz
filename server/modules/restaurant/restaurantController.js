@@ -108,13 +108,13 @@ const getRestaurants = async (req, res, next) => {
       return formatVendorObj({ ...v, distanceKm: dist });
     });
 
-    // If user coordinates provided, filter by 5 km radius and sort by nearest distance
+    // Sort restaurants by distance if user coordinates provided, preserving all database vendors
     if (userLat && userLng) {
-      const withinRadius = restaurants.filter(r => r.distanceKm <= maxRadius);
-      if (withinRadius.length > 0) {
-        restaurants = withinRadius;
-      }
-      restaurants.sort((a, b) => a.distanceKm - b.distanceKm);
+      restaurants.sort((a, b) => {
+        const dA = (a.distanceKm !== null && a.distanceKm !== undefined) ? Number(a.distanceKm) : 999;
+        const dB = (b.distanceKm !== null && b.distanceKm !== undefined) ? Number(b.distanceKm) : 999;
+        return dA - dB;
+      });
     }
 
     res.json({

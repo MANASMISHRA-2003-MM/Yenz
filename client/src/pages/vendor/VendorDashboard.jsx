@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import API from '../../services/api';
 import { socket } from '../../services/socket';
 import Navbar from '../../components/Navbar';
+import FreshCartFooter from '../../components/FreshCartFooter';
 import OrderStatusBadge from '../../components/OrderStatusBadge';
 import DeliveryTimeline from '../../components/DeliveryTimeline';
 import { Store, Flame, RefreshCw, PackageCheck, Tag, BellRing, CheckCircle2, XCircle, Bike, Volume2, Clock, MapPin, Timer, History, ArrowRight, Navigation } from 'lucide-react';
@@ -603,22 +604,22 @@ export default function VendorDashboard() {
                                     </a>
                                   )}
                                 </div>
-                                <p className="text-[11px] text-emerald-700 font-medium">Verify rider name <strong>"{ord.deliveryPartner.name}"</strong> when they arrive to pick up the package.</p>
+                                <p className="text-[11px] text-emerald-700 font-medium">Hand package to <strong>"{ord.deliveryPartner.name}"</strong> when they arrive.</p>
                               </div>
                             ) : (
                               <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-center gap-2 font-bold animate-pulse">
                                 <span className="shrink-0">📡</span>
-                                <span>Order Accepted! Finding & Ringing nearest 3km riders...</span>
+                                <span>Store Accepted! Finding & Ringing nearest 3km riders...</span>
                               </div>
                             )}
 
-                            {/* Vendor Dispatch Button when delivery rider takes order */}
+                            {/* Vendor Button 2: Mark order given to delivery partner */}
                             <button
-                              onClick={() => handleUpdateStatus(ord._id || ord.id, 'OUT_FOR_DELIVERY', 'Order marked dispatched by store. Delivery driver took the order.')}
-                              className="w-full py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-1.5 active:scale-95"
+                              onClick={() => handleUpdateStatus(ord._id || ord.id, 'READY_FOR_PICKUP', 'Store packed package and handed over to rider.')}
+                              className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-1.5 active:scale-95"
                             >
-                              <Navigation className="w-4 h-4" />
-                              <span>🚀 Mark Order Dispatched</span>
+                              <PackageCheck className="w-4 h-4" />
+                              <span>Mark Order Given to Delivery Partner</span>
                             </button>
                           </div>
                         )}
@@ -799,6 +800,7 @@ export default function VendorDashboard() {
           </div>
         )}
 
+      <FreshCartFooter />
       </main>
     </div>
   );

@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API from '../../services/api';
 import Navbar from '../../components/Navbar';
-import { Bike, CheckCircle, Clock, XCircle, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Bike, CheckCircle, Clock, XCircle, ArrowRight, ShieldCheck, Wallet, FileCheck2 } from 'lucide-react';
+import FreshCartFooter from '../../components/FreshCartFooter';
 import { toast } from 'sonner';
 
 export default function DeliveryOnboarding() {
@@ -84,213 +85,35 @@ export default function DeliveryOnboarding() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-slate-900 pb-20">
+    <div className="min-h-screen bg-white text-gray-800">
       <Navbar />
-
-      <main className="max-w-3xl mx-auto px-4 py-8 space-y-6">
-        
-        {/* Banner */}
-        <div className="bg-gradient-to-r from-cyan-900 to-slate-900 text-white p-6 sm:p-8 rounded-3xl shadow-lg relative overflow-hidden">
-          <div className="relative z-10 space-y-2">
-            <span className="px-3 py-1 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[10px] font-extrabold uppercase tracking-wider">
-              DELIVERY FLEET ONBOARDING
-            </span>
-            <h1 className="text-2xl sm:text-3xl font-black">Delivery Fleet Partner Application</h1>
-            <p className="text-xs text-slate-300 max-w-xl font-medium">
-              Earn flexible income with Kravings hyperlocal quick delivery. Provide your vehicle & payout info below to complete driver verification.
-            </p>
+      <main className="fc-container py-8 sm:py-10 pb-20">
+        <section className="fc-card mb-6"><div className="p-6 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6"><div><p className="fc-eyebrow" style={{color:'var(--fc-fresh)'}}>Delivery partner</p><h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 mt-1">Delivery fleet partner application</h1><p className="mt-2 text-sm text-gray-500 max-w-2xl">Apply to receive nearby Yenz delivery jobs. Your application and payout data continue to use the existing delivery API.</p></div><div className="w-16 h-16 rounded-lg flex items-center justify-center" style={{background:'rgba(22,138,91,.08)',color:'var(--fc-fresh)'}}><Bike className="w-8 h-8" /></div></div></section>
+        {existingApp ? <section className="fc-card p-7 text-center">
+          {existingApp.status === 'PENDING' && <><div className="w-12 h-12 rounded-lg bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center mx-auto"><Clock className="w-6 h-6" /></div><p className="mt-4 text-xs font-bold uppercase tracking-wide text-amber-700">Application under review</p><h2 className="mt-2 text-xl font-bold text-gray-900">{existingApp.fullName} · {existingApp.vehicleType}</h2><p className="mt-2 text-sm text-gray-500 max-w-lg mx-auto">Submitted on {new Date(existingApp.createdAt).toLocaleDateString()}. Admin verification is in progress.</p></>}
+          {existingApp.status === 'APPROVED' && <><div className="w-12 h-12 rounded-lg bg-green-50 text-green-600 border border-green-200 flex items-center justify-center mx-auto"><CheckCircle className="w-6 h-6" /></div><p className="mt-4 text-xs font-bold uppercase tracking-wide" style={{color:'var(--fc-fresh)'}}>Driver account approved</p><h2 className="mt-2 text-xl font-bold text-gray-900">Ready to deliver</h2><p className="mt-2 text-sm text-gray-500">Your delivery account can receive live orders.</p><button onClick={() => navigate('/delivery/dashboard')} className="mt-5 fc-btn text-white" style={{background:'var(--fc-fresh)',borderColor:'var(--fc-fresh)'}}>Open delivery console <ArrowRight className="w-4 h-4" /></button></>}
+          {existingApp.status === 'REJECTED' && <><div className="w-12 h-12 rounded-lg flex items-center justify-center mx-auto" style={{background:'rgba(229,27,75,.08)',color:'var(--fc-red)'}}><XCircle className="w-6 h-6" /></div><p className="mt-4 text-xs font-bold uppercase tracking-wide" style={{color:'var(--fc-red)'}}>Application rejected</p><p className="mt-2 text-sm text-gray-500">Admin notes: {existingApp.adminNotes || 'Verification details could not be validated.'}</p></>}
+        </section> : <form onSubmit={handleSubmit} className="fc-card p-5 sm:p-7">
+          <div className="flex items-center gap-3 pb-4 border-b border-gray-200"><div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center"><Bike className="w-5 h-5" /></div><div><h2 className="font-semibold text-gray-900">Delivery partner information</h2><p className="text-xs text-gray-500">Provide the details needed for verification.</p></div></div>
+          <div className="grid md:grid-cols-2 gap-4 mt-5">
+            <label><span className="fc-label">Full legal name *</span><input className="fc-input" required value={form.fullName} onChange={e=>setForm({...form,fullName:e.target.value})} placeholder="Your full name" /></label>
+            <label><span className="fc-label">Vehicle category *</span><select className="fc-input" value={form.vehicleType} onChange={e=>setForm({...form,vehicleType:e.target.value})}><option value="Bike">Motorcycle / Bike</option><option value="Scooter">EV Scooter / Activa</option><option value="Bicycle">Bicycle</option></select></label>
+            <label><span className="fc-label">Vehicle registration *</span><input className="fc-input" required value={form.vehicleNumber} onChange={e=>setForm({...form,vehicleNumber:e.target.value})} placeholder="HR 51 AB 1234" /></label>
+            <label><span className="fc-label">Driving license</span><input className="fc-input" value={form.dlNumber} onChange={e=>setForm({...form,dlNumber:e.target.value})} placeholder="DL-1420110012345" /></label>
+            <label><span className="fc-label">Phone *</span><input className="fc-input" required value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})} placeholder="+91 98765 43210" /></label>
+            <label><span className="fc-label">Email</span><input className="fc-input" type="email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})} placeholder="driver@example.com" /></label>
+            <label className="md:col-span-2"><span className="fc-label">Current operating address</span><input className="fc-input" value={form.address} onChange={e=>setForm({...form,address:e.target.value})} /></label>
           </div>
-          <Bike className="absolute -right-6 -bottom-6 w-48 h-48 text-white/5 pointer-events-none" />
-        </div>
-
-        {/* STATUS CARDS */}
-        {existingApp ? (
-          <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-soft space-y-6 text-center">
-            {existingApp.status === 'PENDING' && (
-              <div className="space-y-4">
-                <div className="w-16 h-16 bg-amber-50 border border-amber-200 text-amber-600 rounded-full flex items-center justify-center mx-auto">
-                  <Clock className="w-8 h-8 animate-pulse" />
-                </div>
-                <div>
-                  <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-black uppercase">
-                    DRIVER APPLICATION UNDER REVIEW
-                  </span>
-                  <h2 className="text-xl font-black text-slate-900 mt-2">{existingApp.fullName} ({existingApp.vehicleType})</h2>
-                  <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
-                    Your driver verification details submitted on {new Date(existingApp.createdAt).toLocaleDateString()} are under review. You will receive active delivery jobs as soon as Admin approves your account.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {existingApp.status === 'APPROVED' && (
-              <div className="space-y-4">
-                <div className="w-16 h-16 bg-emerald-50 border border-emerald-200 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
-                  <CheckCircle className="w-8 h-8" />
-                </div>
-                <div>
-                  <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-black uppercase">
-                    DRIVER ACCOUNT APPROVED!
-                  </span>
-                  <h2 className="text-xl font-black text-slate-900 mt-2">Ready to Deliver</h2>
-                  <p className="text-xs text-slate-500 mt-1">Your driver account is verified and ready for live orders.</p>
-                </div>
-                <button
-                  onClick={() => navigate('/delivery/dashboard')}
-                  className="px-6 py-3 bg-cyan-600 hover:bg-cyan-700 text-white font-extrabold text-xs rounded-2xl shadow-md transition inline-flex items-center gap-2"
-                >
-                  Go to Delivery Console
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-              </div>
-            )}
-
-            {existingApp.status === 'REJECTED' && (
-              <div className="space-y-4">
-                <div className="w-16 h-16 bg-rose-50 border border-rose-200 text-rose-600 rounded-full flex items-center justify-center mx-auto">
-                  <XCircle className="w-8 h-8" />
-                </div>
-                <div>
-                  <span className="px-3 py-1 rounded-full bg-rose-100 text-rose-800 text-xs font-black uppercase">
-                    APPLICATION REJECTED
-                  </span>
-                  <p className="text-xs text-slate-500 mt-2">Admin Notes: {existingApp.adminNotes || 'Verification details could not be validated.'}</p>
-                </div>
-              </div>
-            )}
-          </div>
-        ) : (
-          /* REGISTRATION FORM */
-          <form onSubmit={handleSubmit} className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-soft space-y-6">
-            <h2 className="text-lg font-black text-slate-900 border-b border-slate-100 pb-3 flex items-center gap-2">
-              <ShieldCheck className="w-5 h-5 text-cyan-500" />
-              Delivery Partner Information
-            </h2>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs font-extrabold text-slate-700 block mb-1">Full Legal Name *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Vikram Singh"
-                  value={form.fullName}
-                  onChange={(e) => setForm({ ...form, fullName: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-medium focus:outline-none focus:border-cyan-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-extrabold text-slate-700 block mb-1">Vehicle Category *</label>
-                <select
-                  value={form.vehicleType}
-                  onChange={(e) => setForm({ ...form, vehicleType: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold focus:outline-none focus:border-cyan-500"
-                >
-                  <option value="Bike">Motorcycle / Bike</option>
-                  <option value="Scooter">EV Scooter / Activa</option>
-                  <option value="Bicycle">Bicycle</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs font-extrabold text-slate-700 block mb-1">Vehicle Registration Number *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. HR 51 AB 1234"
-                  value={form.vehicleNumber}
-                  onChange={(e) => setForm({ ...form, vehicleNumber: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-medium focus:outline-none focus:border-cyan-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-extrabold text-slate-700 block mb-1">Driving License Number</label>
-                <input
-                  type="text"
-                  placeholder="DL-1420110012345"
-                  value={form.dlNumber}
-                  onChange={(e) => setForm({ ...form, dlNumber: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-medium focus:outline-none focus:border-cyan-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-extrabold text-slate-700 block mb-1">Phone Number *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="+91 98765 43210"
-                  value={form.phone}
-                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-medium focus:outline-none focus:border-cyan-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-extrabold text-slate-700 block mb-1">Email Address</label>
-                <input
-                  type="email"
-                  placeholder="vikram@driver.com"
-                  value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-medium focus:outline-none focus:border-cyan-500"
-                />
-              </div>
-            </div>
-
-            <h2 className="text-lg font-black text-slate-900 border-b border-slate-100 pb-3 pt-2">
-              Identity Verification & Direct Bank Payouts
-            </h2>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs font-extrabold text-slate-700 block mb-1">Aadhaar Card Number (Private)</label>
-                <input
-                  type="text"
-                  placeholder="12-digit Aadhaar Number"
-                  value={form.aadhaarNumber}
-                  onChange={(e) => setForm({ ...form, aadhaarNumber: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-medium focus:outline-none focus:border-cyan-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-extrabold text-slate-700 block mb-1">Bank Account Number (Payouts)</label>
-                <input
-                  type="text"
-                  placeholder="Account Number"
-                  value={form.bankAccount}
-                  onChange={(e) => setForm({ ...form, bankAccount: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-medium focus:outline-none focus:border-cyan-500"
-                />
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className="text-xs font-extrabold text-slate-700 block mb-1">Bank IFSC Code</label>
-                <input
-                  type="text"
-                  placeholder="SBIN0001234"
-                  value={form.ifscCode}
-                  onChange={(e) => setForm({ ...form, ifscCode: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-medium focus:outline-none focus:border-cyan-500"
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={submitting}
-              className="w-full py-3.5 bg-cyan-600 hover:bg-cyan-700 text-white font-black text-xs rounded-2xl shadow-md transition flex items-center justify-center gap-2"
-            >
-              {submitting ? 'Submitting Application...' : 'Submit Driver Verification'}
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </form>
-        )}
-
+          <div className="mt-7 pt-5 border-t border-gray-200"><div className="flex items-center gap-2"><FileCheck2 className="w-5 h-5" style={{color:'var(--fc-fresh)'}} /><h2 className="font-semibold text-gray-900">Identity & payout</h2></div><div className="grid md:grid-cols-2 gap-4 mt-4">
+            <label><span className="fc-label">Aadhaar number</span><input className="fc-input" value={form.aadhaarNumber} onChange={e=>setForm({...form,aadhaarNumber:e.target.value})} placeholder="12-digit Aadhaar number" /></label>
+            <label><span className="fc-label">Bank account number</span><input className="fc-input" value={form.bankAccount} onChange={e=>setForm({...form,bankAccount:e.target.value})} placeholder="Account number" /></label>
+            <label><span className="fc-label">IFSC code</span><input className="fc-input" value={form.ifscCode} onChange={e=>setForm({...form,ifscCode:e.target.value})} placeholder="SBIN0001234" /></label>
+          </div></div>
+          <div className="mt-7 rounded-md border border-gray-200 bg-gray-50 p-4 text-xs text-gray-500 flex gap-2"><Wallet className="w-4 h-4 shrink-0" /> Payout information continues to be sent in the same backend payload as the existing Yenz application.</div>
+          <button type="submit" disabled={submitting} className="mt-5 w-full fc-btn text-white disabled:opacity-50" style={{background:'var(--fc-fresh)',borderColor:'var(--fc-fresh)'}}>{submitting ? 'Submitting application…' : 'Submit driver verification'} <ArrowRight className="w-4 h-4" /></button>
+        </form>}
       </main>
+      <FreshCartFooter />
     </div>
   );
 }

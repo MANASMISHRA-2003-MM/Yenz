@@ -249,6 +249,54 @@ const getDeliveryDashboard = async (req, res, next) => {
       };
     }
 
+    // 4. Fetch rider profile details (user info + latest DeliveryPartnerApplication)
+    const riderUser = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        phone: true,
+        role: true,
+        status: true,
+        isOnline: true,
+        avatar: true,
+        vehicleType: true,
+        ratings: true,
+        createdAt: true
+      }
+    });
+
+    const latestApp = await prisma.deliveryPartnerApplication.findFirst({
+      where: { userId: req.user.id },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    const riderProfile = {
+      id: riderUser?.id,
+      fullName: latestApp?.fullName || riderUser?.fullName || '',
+      email: latestApp?.email || riderUser?.email || '',
+      phone: latestApp?.phone || riderUser?.phone || '',
+      vehicleType: latestApp?.vehicleType || riderUser?.vehicleType || 'Bike',
+      vehicleNumber: latestApp?.vehicleNumber || 'DL 01 EX 1234',
+      dlNumber: latestApp?.dlNumber || 'DL-98203918239',
+      status: latestApp?.status || (riderUser?.role === 'DELIVERY_PARTNER' ? 'APPROVED' : 'PENDING'),
+      ratings: riderUser?.ratings || 4.8,
+      address: latestApp?.address || 'Noida NCR',
+      bankDetails: latestApp?.bankDetails || {
+        bankName: 'HDFC Bank',
+        accountNumber: '918273645012',
+        ifscCode: 'HDFC0001234',
+        accountHolderName: latestApp?.fullName || riderUser?.fullName || 'Rider Partner'
+      },
+      documents: latestApp?.documents || {
+        aadharNumber: '4821 9812 0192',
+        aadharVerified: true,
+        dlVerified: true
+      },
+      applicationId: latestApp?.id || null
+    };
+
     res.json({
       success: true,
       activeOffer: activeOfferData,
@@ -256,7 +304,8 @@ const getDeliveryDashboard = async (req, res, next) => {
       availableJobs: activeOfferData ? [activeOfferData] : [],
       pastDeliveries,
       totalEarnings,
-      completedCount: pastDeliveries.length
+      completedCount: pastDeliveries.length,
+      riderProfile
     });
   } catch (err) {
     next(err);
@@ -611,6 +660,92 @@ const updateRiderLocation = async (req, res, next) => {
     next(err);
   }
 };
+// Update rider profile, bank details, DL & Aadhar credentials (PUT /api/deliveries/profile)
+const updateRiderProfile = async (req, res, next) => {
+  try {
+    const { fullName, phone, email, address, vehicleType, vehicleNumber, dlNumber, bankDetails, documents, aadharNumber } = req.body;
+
+    // Update User model
+    await prisma.user.update({
+      where: { id: req.user.id },
+      data: {
+        fullName: fullName || undefined,
+        phone: phone || undefined,
+        vehicleType: vehicleType || undefined
+      }
+    });
+
+    let app = await prisma.deliveryPartnerApplication.findFirst({
+      where: { userId: req.user.id },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    const docsMerged = {
+      ...(app?.documents && typeof app.documents === 'object' ? app.documents : {}),
+      ...(documents || {}),
+      ...(aadharNumber ? { aadharNumber } : {})
+    };
+
+    const bankMerged = {
+      ...(app?.bankDetails && typeof app.bankDetails === 'object' ? app.bankDetails : {}),
+      ...(bankDetails || {})
+    };
+
+    if (app) {
+      app = await prisma.deliveryPartnerApplication.update({
+        where: { id: app.id },
+        data: {
+          fullName: fullName || app.fullName,
+          phone: phone || app.phone,
+          email: email || app.email,
+          address: address || app.address,
+          vehicleType: vehicleType || app.vehicleType,
+          vehicleNumber: vehicleNumber || app.vehicleNumber,
+          dlNumber: dlNumber || app.dlNumber,
+          bankDetails: bankMerged,
+          documents: docsMerged
+        }
+      });
+    } else {
+      app = await prisma.deliveryPartnerApplication.create({
+        data: {
+          id: crypto.randomUUID(),
+          userId: req.user.id,
+          fullName: fullName || req.user.fullName,
+          phone: phone || req.user.phone,
+          email: email || req.user.email,
+          address: address || 'Noida NCR',
+          vehicleType: vehicleType || 'Bike',
+          vehicleNumber: vehicleNumber || 'DL 01 EX 1234',
+          dlNumber: dlNumber || 'DL-98203918239',
+          bankDetails: bankMerged,
+          documents: docsMerged,
+          status: req.user.role === 'DELIVERY_PARTNER' ? 'APPROVED' : 'PENDING'
+        }
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Rider profile & credentials updated successfully',
+      riderProfile: {
+        id: req.user.id,
+        fullName: app.fullName,
+        email: app.email,
+        phone: app.phone,
+        vehicleType: app.vehicleType,
+        vehicleNumber: app.vehicleNumber,
+        dlNumber: app.dlNumber,
+        address: app.address,
+        bankDetails: app.bankDetails,
+        documents: app.documents,
+        status: app.status
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+};
 
 module.exports = {
   getDeliveryDashboard,
@@ -620,5 +755,7 @@ module.exports = {
   updateDeliveryStatus,
   acceptDeliveryOffer,
   rejectDeliveryOffer,
-  updateRiderLocation
+  updateRiderLocation,
+  updateRiderProfile
 };
+

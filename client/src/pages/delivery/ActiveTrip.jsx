@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import API from '../../services/api';
 import { socket } from '../../services/socket';
 import Navbar from '../../components/Navbar';
+import FreshCartFooter from '../../components/FreshCartFooter';
 import MapSimulator from '../../components/MapSimulator';
 import OrderStatusBadge from '../../components/OrderStatusBadge';
 import DeliveryTimeline from '../../components/DeliveryTimeline';
@@ -704,6 +705,7 @@ export default function ActiveTrip() {
           </div>
         )}
 
+      <FreshCartFooter />
       </main>
     </div>
   );

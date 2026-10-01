@@ -3,27 +3,29 @@ import { Clock, CheckCircle2, Flame, Bike, PackageCheck, AlertCircle, XCircle } 
 
 export default function OrderStatusBadge({ status }) {
   const configs = {
-    PENDING: { label: 'Order Placed', bg: 'bg-blue-50 text-blue-700 border-blue-200', icon: Clock },
-    CONFIRMED: { label: 'Accepted by Store', bg: 'bg-indigo-50 text-indigo-700 border-indigo-200', icon: CheckCircle2 },
-    PREPARING: { label: 'Preparing Order', bg: 'bg-amber-50 text-amber-700 border-amber-200', icon: Flame },
-    READY_FOR_PICKUP: { label: 'Ready for Pickup', bg: 'bg-teal-50 text-teal-700 border-teal-200', icon: PackageCheck },
-    ASSIGNED: { label: 'Driver Assigned', bg: 'bg-cyan-50 text-cyan-700 border-cyan-200', icon: Bike },
-    PICKED_UP: { label: 'Picked Up', bg: 'bg-purple-50 text-purple-700 border-purple-200', icon: Bike },
-    OUT_FOR_DELIVERY: { label: 'Out for Delivery', bg: 'bg-purple-100 text-purple-800 border-purple-300 animate-pulse', icon: Bike },
-    DELIVERED: { label: 'Delivered', bg: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: CheckCircle2 },
-    CANCELLED: { label: 'Cancelled', bg: 'bg-rose-50 text-rose-700 border-rose-200', icon: XCircle },
-    // Fallbacks for legacy status representations
-    PLACED: { label: 'Order Placed', bg: 'bg-blue-50 text-blue-700 border-blue-200', icon: Clock },
-    VENDOR_ACCEPTED: { label: 'Accepted by Store', bg: 'bg-indigo-50 text-indigo-700 border-indigo-200', icon: CheckCircle2 }
+    PENDING: { label: 'Order Placed', icon: Clock },
+    CONFIRMED: { label: 'Accepted by Store', icon: CheckCircle2 },
+    PREPARING: { label: 'Preparing Order', icon: Flame },
+    READY_FOR_PICKUP: { label: 'Ready for Pickup', icon: PackageCheck },
+    ASSIGNED: { label: 'Driver Assigned', icon: Bike },
+    PICKED_UP: { label: 'Picked Up', icon: Bike },
+    OUT_FOR_DELIVERY: { label: 'Out for Delivery', icon: Bike },
+    DELIVERED: { label: 'Delivered', icon: CheckCircle2 },
+    CANCELLED: { label: 'Cancelled', icon: XCircle },
+    PLACED: { label: 'Order Placed', icon: Clock },
+    VENDOR_ACCEPTED: { label: 'Accepted by Store', icon: CheckCircle2 }
   };
-
-  const config = configs[status] || { label: status, bg: 'bg-slate-100 text-slate-700 border-slate-200', icon: AlertCircle };
+  const config = configs[status] || { label: status, icon: AlertCircle };
   const Icon = config.icon;
-
+  const isFreshTone = ['DELIVERED','CONFIRMED','READY_FOR_PICKUP'].includes(status);
+  const isRedTone = status === 'CANCELLED';
   return (
-    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${config.bg}`}>
-      <Icon className="w-3.5 h-3.5" />
-      {config.label}
-    </span>
+    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border" style={
+      isRedTone
+        ? {color:'var(--fc-red)',borderColor:'rgba(229,27,75,.22)',background:'rgba(229,27,75,.06)'}
+        : isFreshTone
+        ? {color:'var(--fc-fresh)',borderColor:'rgba(22,138,91,.22)',background:'rgba(22,138,91,.06)'}
+        : {color:'var(--fc-gray-700)',borderColor:'var(--fc-gray-300)',background:'var(--fc-gray-50)'}
+    }><Icon className="w-3.5 h-3.5" />{config.label}</span>
   );
 }

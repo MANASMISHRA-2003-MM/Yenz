@@ -8,7 +8,8 @@ const {
   updateDeliveryStatus,
   acceptDeliveryOffer,
   rejectDeliveryOffer,
-  updateRiderLocation
+  updateRiderLocation,
+  updateRiderProfile
 } = require('./deliveryController');
 const { protect, authorize } = require('../../middlewares/authMiddleware');
 
@@ -17,6 +18,7 @@ router.get('/application/me', protect, getMyDeliveryApplication);
 
 router.get('/dashboard', protect, authorize('DELIVERY_PARTNER', 'ADMIN', 'delivery_partner', 'admin'), getDeliveryDashboard);
 router.put('/toggle-online', protect, authorize('DELIVERY_PARTNER', 'ADMIN', 'delivery_partner', 'admin'), toggleOnlineStatus);
+router.put('/profile', protect, authorize('DELIVERY_PARTNER', 'ADMIN', 'delivery_partner', 'admin'), updateRiderProfile);
 router.put('/:id/status', protect, authorize('DELIVERY_PARTNER', 'ADMIN', 'delivery_partner', 'admin'), updateDeliveryStatus);
 
 // Offer lifecycle routes
@@ -27,4 +29,5 @@ router.post('/offers/:offerId/reject', protect, authorize('DELIVERY_PARTNER', 'A
 router.post('/location', protect, authorize('DELIVERY_PARTNER', 'ADMIN', 'delivery_partner', 'admin'), updateRiderLocation);
 
 module.exports = router;
+
 

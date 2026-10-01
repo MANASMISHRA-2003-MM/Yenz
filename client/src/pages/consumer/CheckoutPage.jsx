@@ -5,6 +5,7 @@ import { useCart } from '../../context/CartContext';
 import { useMode } from '../../context/ModeContext';
 import Navbar from '../../components/Navbar';
 import AddressModal, { getSavedAddresses } from '../../components/AddressModal';
+import FreshCartFooter from '../../components/FreshCartFooter';
 import { MapPin, CreditCard, ShieldCheck, CheckCircle2, ArrowRight, Navigation, Plus, Minus, Trash2, Bookmark, Store, Clock, Scale, Tag, ShoppingBag, AlertTriangle, Lock, RefreshCw, X } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -271,526 +272,139 @@ export default function CheckoutPage({ modeOverride }) {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-slate-900 pb-28">
+    <div className="min-h-screen bg-white text-gray-800">
       <Navbar />
-
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-        
-        {/* Header */}
-        <div className="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-soft flex items-center justify-between">
+      <main className="fc-container py-7 sm:py-10 pb-28">
+        <div className="fc-page-heading">
           <div>
-            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase border ${
-              isFreshMode ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-rose-50 text-rose-800 border-rose-200'
-            }`}>
-              {isFreshMode ? '🥬 FRESH MANDI CHECKOUT' : '🍕 CRAVINGS CHECKOUT'}
-            </span>
-            <h1 className="text-2xl font-extrabold text-slate-900 mt-1">Delivery Address & Payment</h1>
+            <p className={`fc-eyebrow ${isFreshMode ? 'fc-eyebrow-fresh' : 'fc-eyebrow-cravings'}`}>
+              {isFreshMode ? 'Fresh Mandi checkout' : 'Cravings checkout'}
+            </p>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">Checkout</h1>
+            <p className="mt-1 text-sm text-gray-500">Choose your delivery address, payment method and review your basket.</p>
           </div>
           {cart.restaurant && (
-            <div className="hidden sm:flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700">
-              <Store className="w-4 h-4 text-slate-500" />
-              <span>{cart.restaurant.name}</span>
+            <div className="fc-card px-4 py-3 flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center"><Store className="w-5 h-5 text-gray-500" /></div>
+              <div className="min-w-0">
+                <div className="text-[10px] uppercase tracking-wide font-bold text-gray-400">Store</div>
+                <div className="text-sm font-semibold text-gray-900 truncate">{cart.restaurant.name}</div>
+              </div>
             </div>
           )}
         </div>
 
-        <form onSubmit={handleOpenConfirmModal} className="grid lg:grid-cols-12 gap-8 items-start">
-          
-          {/* Left Column: Address & Payment Selection */}
-          <div className="lg:col-span-7 space-y-6">
-            
-            {/* 1. Address Selection Box */}
-            <div className="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-soft space-y-4">
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl flex items-center gap-2 text-amber-900 text-xs font-bold">
-                <MapPin className="w-4 h-4 text-amber-600 flex-shrink-0" />
-                <span>Please verify that the selected delivery address is your exact current delivery location before placing your order.</span>
-              </div>
-
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <div className="flex items-center gap-2 text-sm font-extrabold text-slate-900">
-                  <MapPin className="w-5 h-5 text-rose-600" />
-                  <span>Confirm Delivery Location</span>
+        <form onSubmit={handleOpenConfirmModal} className="grid lg:grid-cols-[minmax(0,1fr)_380px] gap-7 items-start">
+          <div className="space-y-5">
+            <section className="fc-card p-5 sm:p-6">
+              <div className="flex items-start justify-between gap-4 pb-4 border-b border-gray-200">
+                <div>
+                  <h2 className="font-semibold text-gray-900 flex items-center gap-2"><MapPin className="w-5 h-5" style={{ color: isFreshMode ? 'var(--fc-fresh)' : 'var(--fc-red)' }} /> Delivery address</h2>
+                  <p className="text-xs text-gray-500 mt-1">Your selected address is used for dispatch and navigation.</p>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={() => setShowAddressModal(true)}
-                  className="text-xs font-bold text-rose-600 hover:text-rose-700 flex items-center gap-1 transition"
-                >
-                  <Bookmark className="w-3.5 h-3.5" />
-                  <span>Saved Profiles</span>
+                <button type="button" onClick={() => setShowAddressModal(true)} className="text-xs font-semibold text-gray-600 hover:text-gray-900 underline underline-offset-2">
+                  Manage saved addresses
                 </button>
               </div>
 
-              {/* Saved Address Selection Pills & GPS Trigger */}
-              <div className="space-y-2">
-                <p className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">
-                  Quick Select Saved Address Profile
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {savedAddresses.map(sa => (
-                    <button
-                      key={sa.id}
-                      type="button"
-                      onClick={() => selectSavedAddress(sa)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 ${
-                        address.street === sa.street
-                          ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
-                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                      }`}
-                    >
-                      <span>{sa.title}</span>
-                      <span className="text-[10px] opacity-75 font-normal truncate max-w-[100px]">
-                        ({sa.city})
-                      </span>
-                    </button>
-                  ))}
-
-                  <button
-                    type="button"
-                    onClick={handleFetchLiveGps}
-                    disabled={locating}
-                    className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition flex items-center gap-1.5"
-                  >
-                    <Navigation className={`w-3.5 h-3.5 ${locating ? 'animate-spin' : ''}`} />
-                    <span>{locating ? 'Locating...' : 'Use Live Device GPS'}</span>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {savedAddresses.map(sa => (
+                  <button key={sa.id} type="button" onClick={() => selectSavedAddress(sa)} className={`px-3 py-2 rounded-md border text-xs font-semibold transition ${address.street === sa.street ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-300 bg-white text-gray-700 hover:border-gray-500'}`}>
+                    {sa.title}<span className="ml-1 text-[10px] opacity-60">• {sa.city}</span>
                   </button>
-                </div>
+                ))}
+                <button type="button" onClick={handleFetchLiveGps} disabled={locating} className="px-3 py-2 rounded-md border text-xs font-semibold" style={{ borderColor: 'rgba(22,138,91,.3)', color: 'var(--fc-fresh)', background: 'rgba(22,138,91,.06)' }}>
+                  <span className="inline-flex items-center gap-1.5"><Navigation className={`w-3.5 h-3.5 ${locating ? 'animate-spin' : ''}`} />{locating ? 'Locating…' : 'Use live GPS'}</span>
+                </button>
               </div>
 
-              <div className="space-y-3 text-xs pt-2">
-                <div>
-                  <label className="font-extrabold text-slate-700 block mb-1">Street / House / Apartment</label>
-                  <input
-                    type="text"
-                    value={address.street}
-                    onChange={(e) => setAddress({ ...address, street: e.target.value })}
-                    required
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium focus:bg-white focus:outline-none"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="font-extrabold text-slate-700 block mb-1">City</label>
-                    <input
-                      type="text"
-                      value={address.city}
-                      onChange={(e) => setAddress({ ...address, city: e.target.value })}
-                      required
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium focus:bg-white focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="font-extrabold text-slate-700 block mb-1">Pincode</label>
-                    <input
-                      type="text"
-                      value={address.pincode}
-                      onChange={(e) => setAddress({ ...address, pincode: e.target.value })}
-                      required
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium focus:bg-white focus:outline-none"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="font-extrabold text-slate-700 block mb-1">Phone Number for Delivery Partner</label>
-                  <input
-                    type="text"
-                    value={address.phone}
-                    onChange={(e) => setAddress({ ...address, phone: e.target.value })}
-                    required
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium focus:bg-white focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="font-extrabold text-slate-700 block mb-1">Special Delivery Instructions (Optional)</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Leave at gate, ring bell twice..."
-                    value={deliveryNotes}
-                    onChange={(e) => setDeliveryNotes(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium focus:bg-white focus:outline-none"
-                  />
-                </div>
+              <div className="grid sm:grid-cols-2 gap-4 mt-5">
+                <label className="sm:col-span-2"><span className="fc-label">Street / House / Apartment</span><input className="fc-input" value={address.street} onChange={e => setAddress({ ...address, street: e.target.value })} required /></label>
+                <label><span className="fc-label">City</span><input className="fc-input" value={address.city} onChange={e => setAddress({ ...address, city: e.target.value })} required /></label>
+                <label><span className="fc-label">State</span><input className="fc-input" value={address.state} onChange={e => setAddress({ ...address, state: e.target.value })} /></label>
+                <label><span className="fc-label">Pincode</span><input className="fc-input" value={address.pincode} onChange={e => setAddress({ ...address, pincode: e.target.value })} required /></label>
+                <label><span className="fc-label">Contact phone</span><input className="fc-input" value={address.phone} onChange={e => setAddress({ ...address, phone: e.target.value })} required /></label>
+                <label className="sm:col-span-2"><span className="fc-label">Delivery instructions <span className="text-gray-400 font-normal">(optional)</span></span><input className="fc-input" value={deliveryNotes} onChange={e => setDeliveryNotes(e.target.value)} placeholder="Leave at gate, ring bell, etc." /></label>
               </div>
-            </div>
+            </section>
 
-            {/* 2. Payment Method Selector */}
-            <div className="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-soft space-y-4">
-              <div className="flex items-center gap-2 text-sm font-extrabold text-slate-900 border-b border-slate-100 pb-3">
-                <CreditCard className="w-5 h-5 text-emerald-600" />
-                <span>Select Payment Method</span>
+            <section className="fc-card p-5 sm:p-6">
+              <div className="pb-4 border-b border-gray-200">
+                <h2 className="font-semibold text-gray-900 flex items-center gap-2"><CreditCard className="w-5 h-5" /> Payment method</h2>
+                <p className="text-xs text-gray-500 mt-1">Available methods are controlled by the existing Yenz payment flow.</p>
               </div>
-
-              <div className="space-y-2">
+              <div className="mt-4 space-y-2">
                 {[
-                  { id: 'COD', label: 'Cash on Delivery (COD)', desc: 'Pay cash to driver upon arrival', available: true },
-                  { id: 'UPI', label: 'Instant Google Pay / PhonePe UPI', desc: 'Fast & 100% Instant Approval', available: false },
+                  { id: 'COD', label: 'Cash on Delivery', desc: 'Pay the delivery partner on arrival', available: true },
+                  { id: 'UPI', label: 'UPI', desc: 'Google Pay / PhonePe', available: false },
                   { id: 'CARD', label: 'Credit / Debit Card', desc: 'Visa, Mastercard, RuPay', available: false }
                 ].map(pm => {
-                  const isSelected = paymentMethod === pm.id;
-                  const isComingSoon = !pm.available;
-
+                  const selected = paymentMethod === pm.id;
                   return (
-                    <div
-                      key={pm.id}
-                      onClick={() => {
-                        if (isComingSoon) {
-                          toast.info('Feature will be coming soon');
-                        } else {
-                          setPaymentMethod(pm.id);
-                        }
-                      }}
-                      className={`flex items-start justify-between p-4 rounded-2xl border transition select-none ${
-                        isComingSoon
-                          ? 'bg-slate-50/80 border-slate-200 text-slate-500 cursor-not-allowed hover:bg-slate-100/50'
-                          : isSelected
-                            ? 'bg-slate-900 text-white border-slate-900 shadow-md cursor-pointer'
-                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 cursor-pointer'
-                      }`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <input
-                          type="radio"
-                          name="payment"
-                          checked={isSelected}
-                          disabled={isComingSoon}
-                          onChange={() => {
-                            if (!isComingSoon) setPaymentMethod(pm.id);
-                          }}
-                          className="mt-1"
-                        />
-                        <div>
-                          <span className={`text-xs font-extrabold block ${isComingSoon ? 'text-slate-600 font-bold' : ''}`}>
-                            {pm.label}
-                          </span>
-                          <span className={`text-[11px] font-medium ${isSelected ? 'text-slate-300' : 'text-slate-500'}`}>
-                            {pm.desc}
-                          </span>
+                    <button type="button" key={pm.id} onClick={() => pm.available ? setPaymentMethod(pm.id) : toast.info('Feature will be coming soon')} className={`w-full text-left p-4 rounded-lg border transition ${selected ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 bg-white text-gray-900 hover:border-gray-400'} ${!pm.available ? 'opacity-60' : ''}`}>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${selected ? 'border-white' : 'border-gray-400'}`}><span className={`w-2 h-2 rounded-full ${selected ? 'bg-white' : 'bg-transparent'}`} /></span>
+                          <div><div className="text-sm font-semibold">{pm.label}</div><div className={`text-xs mt-0.5 ${selected ? 'text-gray-300' : 'text-gray-500'}`}>{pm.desc}</div></div>
                         </div>
+                        {!pm.available && <span className="text-[10px] font-bold uppercase tracking-wide">Coming soon</span>}
                       </div>
-
-                      {isComingSoon && (
-                        <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 text-[10px] font-extrabold border border-amber-300 flex-shrink-0">
-                          Coming Soon
-                        </span>
-                      )}
-                    </div>
+                    </button>
                   );
                 })}
               </div>
-            </div>
-
+            </section>
           </div>
 
-          {/* Right Column: Order Summary & Place Order CTA */}
-          <div className="lg:col-span-5 bg-white p-6 rounded-3xl border border-slate-200/90 shadow-soft space-y-4">
-            <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-2">
-              {isFreshMode ? 'Fresh Mandi Basket Items' : 'Cravings Order Summary'}
-            </h3>
-
-            {/* Mode Specific Channel Notes */}
-            <div className={`p-3 rounded-2xl text-xs space-y-1 ${
-              isFreshMode ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' : 'bg-rose-50 border border-rose-200 text-rose-800'
-            }`}>
-              <div className="flex items-center gap-1.5 font-bold">
-                {isFreshMode ? <Scale className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
-                <span>{isFreshMode ? 'Direct Wholesale Mandi Supply' : 'Kitchen Fresh Preparation'}</span>
+          <aside className="lg:sticky lg:top-28">
+            <section className="fc-card p-5 sm:p-6">
+              <div className="flex items-start justify-between gap-4 pb-4 border-b border-gray-200">
+                <div><h2 className="font-semibold text-gray-900">Order summary</h2><p className="text-xs text-gray-500 mt-1">{cart.items?.length || 0} line items</p></div>
+                {cart.items?.length > 0 && <button type="button" onClick={() => clearCart(activeMode)} className="text-xs font-semibold text-gray-500 hover:text-red-600">Clear</button>}
               </div>
-              <p className="text-[11px] font-medium opacity-90">
-                {isFreshMode 
-                  ? 'All produce is weighed and packed directly from local Mandi vendors.'
-                  : 'Prepared hot & fresh on demand from restaurant kitchen.'}
-              </p>
-            </div>
-
-            {/* Itemized List with Removal & Quantity Modifier Controls */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
-                <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">Basket Items</span>
-                {cart.items && cart.items.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => clearCart(activeMode)}
-                    className="text-[10px] font-bold text-rose-600 hover:text-rose-700 hover:underline transition flex items-center gap-1"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                    <span>Clear All</span>
-                  </button>
-                )}
-              </div>
-
-              <div className="divide-y divide-slate-100 max-h-60 overflow-y-auto pr-1">
-                {cart.items && cart.items.length > 0 ? (
-                  cart.items.map((item) => {
-                    const targetFoodId = item.foodId || item.productId || item.id || item._id;
-                    const itemTotal = (item.price || 0) * item.quantity;
-
-                    return (
-                      <div key={item.id || item._id} className="py-3 flex items-center justify-between text-xs gap-3">
-                        <div className="flex-1 min-w-0">
-                          <h4 className="font-extrabold text-slate-800 truncate">{item.name}</h4>
-                          <div className="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5">
-                            <span className="font-semibold text-slate-700">₹{item.price} each</span>
-                            {item.selectedWeight && (
-                              <span className="px-1.5 py-0.5 rounded bg-slate-100 font-bold text-slate-700 text-[10px]">
-                                {item.selectedWeight}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Interactive Quantity Stepper & Remove Button */}
-                        <div className="flex items-center gap-3">
-                          <div className="flex items-center border border-slate-200 bg-slate-50 rounded-xl p-0.5 shadow-sm">
-                            <button
-                              type="button"
-                              onClick={() => updateQuantity(targetFoodId, item.quantity - 1, item.selectedWeight, activeMode)}
-                              className="p-1 hover:bg-white text-slate-600 hover:text-rose-600 rounded-lg transition"
-                              title="Decrease / Remove"
-                            >
-                              <Minus className="w-3.5 h-3.5" />
-                            </button>
-                            <span className="w-6 text-center font-extrabold text-slate-900 text-xs">{item.quantity}</span>
-                            <button
-                              type="button"
-                              onClick={() => updateQuantity(targetFoodId, item.quantity + 1, item.selectedWeight, activeMode)}
-                              className="p-1 hover:bg-white text-slate-600 hover:text-emerald-600 rounded-lg transition"
-                              title="Increase Quantity"
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() => updateQuantity(targetFoodId, 0, item.selectedWeight, activeMode)}
-                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition"
-                            title="Remove product from basket"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-
-                          <span className="font-extrabold text-slate-900 min-w-[50px] text-right">₹{itemTotal}</span>
-                        </div>
+              <div className="divide-y divide-gray-100 max-h-72 overflow-auto">
+                {cart.items?.length ? cart.items.map(item => {
+                  const targetFoodId = item.foodId || item.productId || item.id || item._id;
+                  const itemTotal = (item.price || 0) * item.quantity;
+                  return (
+                    <div key={item.id || item._id} className="py-3 flex gap-3">
+                      <div className="w-11 h-11 rounded-md overflow-hidden bg-gray-100 shrink-0"><img src={item.image || item.imageUrl || '/favicon.png'} alt="" className="w-full h-full object-cover" onError={e => { e.currentTarget.src = '/favicon.png'; }} /></div>
+                      <div className="min-w-0 flex-1"><div className="text-sm font-semibold text-gray-900 truncate">{item.name}</div><div className="text-xs text-gray-500 mt-0.5">₹{item.price}{item.selectedWeight ? ` • ${item.selectedWeight}` : ''}</div>
+                        <div className="mt-2 inline-flex items-center border border-gray-300 rounded-md overflow-hidden"><button type="button" className="px-2 py-1 hover:bg-gray-50" onClick={() => updateQuantity(targetFoodId, item.quantity - 1, item.selectedWeight, activeMode)}><Minus className="w-3 h-3" /></button><span className="px-2 text-xs font-semibold">{item.quantity}</span><button type="button" className="px-2 py-1 hover:bg-gray-50" onClick={() => updateQuantity(targetFoodId, item.quantity + 1, item.selectedWeight, activeMode)}><Plus className="w-3 h-3" /></button></div>
                       </div>
-                    );
-                  })
-                ) : (
-                  <div className="py-8 text-center text-xs space-y-2">
-                    <ShoppingBag className="w-8 h-8 text-slate-300 mx-auto" />
-                    <p className="font-extrabold text-slate-500">Your basket is currently empty</p>
-                    <Link
-                      to={isFreshMode ? '/home' : '/home'}
-                      className="inline-block text-[11px] font-extrabold text-brand-600 hover:underline"
-                    >
-                      ← Explore & Add Items
-                    </Link>
-                  </div>
-                )}
+                      <div className="text-sm font-semibold text-gray-900">₹{itemTotal}</div>
+                      <button type="button" onClick={() => updateQuantity(targetFoodId, 0, item.selectedWeight, activeMode)} className="self-start text-gray-400 hover:text-red-600" aria-label="Remove"><Trash2 className="w-4 h-4" /></button>
+                    </div>
+                  );
+                }) : <div className="py-8 text-center"><ShoppingBag className="w-8 h-8 text-gray-300 mx-auto" /><p className="text-sm font-semibold text-gray-600 mt-2">Your basket is empty</p><Link to="/home" className="text-xs mt-2 inline-block underline">Continue shopping</Link></div>}
               </div>
-            </div>
-
-            <div className="space-y-2 text-xs font-medium text-slate-600 pt-2 border-t border-slate-100">
-              <div className="flex justify-between">
-                <span>Subtotal ({cart.items?.length || 0} items)</span>
-                <span className="font-extrabold text-slate-900">₹{subtotal}</span>
+              <div className="mt-4 pt-4 border-t border-gray-200 space-y-2 text-sm">
+                <div className="flex justify-between text-gray-500"><span>Subtotal</span><span>₹{subtotal}</span></div>
+                <div className="flex justify-between text-gray-500"><span>Delivery fee</span><span>₹{deliveryFee}</span></div>
+                <div className="flex justify-between text-gray-500"><span>Taxes & packing</span><span>₹{tax}</span></div>
+                {discount > 0 && <div className="flex justify-between" style={{ color: 'var(--fc-fresh)' }}><span>Discount</span><span>-₹{discount}</span></div>}
+                <div className="pt-3 mt-2 border-t border-gray-200 flex items-center justify-between"><span className="font-semibold text-gray-900">Total</span><span className="text-2xl font-bold text-gray-900">₹{grandTotal}</span></div>
               </div>
-              <div className="flex justify-between">
-                <span>Delivery Fee</span>
-                <span className="font-extrabold text-slate-900">₹{deliveryFee}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Taxes & Packing</span>
-                <span className="font-extrabold text-slate-900">₹{tax}</span>
-              </div>
-              {discount > 0 && (
-                <div className="flex justify-between text-emerald-700 font-extrabold">
-                  <span>Discount</span>
-                  <span>-₹{discount}</span>
-                </div>
-              )}
-            </div>
-
-            <div className="pt-3 border-t border-slate-100 space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-xs font-extrabold text-slate-400 uppercase tracking-wider">Amount Payable</span>
-                <span className="text-2xl font-extrabold text-slate-900">₹{grandTotal}</span>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading || !cart.items || cart.items.length === 0}
-                className={`w-full py-4 rounded-2xl text-xs font-extrabold text-white shadow-lg transition flex items-center justify-center gap-2 ${
-                  isFreshMode ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'
-                } ${(!cart.items || cart.items.length === 0) ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                {loading ? (
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <>
-                    <span>Confirm {isFreshMode ? 'Fresh Mandi' : 'Cravings'} Order (₹{grandTotal})</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
+              <button type="submit" disabled={loading || !cart.items?.length} className="w-full mt-5 px-4 py-3 rounded-md text-sm font-semibold text-white disabled:opacity-50" style={{ background: isFreshMode ? 'var(--fc-fresh)' : 'var(--fc-red)' }}>
+                {loading ? 'Processing…' : `Place ${isFreshMode ? 'Fresh Mandi' : 'Cravings'} order`}
               </button>
-
-              {/* Explore More Deals Redirect Link (Tactical Lure to add more items) */}
-              {(() => {
-                const targetShopId = cart.restaurantId || cart.vendorId || cart.restaurant?.id || cart.restaurant?._id;
-                const targetUrl = targetShopId ? `/restaurant/${targetShopId}` : '/home';
-                return (
-                  <Link
-                    to={targetUrl}
-                    className="w-full py-3 px-4 rounded-2xl border-2 border-dashed border-rose-300 hover:border-rose-400 bg-rose-50/80 hover:bg-rose-100/90 text-rose-700 text-xs font-extrabold flex items-center justify-center gap-2 transition shadow-sm text-center"
-                  >
-                    <Tag className="w-4 h-4 text-rose-600 animate-pulse" />
-                    <span>Explore more deals in this store before ordering!</span>
-                  </Link>
-                );
-              })()}
-
-              <div className="flex items-center justify-center gap-1.5 text-[11px] text-emerald-700 font-extrabold pt-1">
-                <ShieldCheck className="w-4 h-4" />
-                <span>Instant Order Dispatch Guaranteed</span>
-              </div>
-            </div>
-
-          </div>
-
+              <div className="mt-3 flex items-center justify-center gap-1.5 text-xs text-gray-500"><ShieldCheck className="w-4 h-4" /> Secure order confirmation</div>
+            </section>
+          </aside>
         </form>
-
       </main>
 
-      <AddressModal
-        isOpen={showAddressModal}
-        onClose={() => setShowAddressModal(false)}
-        onSelectAddress={(selected) => selectSavedAddress(selected)}
-      />
+      <FreshCartFooter />
+      <AddressModal isOpen={showAddressModal} onClose={() => setShowAddressModal(false)} onSelectAddress={selected => selectSavedAddress(selected)} />
 
-      {/* Accidental Order Prevention & Permanent Address Confirmation Modal */}
       {showConfirmModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl border border-slate-100 space-y-5 animate-in zoom-in-95 duration-200 relative">
-            <button
-              type="button"
-              onClick={() => setShowConfirmModal(false)}
-              className="absolute top-5 right-5 p-2 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            {/* Header */}
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 flex-shrink-0">
-                <AlertTriangle className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="text-lg font-extrabold text-slate-900">Verify Delivery Address</h3>
-                <p className="text-xs text-slate-500 font-medium">Please review carefully before confirming your order</p>
-              </div>
-            </div>
-
-            {/* Address Details Card */}
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
-              <div className="flex items-center justify-between text-xs font-bold text-slate-500">
-                <span className="flex items-center gap-1.5 uppercase tracking-wider text-[11px] text-slate-700">
-                  <MapPin className="w-4 h-4 text-rose-600" />
-                  <span>{address.title || 'Selected Delivery Location'}</span>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowConfirmModal(false);
-                    setShowAddressModal(true);
-                  }}
-                  className="text-rose-600 hover:underline text-xs font-extrabold"
-                >
-                  Change Address
-                </button>
-              </div>
-              <p className="text-sm font-semibold text-slate-800 leading-relaxed">
-                {address.street}, {address.city}, {address.state} - {address.pincode}
-              </p>
-              <p className="text-xs text-slate-500">
-                Contact: <span className="font-semibold text-slate-700">{address.phone}</span>
-              </p>
-            </div>
-
-            {/* Locked Address Rule Notice */}
-            <div className="p-3 bg-rose-50/80 border border-rose-200 rounded-2xl flex items-start gap-2.5 text-xs text-rose-900">
-              <Lock className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
-              <div className="space-y-0.5">
-                <span className="font-bold">Permanent Address Lock:</span>
-                <p className="text-[11px] text-rose-800/90 leading-tight">
-                  For rider navigation and geofenced dispatch accuracy, this delivery address cannot be modified after payment authorization.
-                </p>
-              </div>
-            </div>
-
-            {/* Anti-Accidental Order Verification Captcha */}
-            <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-900 to-slate-800 text-white space-y-3 shadow-sm">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-300">Anti-Accidental Order Check</span>
-                <button
-                  type="button"
-                  onClick={generateNewConfirmCode}
-                  className="text-[11px] text-slate-400 hover:text-white flex items-center gap-1 transition"
-                >
-                  <RefreshCw className="w-3 h-3" />
-                  <span>New Code</span>
-                </button>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <div className="px-4 py-2.5 rounded-xl bg-white/10 border border-white/20 font-mono text-xl font-extrabold tracking-widest text-amber-300 select-none">
-                  {confirmCode}
-                </div>
-                <div className="flex-1">
-                  <input
-                    type="text"
-                    maxLength={4}
-                    value={userTypedCode}
-                    onChange={(e) => setUserTypedCode(e.target.value.replace(/\D/g, ''))}
-                    placeholder={`Type ${confirmCode} to verify`}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-white text-slate-900 placeholder-slate-400 font-bold text-center tracking-widest text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
-                    autoFocus
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex items-center gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowConfirmModal(false)}
-                className="flex-1 py-3 rounded-2xl border border-slate-200 text-xs font-extrabold text-slate-600 hover:bg-slate-50 transition"
-              >
-                Cancel
-              </button>
-
-              <button
-                type="button"
-                onClick={executePlaceOrder}
-                disabled={loading || userTypedCode.trim() !== confirmCode}
-                className={`flex-1 py-3.5 rounded-2xl text-xs font-extrabold text-white shadow-lg transition flex items-center justify-center gap-2 ${
-                  isFreshMode ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'
-                } ${(loading || userTypedCode.trim() !== confirmCode) ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                {loading ? (
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <>
-                    <span>Confirm & Pay ₹{grandTotal}</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
-              </button>
-            </div>
-
+        <div className="fixed inset-0 z-[10000] bg-gray-900/50 p-4 flex items-center justify-center">
+          <div className="bg-white rounded-lg border border-gray-200 w-full max-w-md shadow-2xl p-6 relative">
+            <button type="button" onClick={() => setShowConfirmModal(false)} className="absolute top-4 right-4 p-1 text-gray-400 hover:text-gray-900"><X className="w-5 h-5" /></button>
+            <div className="flex items-start gap-3"><div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: 'rgba(229,27,75,.08)', color: 'var(--fc-red)' }}><AlertTriangle className="w-5 h-5" /></div><div><h3 className="font-semibold text-gray-900">Verify your order</h3><p className="text-xs text-gray-500 mt-1">Confirm the delivery details before placing it.</p></div></div>
+            <div className="mt-5 p-4 rounded-md bg-gray-50 border border-gray-200"><div className="flex justify-between gap-3"><div className="min-w-0"><div className="text-xs font-bold uppercase tracking-wide text-gray-400">{address.title || 'Delivery address'}</div><div className="mt-1 text-sm font-medium text-gray-900">{address.street}, {address.city}, {address.state} - {address.pincode}</div><div className="mt-1 text-xs text-gray-500">{address.phone}</div></div><button type="button" onClick={() => { setShowConfirmModal(false); setShowAddressModal(true); }} className="text-xs font-semibold underline shrink-0">Change</button></div></div>
+            <div className="mt-4 p-4 rounded-md bg-gray-900 text-white"><div className="flex items-center justify-between"><span className="text-xs text-gray-300">Enter the confirmation code</span><button type="button" onClick={generateNewConfirmCode} className="text-xs text-gray-300 hover:text-white inline-flex items-center gap-1"><RefreshCw className="w-3 h-3" />New code</button></div><div className="mt-3 grid grid-cols-[110px_1fr] gap-3"><div className="rounded-md border border-white/20 bg-white/10 flex items-center justify-center font-mono text-xl font-bold tracking-widest text-amber-300">{confirmCode}</div><input className="fc-input !bg-white !text-gray-900" autoFocus maxLength={4} value={userTypedCode} onChange={e => setUserTypedCode(e.target.value.replace(/\D/g, ''))} placeholder="Enter code" /></div></div>
+            <div className="mt-5 flex gap-3"><button type="button" onClick={() => setShowConfirmModal(false)} className="fc-btn-secondary flex-1">Cancel</button><button type="button" onClick={executePlaceOrder} disabled={loading || userTypedCode.trim() !== confirmCode} className="flex-1 px-4 py-2.5 rounded-md font-semibold text-white disabled:opacity-50" style={{ background: isFreshMode ? 'var(--fc-fresh)' : 'var(--fc-red)' }}>{loading ? 'Placing…' : `Confirm ₹${grandTotal}`}</button></div>
           </div>
         </div>
       )}

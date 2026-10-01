@@ -4,10 +4,10 @@ import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { useMode } from '../context/ModeContext';
 import MilegaLogo from './MilegaLogo';
-import ModeSwitcher from './ModeSwitcher';
 import LocationSelector from './LocationSelector';
-import AddressModal from './AddressModal';
-import { Search, ShoppingBag, MapPin, LogOut, Receipt, User } from 'lucide-react';
+import AddressModal, { getSavedAddresses } from './AddressModal';
+import { Search, ShoppingBag, MapPin, LogOut, Receipt, User, Menu, X, ChevronDown, Truck, LayoutGrid, Download, History, FileText, CreditCard } from 'lucide-react';
+import { toast } from 'sonner';
 import { getUniversalProfileIcon } from '../utils/imageUtils';
 
 export default function Navbar({ onVegToggle }) {
@@ -18,74 +18,81 @@ export default function Navbar({ onVegToggle }) {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const [profileOpen, setProfileOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [deptOpen, setDeptOpen] = useState(false);
   const [showAddressModal, setShowAddressModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState(searchParams.get('q') || '');
+  const [activeSavedAddress, setActiveSavedAddress] = useState(null);
 
-  // Route-authoritative mode determination
   const isFreshRoute = location.pathname.includes('fresh-mandi');
   const isCravingsRoute = location.pathname.includes('cravings');
   const isFresh = isFreshRoute ? true : (isCravingsRoute ? false : globalIsFresh);
-
-  // Active cart derived strictly from route-authoritative mode
   const activeCart = isFresh ? (freshCart || { items: [] }) : (cravingsCart || { items: [] });
-  const itemCount = activeCart.items && Array.isArray(activeCart.items)
-    ? activeCart.items.reduce((acc, item) => acc + (item.quantity || 0), 0)
-    : 0;
-  const subtotal = activeCart.items && Array.isArray(activeCart.items)
-    ? activeCart.items.reduce((acc, item) => acc + (Number(item.price) || 0) * (item.quantity || 0), 0)
-    : 0;
+  const itemCount = activeCart.items?.reduce((acc, item) => acc + (item.quantity || 0), 0) || 0;
+  const subtotal = activeCart.items?.reduce((acc, item) => acc + (Number(item.price) || 0) * (item.quantity || 0), 0) || 0;
 
-  // Global VEG Mode toggle state
-  const [isVegOnly, setIsVegOnly] = useState(() => {
-    return localStorage.getItem('krawing_veg_only') === 'true';
-  });
-
-  // Role Gating & Portal Routing
+  const [isVegOnly, setIsVegOnly] = useState(() => localStorage.getItem('krawing_veg_only') === 'true');
   const roleUpper = (user?.role || '').toUpperCase();
   const isVendor = roleUpper === 'VENDOR';
   const isDelivery = roleUpper === 'DELIVERY_PARTNER';
   const isAdmin = roleUpper === 'ADMIN';
   const isPortalUser = isVendor || isDelivery || isAdmin;
+  const portalDashboardUrl = isVendor ? '/vendor/dashboard' : (isDelivery ? '/delivery/dashboard' : (isAdmin ? '/admin/dashboard' : '/'));
 
-  const portalDashboardUrl = isVendor
-    ? '/vendor/dashboard'
-    : (isDelivery ? '/delivery/dashboard' : (isAdmin ? '/admin/dashboard' : '/'));
+  useEffect(() => setSearchQuery(searchParams.get('q') || ''), [searchParams]);
+
+  const loadSavedAddr = () => {
+    try {
+      const savedRaw = localStorage.getItem('krawing_user_address') || localStorage.getItem('krawing_selected_address');
+      if (savedRaw) {
+        const parsed = JSON.parse(savedRaw);
+        if (parsed && (parsed.street || parsed.title || parsed.area || parsed.city)) {
+          setActiveSavedAddress(parsed);
+          return;
+        }
+      }
+      const list = getSavedAddresses();
+      if (list && list.length > 0) {
+        setActiveSavedAddress(list.find(a => a.isDefault) || list[0]);
+      } else {
+        setActiveSavedAddress(null);
+      }
+    } catch {
+      setActiveSavedAddress(null);
+    }
+  };
 
   useEffect(() => {
-    setSearchQuery(searchParams.get('q') || '');
-  }, [searchParams]);
+    loadSavedAddr();
+    const handleUpdate = () => loadSavedAddr();
+    window.addEventListener('krawing_addresses_updated', handleUpdate);
+    window.addEventListener('krawing_location_changed', handleUpdate);
+    return () => {
+      window.removeEventListener('krawing_addresses_updated', handleUpdate);
+      window.removeEventListener('krawing_location_changed', handleUpdate);
+    };
+  }, []);
 
-  // Live Delivery Partner Location & Address tracking state for Navbar portal badge
   const [riderLocationInfo, setRiderLocationInfo] = useState(() => {
     try {
       const savedCoords = localStorage.getItem('milega_rider_coords');
       const savedAddrName = localStorage.getItem('milega_rider_address_name');
       const userAddrRaw = localStorage.getItem('krawing_user_address') || localStorage.getItem('krawing_selected_address');
-      
       let initialAddr = savedAddrName || '';
       if (!initialAddr && userAddrRaw) {
         const parsed = JSON.parse(userAddrRaw);
         initialAddr = parsed.street || parsed.title || parsed.area || parsed.city || '';
       }
-      return {
-        coords: savedCoords ? JSON.parse(savedCoords) : null,
-        addressName: initialAddr
-      };
-    } catch {
-      return { coords: null, addressName: '' };
-    }
+      return { coords: savedCoords ? JSON.parse(savedCoords) : null, addressName: initialAddr };
+    } catch { return { coords: null, addressName: '' }; }
   });
 
   useEffect(() => {
     if (!isDelivery) return;
-    const handleLocChange = (e) => {
-      if (e.detail) {
-        setRiderLocationInfo(prev => ({
-          coords: (e.detail.lat && e.detail.lng) ? { lat: e.detail.lat, lng: e.detail.lng } : prev.coords,
-          addressName: e.detail.addressName || prev.addressName
-        }));
-      }
-    };
+    const handleLocChange = (e) => e.detail && setRiderLocationInfo(prev => ({
+      coords: (e.detail.lat && e.detail.lng) ? { lat: e.detail.lat, lng: e.detail.lng } : prev.coords,
+      addressName: e.detail.addressName || prev.addressName
+    }));
     window.addEventListener('milega_rider_location_changed', handleLocChange);
     return () => window.removeEventListener('milega_rider_location_changed', handleLocChange);
   }, [isDelivery]);
@@ -95,435 +102,248 @@ export default function Navbar({ onVegToggle }) {
     setIsVegOnly(nextState);
     localStorage.setItem('krawing_veg_only', String(nextState));
     window.dispatchEvent(new CustomEvent('krawing_veg_toggled', { detail: { isVegOnly: nextState } }));
-    if (onVegToggle) onVegToggle(nextState);
+    onVegToggle?.(nextState);
   };
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
-    if (searchQuery.trim()) {
-      navigate(`/search?q=${encodeURIComponent(searchQuery)}`);
-    } else {
-      navigate('/search');
-    }
+    navigate(searchQuery.trim() ? `/search?q=${encodeURIComponent(searchQuery.trim())}` : '/search');
+    setMobileOpen(false);
   };
+
+  const goTo = (path) => { navigate(path); setMobileOpen(false); setDeptOpen(false); };
 
   return (
     <>
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-[#E8E9ED] shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          
-          {/* ================= DESKTOP HEADER (≥ 1024px) ================= */}
-          <div className="hidden lg:flex items-center justify-between h-16 gap-4">
-            
-            {/* Logo & Portal Badge or Location Selector */}
-            <div className="flex items-center gap-4 flex-shrink-0">
-              <Link to={portalDashboardUrl} className="flex items-center focus:outline-none">
-                <MilegaLogo size="medium" />
-              </Link>
-              
-              {isPortalUser ? (
-                <div className="px-3 py-1 bg-amber-50 text-amber-900 border border-amber-200 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm">
-                  {isVendor && <span>🏪 Store Vendor Portal</span>}
-                  {isDelivery && (
-                    <div className="flex items-center gap-1.5 text-blue-900 font-extrabold flex-wrap max-w-full">
-                      <span className="text-blue-900 whitespace-nowrap">🛵 Delivery Fleet Portal</span>
-                      {riderLocationInfo.addressName ? (
-                        <span className="px-2.5 py-0.5 rounded-lg bg-blue-100/90 text-blue-950 border border-blue-300 text-[10px] font-black flex items-center gap-1 shadow-2xs truncate max-w-[200px] sm:max-w-[280px]">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping shrink-0" />
-                          <span className="truncate">📍 {riderLocationInfo.addressName}</span>
-                        </span>
-                      ) : riderLocationInfo.coords ? (
-                        <span className="px-2.5 py-0.5 rounded-lg bg-blue-100/90 text-blue-950 border border-blue-300 text-[10px] font-mono font-black flex items-center gap-1 shadow-2xs">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping shrink-0" />
-                          📍 {riderLocationInfo.coords.lat.toFixed(4)}°, {riderLocationInfo.coords.lng.toFixed(4)}°
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 rounded-lg bg-blue-50 text-blue-900 border border-blue-200 text-[10px] font-extrabold flex items-center gap-1">
-                          📍 {user?.city || user?.address || 'Duty Zone Active'}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  {isAdmin && <span className="text-purple-900">⚙️ Platform Admin Portal</span>}
-                </div>
-              ) : (
-                <LocationSelector variant="desktop" />
-              )}
+      <header className="fc-navbar">
+        <div className="fc-topbar hidden lg:block">
+          <div className="fc-container py-2 flex items-center justify-between gap-4 text-[11px] font-medium">
+            <span>Free delivery on eligible orders · Fresh, local & fast</span>
+            <div className="flex items-center gap-4">
+              <span>Support</span>
+              <a
+                href="/downloads/yenz-app.apk"
+                download="Yenz-App.apk"
+                onClick={() => {
+                  try { toast.info('Downloading Yenz Android App APK...'); } catch {}
+                }}
+                className="hover:underline flex items-center gap-1 cursor-pointer font-bold text-emerald-700"
+              >
+                <Download className="w-3 h-3" /> Download App (APK)
+              </a>
             </div>
+          </div>
+        </div>
 
-            {/* Consumer Mode Switcher & Search Bar (Hidden for Vendors / Drivers) */}
+        <div className="fc-container py-4">
+          <div className="flex items-center gap-3 justify-between">
+
+            <Link to={portalDashboardUrl} className="flex-shrink-0">
+              <MilegaLogo size="medium" showTagline={false} />
+            </Link>
+
             {!isPortalUser && (
-              <div className="flex-1 max-w-xl min-w-[260px] flex items-center gap-3">
-                <ModeSwitcher routeMode={isFresh ? 'fresh' : 'cravings'} />
-
-                <form onSubmit={handleSearchSubmit} className="flex-1 relative">
-                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  <input
-                    type="text"
-                    placeholder={isFresh ? "Search vegetables, fruits, essentials..." : "Search dishes, biryani, pizza..."}
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 bg-[#F5F6F7] border border-[#E8E9ED] rounded-xl text-xs font-medium text-[#17181C] placeholder-[#9095A1] focus:outline-none focus:bg-white focus:border-[#CBD5E1] transition"
-                  />
-                </form>
+              <div className="hidden xl:block min-w-[190px] max-w-[240px]">
+                <LocationSelector variant="desktop" />
               </div>
             )}
 
-            {/* VEG Toggle, Basket & Profile Dropdown */}
-            <div className="flex items-center gap-3 flex-shrink-0">
-              
-              {!isPortalUser && (
-                <>
-                  {/* Global VEG Toggle Switch */}
-                  <button
-                    onClick={toggleVegMode}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-extrabold transition ${
-                      isVegOnly
-                        ? 'bg-emerald-50 text-emerald-800 border-emerald-300 shadow-sm'
-                        : 'bg-[#F5F6F7] text-[#686D78] border-[#E8E9ED] hover:bg-[#E8E9ED]'
-                    }`}
-                    title="Toggle Veg Only Mode"
-                  >
-                    <span className="text-[10px] uppercase font-black">VEG</span>
-                    <div className={`w-7 h-4 rounded-full p-0.5 transition-colors ${isVegOnly ? 'bg-emerald-600' : 'bg-slate-300'}`}>
-                      <div className={`w-3 h-3 rounded-full bg-white transition-transform ${isVegOnly ? 'translate-x-3' : 'translate-x-0'}`} />
-                    </div>
-                  </button>
+            {!isPortalUser && (
+              <form onSubmit={handleSearchSubmit} className="flex-1 max-w-2xl mx-auto relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
+                <input
+                  aria-label="Search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={isFresh ? 'Search fresh vegetables, fruits & groceries' : 'Search for dishes, restaurants & cravings'}
+                  className="fc-input pl-10 pr-4 py-2.5 text-sm bg-gray-50 border-gray-300"
+                />
+              </form>
+            )}
 
-                  {/* Basket Button */}
-                  <Link
-                    to={isFresh ? '/checkout/fresh-mandi' : '/checkout/cravings'}
-                    className={`relative flex items-center gap-2 px-3.5 py-2 rounded-xl font-extrabold text-xs transition border ${
-                      itemCount > 0
-                        ? isFresh
-                          ? 'bg-[#168A5B] text-white border-[#0F6945] shadow-sm'
-                          : 'bg-[#E51B4B] text-white border-[#B90F38] shadow-sm'
-                        : 'bg-[#F5F6F7] text-[#17181C] border-[#E8E9ED] hover:bg-[#E8E9ED]'
-                    }`}
-                  >
-                    <ShoppingBag className="w-4 h-4" />
-                    <span>
-                      {itemCount > 0 ? `Basket (₹${subtotal})` : 'Cart'}
-                    </span>
-                    {itemCount > 0 && (
-                      <span className="w-5 h-5 rounded-full text-[10px] font-extrabold flex items-center justify-center bg-slate-900 text-white border-2 border-white">
-                        {itemCount}
-                      </span>
-                    )}
-                  </Link>
-                </>
+            <div className="ml-auto flex items-center gap-1.5">
+              {isPortalUser && (
+                <Link to={portalDashboardUrl} className="hidden sm:inline-flex fc-btn fc-btn-soft py-2 px-3 text-xs">
+                  {isVendor ? <LayoutGrid className="w-4 h-4" /> : isDelivery ? <Truck className="w-4 h-4" /> : <LayoutGrid className="w-4 h-4" />}
+                  Dashboard
+                </Link>
               )}
 
-              {/* User Profile */}
+              {!isPortalUser && (
+                <button
+                  onClick={() => navigate('/cart')}
+                  className="hidden sm:flex relative items-center gap-2 p-2.5 rounded-lg border border-transparent hover:border-gray-200 hover:bg-gray-50"
+                  aria-label="Cart"
+                >
+                  <ShoppingBag className="w-5 h-5 text-gray-700" />
+                  <span className="hidden sm:block text-xs font-semibold text-gray-700">Cart</span>
+                  {itemCount > 0 && <span className="absolute -top-1 -right-1 w-5 h-5 bg-green-600 text-white rounded-full text-[10px] font-bold flex items-center justify-center">{itemCount}</span>}
+                </button>
+              )}
+
               {user ? (
                 <div className="relative">
-                  <button
-                    onClick={() => setProfileOpen(!profileOpen)}
-                    className="flex items-center gap-2 p-1 rounded-xl hover:bg-[#F5F6F7] border border-transparent hover:border-[#E8E9ED] transition"
-                  >
-                    <img
-                      src={getUniversalProfileIcon(user.avatar)}
-                      alt={user.name}
-                      className="w-9 h-9 rounded-xl object-cover border border-[#E8E9ED]"
-                    />
+                  <button onClick={() => setProfileOpen(!profileOpen)} className="hidden md:flex items-center gap-2 p-1.5 rounded-lg hover:bg-gray-50" aria-expanded={profileOpen}>
+                    <img src={getUniversalProfileIcon(user.avatar)} alt={user.name || 'Profile'} className="w-8 h-8 rounded-full object-cover border border-gray-200" />
+                    <span className="hidden md:block max-w-[100px] truncate text-xs font-semibold text-gray-700">{user.name || user.fullName || 'Account'}</span>
                   </button>
-
                   {profileOpen && (
-                    <div className="absolute right-0 mt-2 w-56 rounded-2xl bg-white border border-[#E8E9ED] shadow-xl z-50 p-2 space-y-1">
-                      <div className="px-3 py-2 border-b border-slate-100">
-                        <p className="text-xs font-extrabold text-[#17181C] truncate">{user.name}</p>
-                        <p className="text-[10px] text-[#9095A1] font-mono font-bold capitalize">{user.role} Account</p>
+                    <div className="absolute right-0 top-full mt-2 w-64 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden">
+                      <div className="p-4 border-b border-gray-100 bg-gray-50/60">
+                        <div className="font-bold text-sm text-gray-900 truncate">{user.name || user.fullName || 'Account'}</div>
+                        <div className="text-xs text-gray-500 truncate mt-0.5">{user.email}</div>
                       </div>
-
-                      {isPortalUser && (
-                        <Link
-                          to={portalDashboardUrl}
-                          onClick={() => setProfileOpen(false)}
-                          className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-[#17181C] hover:bg-[#F5F6F7]"
-                        >
-                          <ShoppingBag className="w-4 h-4 text-emerald-600" />
-                          <span>My Dashboard</span>
-                        </Link>
-                      )}
-
-                      <Link
-                        to="/profile"
-                        onClick={() => setProfileOpen(false)}
-                        className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-[#17181C] hover:bg-[#F5F6F7]"
-                      >
-                        <User className="w-4 h-4 text-[#9095A1]" />
-                        <span>My Profile</span>
-                      </Link>
-
-                      <Link
-                        to="/orders"
-                        onClick={() => setProfileOpen(false)}
-                        className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-[#17181C] hover:bg-[#F5F6F7]"
-                      >
-                        <Receipt className="w-4 h-4 text-[#9095A1]" />
-                        <span>{isPortalUser ? 'Order History' : 'My Orders'}</span>
-                      </Link>
-
-                      {!isPortalUser && (
-                        <button
-                          onClick={() => {
-                            setProfileOpen(false);
-                            setShowAddressModal(true);
-                          }}
-                          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-[#17181C] hover:bg-[#F5F6F7] transition text-left"
-                        >
-                          <MapPin className="w-4 h-4 text-[#E51B4B]" />
-                          <span>Saved Address</span>
-                        </button>
-                      )}
-
-                      <button
-                        onClick={() => {
-                          setProfileOpen(false);
-                          logout();
-                        }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 transition text-left"
-                      >
-                        <LogOut className="w-4 h-4" />
-                        <span>Sign Out</span>
-                      </button>
+                      <div className="p-2 space-y-0.5">
+                        {isDelivery && (
+                          <>
+                            <Link to="/delivery/dashboard?modal=credentials" onClick={() => setProfileOpen(false)} className="block px-3 py-2 rounded-lg text-xs font-bold text-cyan-800 hover:bg-cyan-50 flex items-center gap-2">
+                              <FileText className="w-4 h-4 text-cyan-600" /> My Details & Credentials
+                            </Link>
+                            <Link to="/delivery/dashboard?modal=history" onClick={() => setProfileOpen(false)} className="block px-3 py-2 rounded-lg text-xs font-bold text-cyan-800 hover:bg-cyan-50 flex items-center gap-2">
+                              <History className="w-4 h-4 text-cyan-600" /> Earnings & History
+                            </Link>
+                            <div className="my-1 border-t border-gray-100" />
+                          </>
+                        )}
+                        <Link to="/search" onClick={() => setProfileOpen(false)} className="block px-3 py-2 rounded-lg text-xs font-semibold text-gray-700 hover:bg-gray-100 flex items-center gap-2"><Search className="w-4 h-4 text-gray-500" />Shop / Search</Link>
+                        <Link to="/orders" onClick={() => setProfileOpen(false)} className="block px-3 py-2 rounded-lg text-xs font-semibold text-gray-700 hover:bg-gray-100 flex items-center gap-2"><Receipt className="w-4 h-4 text-gray-500" />My Orders</Link>
+                        <Link to="/profile" onClick={() => setProfileOpen(false)} className="block px-3 py-2 rounded-lg text-xs font-semibold text-gray-700 hover:bg-gray-100 flex items-center gap-2"><User className="w-4 h-4 text-gray-500" />Account Profile</Link>
+                        {isPortalUser && <Link to={portalDashboardUrl} onClick={() => setProfileOpen(false)} className="block px-3 py-2 rounded-lg text-xs font-semibold text-gray-700 hover:bg-gray-100 flex items-center gap-2"><LayoutGrid className="w-4 h-4 text-gray-500" />Dashboard</Link>}
+                        <button onClick={() => { setProfileOpen(false); logout(); }} className="w-full text-left px-3 py-2 rounded-lg text-xs font-semibold text-red-600 hover:bg-red-50 flex items-center gap-2 border-t border-gray-100 mt-1 pt-2"><LogOut className="w-4 h-4 text-red-600" />Sign Out</button>
+                      </div>
                     </div>
                   )}
                 </div>
               ) : (
-                <Link
-                  to="/login"
-                  className="px-4 py-2 bg-[#E51B4B] text-white rounded-xl font-extrabold text-xs shadow-sm hover:bg-[#B90F38] transition"
-                >
-                  Sign In
-                </Link>
+                <Link to="/login" className="hidden sm:inline-flex fc-btn fc-btn-primary py-2 px-3 text-xs">Sign In</Link>
               )}
+
+              {/* Mobile Hamburger Menu Button on the Right End */}
+              <button className="lg:hidden p-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50" onClick={() => setMobileOpen(true)} aria-label="Open menu">
+                <Menu className="w-5 h-5" />
+              </button>
             </div>
           </div>
 
-          {/* ================= TABLET HEADER (768px to 1023px) ================= */}
-          <div className="hidden md:flex lg:hidden flex-col py-2.5 space-y-2.5">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3 flex-shrink-0">
-                <Link to={portalDashboardUrl} className="flex items-center focus:outline-none">
-                  <MilegaLogo size="small" />
-                </Link>
-                {isPortalUser ? (
-                  <span className="px-2.5 py-1 bg-amber-50 text-amber-900 border border-amber-200 rounded-lg text-[10px] font-black uppercase">
-                    {isVendor ? '🏪 Vendor Portal' : (isDelivery ? '🛵 Delivery Portal' : '⚙️ Admin Portal')}
-                  </span>
-                ) : (
-                  <LocationSelector variant="desktop" />
-                )}
-              </div>
-
-              <div className="flex items-center gap-2 flex-shrink-0">
-                {!isPortalUser && (
-                  <>
-                    <ModeSwitcher routeMode={isFresh ? 'fresh' : 'cravings'} />
-                    <button
-                      onClick={toggleVegMode}
-                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-extrabold transition ${
-                        isVegOnly
-                          ? 'bg-emerald-50 text-emerald-800 border-emerald-300 shadow-sm'
-                          : 'bg-[#F5F6F7] text-[#686D78] border-[#E8E9ED] hover:bg-[#E8E9ED]'
-                      }`}
-                    >
-                      <span className="text-[10px] uppercase font-black">VEG</span>
-                      <div className={`w-6 h-3.5 rounded-full p-0.5 transition-colors ${isVegOnly ? 'bg-emerald-600' : 'bg-slate-300'}`}>
-                        <div className={`w-2.5 h-2.5 rounded-full bg-white transition-transform ${isVegOnly ? 'translate-x-2.5' : 'translate-x-0'}`} />
-                      </div>
-                    </button>
-                    <Link
-                      to={isFresh ? '/checkout/fresh-mandi' : '/checkout/cravings'}
-                      className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-extrabold text-xs bg-[#E51B4B] text-white"
-                    >
-                      <ShoppingBag className="w-4 h-4" />
-                      <span>{itemCount > 0 ? `₹${subtotal}` : 'Cart'}</span>
-                    </Link>
-                  </>
-                )}
-
-                {user ? (
-                  <div className="relative">
-                    <button
-                      onClick={() => setProfileOpen(!profileOpen)}
-                      className="flex items-center p-1 rounded-xl hover:bg-[#F5F6F7] border border-transparent hover:border-[#E8E9ED] transition"
-                    >
-                      <img
-                        src={getUniversalProfileIcon(user.avatar)}
-                        alt={user.name}
-                        className="w-8 h-8 rounded-xl object-cover border border-[#E8E9ED]"
-                      />
-                    </button>
-
-                    {profileOpen && (
-                      <div className="absolute right-0 mt-2 w-56 rounded-2xl bg-white border border-[#E8E9ED] shadow-xl z-50 p-2 space-y-1">
-                        <div className="px-3 py-2 border-b border-slate-100">
-                          <p className="text-xs font-extrabold text-[#17181C] truncate">{user.name}</p>
-                          <p className="text-[10px] text-[#9095A1] font-mono font-bold capitalize">{user.role} Account</p>
-                        </div>
-                        {isPortalUser && (
-                          <Link to={portalDashboardUrl} onClick={() => setProfileOpen(false)} className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-[#17181C] hover:bg-[#F5F6F7]">
-                            <ShoppingBag className="w-4 h-4 text-emerald-600" />
-                            <span>My Dashboard</span>
-                          </Link>
-                        )}
-                        <Link to="/profile" onClick={() => setProfileOpen(false)} className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-[#17181C] hover:bg-[#F5F6F7]">
-                          <User className="w-4 h-4 text-[#9095A1]" />
-                          <span>My Profile</span>
-                        </Link>
-                        <Link to="/orders" onClick={() => setProfileOpen(false)} className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-[#17181C] hover:bg-[#F5F6F7]">
-                          <Receipt className="w-4 h-4 text-[#9095A1]" />
-                          <span>{isPortalUser ? 'Order History' : 'My Orders'}</span>
-                        </Link>
-                        <button onClick={() => { setProfileOpen(false); logout(); }} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 text-left">
-                          <LogOut className="w-4 h-4" />
-                          <span>Sign Out</span>
-                        </button>
-                      </div>
-                    )}
+          <div className="hidden lg:flex items-center gap-6 pt-4 mt-4 border-t border-gray-200">
+            {!isPortalUser && (
+              <div className="relative">
+                <button onClick={() => setDeptOpen(!deptOpen)} className="fc-btn fc-btn-primary py-2 px-4 text-xs" type="button">
+                  <LayoutGrid className="w-4 h-4" /> All Departments <ChevronDown className="w-3.5 h-3.5" />
+                </button>
+                {deptOpen && (
+                  <div className="absolute top-full left-0 mt-2 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-2">
+                    {(isFresh ? ['Fruits & Vegetables','Dairy, Bread & Eggs','Atta, Rice & Dal','Oils & Ghee','Snacks & Munchies','Cleaning Essentials'] : ['Biryani','Pizza','Burgers','Momos','North Indian','Sweets']).map(cat => (
+                      <button key={cat} onClick={() => goTo(`/search?q=${encodeURIComponent(cat)}`)} className="block w-full text-left px-3 py-2.5 rounded-md text-sm hover:bg-gray-100">{cat}</button>
+                    ))}
                   </div>
-                ) : (
-                  <Link to="/login" className="px-3 py-1.5 bg-[#E51B4B] text-white rounded-xl font-extrabold text-xs">Sign In</Link>
                 )}
               </div>
-            </div>
-
+            )}
+            {!isPortalUser && <button onClick={() => goTo('/home')} className={`fc-nav-link ${location.pathname === '/' || location.pathname === '/home' ? 'active' : ''}`}>Home</button>}
+            <button onClick={() => goTo('/search')} className="fc-nav-link">Shop</button>
+            <button onClick={() => goTo('/orders')} className="fc-nav-link">Orders</button>
+            {user && <button onClick={() => goTo('/profile')} className="fc-nav-link">Account</button>}
             {!isPortalUser && (
-              <form onSubmit={handleSearchSubmit} className="w-full relative">
-                <Search className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                <input
-                  type="text"
-                  placeholder={isFresh ? "Search vegetables, fruits, essentials..." : "Search dishes, biryani, pizza..."}
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2.5 bg-[#F5F6F7] border border-[#E8E9ED] rounded-xl text-xs font-semibold text-[#17181C] placeholder-[#9095A1] focus:outline-none focus:bg-white transition"
-                />
-              </form>
+              <button onClick={toggleVegMode} className={`ml-auto text-xs font-bold px-3 py-1.5 rounded-md border ${isVegOnly ? 'bg-green-50 border-green-300 text-green-700' : 'bg-white border-gray-300 text-gray-600'}`}>
+                {isVegOnly ? '✓ Pure Veg' : 'Pure Veg'}
+              </button>
             )}
           </div>
 
-          {/* ================= MOBILE HEADER (< 768px) ================= */}
-          <div className="md:hidden py-2 space-y-2">
-            {/* Top Row: App Brand Logo & Name (Left) + VEG selector & Profile (Right) */}
-            <div className="flex items-center justify-between gap-2.5">
-              <div className="flex items-center gap-2 min-w-0">
-                <Link to={portalDashboardUrl} className="flex items-center focus:outline-none flex-shrink-0">
-                  <MilegaLogo size="small" showTagline={false} />
-                </Link>
-                {isPortalUser && (
-                  <span className="px-2 py-0.5 bg-amber-50 text-amber-900 border border-amber-200 rounded-md text-[9px] font-black uppercase flex items-center gap-1 flex-shrink-0 max-w-[170px] truncate">
-                    {isVendor ? 'Vendor' : (isDelivery ? (
-                      <span className="flex items-center gap-1 text-blue-900 truncate">
-                        <span className="shrink-0">🛵 Fleet</span>
-                        <span className="font-bold text-[8px] text-blue-950 truncate">📍{riderLocationInfo.addressName || (riderLocationInfo.coords ? `${riderLocationInfo.coords.lat.toFixed(2)}°,${riderLocationInfo.coords.lng.toFixed(2)}°` : 'Live')}</span>
-                      </span>
-                    ) : 'Admin')}
-                  </span>
-                )}
-              </div>
-
-              <div className="flex items-center gap-2 flex-shrink-0">
-                {!isPortalUser && (
-                  <button
-                    onClick={toggleVegMode}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-extrabold transition shadow-2xs ${
-                      isVegOnly ? 'bg-emerald-50 text-emerald-800 border-emerald-300' : 'bg-[#F5F6F7] text-[#686D78] border-[#E8E9ED] hover:bg-[#E8E9ED]'
-                    }`}
-                    title="Toggle Pure Veg Dishes"
-                  >
-                    <span className="font-black tracking-wider">VEG</span>
-                    <div className={`w-5 h-3 rounded-full p-0.5 transition-colors ${isVegOnly ? 'bg-emerald-600' : 'bg-slate-300'}`}>
-                      <div className={`w-2 h-2 rounded-full bg-white transition-transform ${isVegOnly ? 'translate-x-2' : 'translate-x-0'}`} />
-                    </div>
-                  </button>
-                )}
-
-                {user ? (
-                  <div className="relative flex-shrink-0">
-                    <button
-                      onClick={() => setProfileOpen(!profileOpen)}
-                      className="flex items-center p-0.5 rounded-full border border-transparent hover:border-[#E8E9ED] transition"
-                    >
-                      <img
-                        src={getUniversalProfileIcon(user.avatar)}
-                        alt={user.name}
-                        className="w-8 h-8 rounded-full object-cover border border-[#E8E9ED]"
-                      />
-                    </button>
-
-                    {profileOpen && (
-                      <div className="absolute right-0 mt-2 w-56 rounded-2xl bg-white border border-[#E8E9ED] shadow-xl z-50 p-2 space-y-1">
-                        <div className="px-3 py-2 border-b border-slate-100">
-                          <p className="text-xs font-extrabold text-[#17181C] truncate">{user.name}</p>
-                          <p className="text-[10px] text-[#9095A1] font-mono font-bold capitalize">{user.role} Account</p>
-                        </div>
-
-                        {isPortalUser && (
-                          <Link to={portalDashboardUrl} onClick={() => setProfileOpen(false)} className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-[#17181C] hover:bg-[#F5F6F7]">
-                            <ShoppingBag className="w-4 h-4 text-emerald-600" />
-                            <span>My Dashboard</span>
-                          </Link>
-                        )}
-
-                        <Link to="/profile" onClick={() => setProfileOpen(false)} className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-[#17181C] hover:bg-[#F5F6F7]">
-                          <User className="w-4 h-4 text-[#9095A1]" />
-                          <span>My Profile</span>
-                        </Link>
-
-                        <Link to="/orders" onClick={() => setProfileOpen(false)} className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-[#17181C] hover:bg-[#F5F6F7]">
-                          <Receipt className="w-4 h-4 text-[#9095A1]" />
-                          <span>{isPortalUser ? 'Order History' : 'My Orders'}</span>
-                        </Link>
-
-                        <button onClick={() => { setProfileOpen(false); logout(); }} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 text-left">
-                          <LogOut className="w-4 h-4" />
-                          <span>Sign Out</span>
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <Link to="/login" className="px-3 py-1 bg-[#E51B4B] text-white rounded-lg text-[10px] font-extrabold">Login</Link>
-                )}
-              </div>
+          {isDelivery && (
+            <div className="mt-3 flex items-center gap-2 text-[11px] text-gray-600 bg-gray-50 border border-gray-200 rounded-md px-3 py-2">
+              <Truck className="w-4 h-4 text-cyan-600" />
+              <span className="font-semibold">Delivery Fleet Portal</span>
+              <span className="truncate">· {riderLocationInfo.addressName || 'Live location'}</span>
             </div>
-
-            {/* Second Row: Delivery Location Selector Bar */}
-            {!isPortalUser && (
-              <div className="flex items-center w-full min-w-0 pt-0.5">
-                <LocationSelector variant="mobile" />
-              </div>
-            )}
-
-            {/* Third Row: Search Bar */}
-            {!isPortalUser && (
-              <form onSubmit={handleSearchSubmit} className="relative">
-                <Search className="w-4 h-4 text-emerald-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                <input
-                  type="text"
-                  placeholder={isFresh ? 'Search "tamatar", "apple", "spinach"...' : 'Search "chatpata", "biryani", "pizza"...'}
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2.5 bg-[#F5F6F7] border border-[#E8E9ED] rounded-xl text-xs font-semibold text-[#17181C] placeholder-[#9095A1] focus:outline-none focus:bg-white transition"
-                />
-              </form>
-            )}
-          </div>
-
+          )}
         </div>
       </header>
 
-      {showAddressModal && (
-        <AddressModal
-          isOpen={showAddressModal}
-          onClose={() => setShowAddressModal(false)}
-          onSelectAddress={() => {
-            setShowAddressModal(false);
-            window.dispatchEvent(new Event('krawing_location_changed'));
-          }}
-        />
+      {!isPortalUser && <div className="lg:hidden border-b border-gray-200 bg-white px-4 py-2"><LocationSelector variant="mobile" /></div>}
+
+      {mobileOpen && (
+        <div className="fixed inset-0 z-[60] bg-black/40 lg:hidden" onClick={() => setMobileOpen(false)}>
+          <div className="absolute right-0 top-0 h-full w-[310px] max-w-[88vw] bg-white shadow-xl p-5 overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-200">
+              <MilegaLogo size="medium" showTagline={false} />
+              <button onClick={() => setMobileOpen(false)} className="p-2 rounded-md hover:bg-gray-100"><X className="w-5 h-5" /></button>
+            </div>
+            {!isPortalUser && <form onSubmit={handleSearchSubmit} className="mb-4 relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" /><input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search" className="fc-input pl-10" /></form>}
+            
+            {!isPortalUser && (
+              <div className="mb-4 p-3 rounded-lg border border-gray-200 bg-gray-50">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[11px] font-extrabold text-gray-500 uppercase tracking-wider flex items-center gap-1">
+                    <MapPin className="w-3.5 h-3.5 text-rose-600" /> Saved Address
+                  </span>
+                  <button onClick={() => { setMobileOpen(false); setShowAddressModal(true); }} className="text-xs font-bold text-rose-600 hover:underline">
+                    {activeSavedAddress ? 'Change' : 'Select'}
+                  </button>
+                </div>
+                {activeSavedAddress ? (
+                  <div>
+                    <div className="text-xs font-bold text-gray-900 truncate flex items-center gap-1">
+                      {activeSavedAddress.title || 'Saved Location'}
+                      {activeSavedAddress.isDefault && <span className="text-[9px] px-1.5 py-0.2 bg-rose-100 text-rose-700 rounded font-bold">Default</span>}
+                    </div>
+                    <div className="text-xs text-gray-600 truncate mt-0.5">
+                      {activeSavedAddress.street || activeSavedAddress.area || activeSavedAddress.addressLine || 'No street details'}
+                    </div>
+                    <div className="text-[11px] text-gray-400 truncate">
+                      {[activeSavedAddress.city, activeSavedAddress.pincode].filter(Boolean).join(' - ')}
+                    </div>
+                  </div>
+                ) : (
+                  <button onClick={() => { setMobileOpen(false); setShowAddressModal(true); }} className="text-xs text-gray-600 hover:text-gray-900 w-full text-left py-1">
+                    + Add delivery location
+                  </button>
+                )}
+              </div>
+            )}
+
+            <div className="space-y-1">
+              {isDelivery && (
+                <>
+                  <button onClick={() => goTo('/delivery/dashboard?modal=credentials')} className="w-full text-left px-3 py-2.5 rounded-md hover:bg-cyan-50 text-cyan-800 font-bold text-sm flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-cyan-600" /> My Details & Credentials
+                  </button>
+                  <button onClick={() => goTo('/delivery/dashboard?modal=history')} className="w-full text-left px-3 py-2.5 rounded-md hover:bg-cyan-50 text-cyan-800 font-bold text-sm flex items-center gap-2">
+                    <History className="w-4 h-4 text-cyan-600" /> Earnings & History
+                  </button>
+                  <div className="my-1 border-t border-gray-200" />
+                </>
+              )}
+              {!isPortalUser && <button onClick={() => goTo('/home')} className="w-full text-left px-3 py-2.5 rounded-md hover:bg-gray-100 font-semibold text-sm">Home</button>}
+              <button onClick={() => goTo('/search')} className="w-full text-left px-3 py-2.5 rounded-md hover:bg-gray-100 font-semibold text-sm flex items-center gap-2"><Search className="w-4 h-4 text-gray-500" />Shop & Search</button>
+              {user && <button onClick={() => goTo('/orders')} className="w-full text-left px-3 py-2.5 rounded-md hover:bg-gray-100 font-semibold text-sm flex items-center gap-2"><Receipt className="w-4 h-4 text-gray-500" />Orders</button>}
+              {user && <button onClick={() => goTo('/profile')} className="w-full text-left px-3 py-2.5 rounded-md hover:bg-gray-100 font-semibold text-sm flex items-center gap-2"><User className="w-4 h-4 text-gray-500" />Account Profile</button>}
+              {isPortalUser && <button onClick={() => goTo(portalDashboardUrl)} className="w-full text-left px-3 py-2.5 rounded-md hover:bg-gray-100 font-semibold text-sm flex items-center gap-2"><LayoutGrid className="w-4 h-4 text-gray-600" />Dashboard</button>}
+              <button onClick={() => { setMobileOpen(false); setShowAddressModal(true); }} className="w-full text-left px-3 py-2.5 rounded-md hover:bg-gray-100 font-semibold text-sm flex items-center gap-2"><MapPin className="w-4 h-4 text-gray-600" />Manage Saved Addresses</button>
+              
+              {user ? (
+                <button
+                  onClick={() => {
+                    setMobileOpen(false);
+                    logout();
+                    toast.success('Logged out successfully');
+                  }}
+                  className="w-full text-left px-3 py-2.5 rounded-md hover:bg-red-50 text-red-600 font-semibold text-sm flex items-center gap-2 mt-4 border-t border-gray-200 pt-4"
+                >
+                  <LogOut className="w-4 h-4 text-red-600" /> Sign Out / Logout
+                </button>
+              ) : (
+                <button
+                  onClick={() => goTo('/login')}
+                  className="w-full text-left px-3 py-2.5 rounded-md hover:bg-emerald-50 text-emerald-700 font-semibold text-sm flex items-center gap-2 mt-4 border-t border-gray-200 pt-4"
+                >
+                  <User className="w-4 h-4 text-emerald-600" /> Sign In / Login
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

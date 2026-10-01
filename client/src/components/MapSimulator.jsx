@@ -89,7 +89,7 @@ export default function MapSimulator({ orderId, orderType = 'FOOD', vendor, cust
   const polylinePath = [vendorPos, driverPos, customerPos];
 
   return (
-    <div className="bg-white rounded-3xl border border-slate-200/90 p-5 shadow-soft space-y-4">
+    <div className="fc-card p-4 sm:p-5 space-y-4">
       {/* Map Header - Clean & User-Friendly */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -109,7 +109,7 @@ export default function MapSimulator({ orderId, orderType = 'FOOD', vendor, cust
       </div>
 
       {/* Real Interactive OpenStreetMap Container */}
-      <div className="relative h-64 w-full bg-slate-900 rounded-2xl overflow-hidden border border-slate-800 shadow-inner flex items-center justify-center">
+      <div className="relative h-64 w-full bg-gray-100 rounded-md overflow-hidden border border-gray-200 shadow-inner flex items-center justify-center">
         <MapContainer
           center={driverPos}
           zoom={13}

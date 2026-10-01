@@ -4,107 +4,68 @@ import { useMode } from '../context/ModeContext';
 export default function CategoryRail({ selectedCategory = 'ALL', onCategorySelect }) {
   const { isFresh } = useMode();
 
-  const cravingsCategories = [
-    { id: 'ALL', label: 'All Dishes', icon: '🍽️' },
-    { id: 'Momos', label: 'Momos', icon: '🥟' },
-    { id: 'Biryani', label: 'Biryani', icon: '🥘' },
-    { id: 'Pizza', label: 'Pizza', icon: '🍕' },
-    { id: 'Burger', label: 'Burger', icon: '🍔' },
-    { id: 'North Indian', label: 'North Indian', icon: '🍛' },
-    { id: 'Healthy', label: 'Healthy', icon: '🥗' },
-    { id: 'Sweets', label: 'Sweets', icon: '🪔' },
-    { id: 'Soya Chaap', label: 'Soya Chaap', icon: '🍢' }
+  const cravingCategories = [
+    { id: 'ALL', label: 'All Dishes', image: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&q=80&w=300', fallback: '/freshcart/images/category/category-1.jpg' },
+    { id: 'Biryani', label: 'Biryani', image: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&q=80&w=300', fallback: '/freshcart/images/category/category-3.jpg' },
+    { id: 'Pizza', label: 'Pizza', image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&q=80&w=300', fallback: '/freshcart/images/category/category-4.jpg' },
+    { id: 'Burger', label: 'Burgers', image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&q=80&w=300', fallback: '/freshcart/images/category/category-5.jpg' },
+    { id: 'Momos', label: 'Momos & Dimsum', image: 'https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?auto=format&fit=crop&q=80&w=300', fallback: '/freshcart/images/category/category-2.jpg' },
+    { id: 'North Indian', label: 'North Indian', image: 'https://images.unsplash.com/photo-1585937421612-70a008356fbe?auto=format&fit=crop&q=80&w=300', fallback: '/freshcart/images/category/category-snack-munchies.jpg' },
+    { id: 'Sweets', label: 'Sweets & Desserts', image: 'https://images.unsplash.com/photo-1587314168485-3236d6710814?auto=format&fit=crop&q=80&w=300', fallback: '/freshcart/images/category/category-bakery-biscuits.jpg' },
+    { id: 'Healthy', label: 'Salads & Healthy', image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&q=80&w=300', fallback: '/freshcart/images/category/category-fruits-vegetables.jpg' }
   ];
 
   const freshCategories = [
-    { id: 'ALL', label: 'All Fresh Mandi', icon: '🧺' },
-    
-    // Section Headers / Direct Filters
-    { id: 'FRESH_PRODUCE', label: '🌱 All Fresh Produce', icon: '🥦', isHeader: true },
-    { id: 'Vegetable', label: 'Daily Vegetables', icon: '🥔' },
-    { id: 'Fruit', label: 'Fresh Fruits', icon: '🍎' },
-    { id: 'Greens', label: 'Leafy Greens', icon: '🥬' },
-    { id: 'Onion', label: 'Onion & Potato', icon: '🧅' },
-    { id: 'Herb', label: 'Herbs & Seasoning', icon: '🌿' },
-    { id: 'Seasonal', label: 'Seasonal Produce', icon: '🌽' },
-    { id: 'Mandi', label: 'Wholesale Mandi', icon: '📦' },
-
-    { id: 'GROCERY_ESSENTIALS', label: '🛒 All Grocery Essentials', icon: '🛍️', isHeader: true },
-    { id: 'Rice', label: 'Grains & Rice', icon: '🌾' },
-    { id: 'Pulse', label: 'Pulses & Dals', icon: '🫘' },
-    { id: 'Flour', label: 'Flour / Atta', icon: '🍞' },
-    { id: 'Oil', label: 'Oil & Ghee', icon: '🫗' },
-    { id: 'Spice', label: 'Spices & Masala', icon: '🌶️' },
-    { id: 'Salt', label: 'Sugar & Salt', icon: '🧂' },
-    { id: 'Dry Fruit', label: 'Dry Fruits & Nuts', icon: '🥜' },
-    { id: 'Snack', label: 'Snacks', icon: '🍿' },
-    { id: 'Biscuit', label: 'Biscuits', icon: '🍪' },
-    { id: 'Packaged', label: 'Packaged Foods', icon: '📦' },
-    { id: 'Breakfast', label: 'Breakfast / Cereals', icon: '🥣' },
-    { id: 'Beverage', label: 'Beverages', icon: '🥤' },
-    { id: 'Essential', label: 'Daily Essentials', icon: '🛒' }
+    { id: 'ALL', label: 'All Fresh Mandi', image: 'https://images.unsplash.com/photo-1610832958506-aa56368176cf?auto=format&fit=crop&q=80&w=300', fallback: '/freshcart/images/category/category-fruits-vegetables.jpg' },
+    { id: 'Vegetable', label: 'Vegetables', image: 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=300', fallback: '/freshcart/images/category/category-fruits-vegetables.jpg' },
+    { id: 'Fruit', label: 'Fresh Fruits', image: 'https://images.unsplash.com/photo-1619566636858-adf3ef46400b?auto=format&fit=crop&q=80&w=300', fallback: '/freshcart/images/category/category-1.jpg' },
+    { id: 'Atta', label: 'Atta, Rice & Dal', image: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&q=80&w=300', fallback: '/freshcart/images/category/category-atta-rice-dal.jpg' },
+    { id: 'Dairy', label: 'Dairy & Eggs', image: 'https://images.unsplash.com/photo-1628088062854-d1870b4553da?auto=format&fit=crop&q=80&w=300', fallback: '/freshcart/images/category/category-dairy-bread-eggs.jpg' },
+    { id: 'Oil', label: 'Oil, Ghee & Spices', image: 'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?auto=format&fit=crop&q=80&w=300', fallback: '/freshcart/images/category/category-atta-rice-dal.jpg' },
+    { id: 'Snacks', label: 'Snacks & Munchies', image: 'https://images.unsplash.com/photo-1599490659213-e2b9527bd087?auto=format&fit=crop&q=80&w=300', fallback: '/freshcart/images/category/category-snack-munchies.jpg' },
+    { id: 'GROCERY_ESSENTIALS', label: 'Grocery Essentials', image: 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?auto=format&fit=crop&q=80&w=300', fallback: '/freshcart/images/category/category-cleaning-essentials.jpg' }
   ];
 
-  const categories = isFresh ? freshCategories : cravingsCategories;
+  const categories = isFresh ? freshCategories : cravingCategories;
+  const activeColor = isFresh ? 'border-emerald-600 ring-2 ring-emerald-600/20 bg-emerald-50/30' : 'border-rose-600 ring-2 ring-rose-600/20 bg-rose-50/30';
 
   return (
-    <div className="space-y-2.5 min-w-0 max-w-full">
-      <div className="flex items-center justify-between">
-        <h2 className="text-base sm:text-lg font-extrabold text-[#17181C] tracking-tight">
-          {isFresh ? 'Explore Fresh Mandi Categories' : 'What are you in the mood for?'}
-        </h2>
-        {selectedCategory !== 'ALL' && (
-          <button
-            onClick={() => onCategorySelect('ALL')}
-            className="text-xs font-bold text-[#E51B4B] hover:underline flex-shrink-0"
-          >
-            Clear Filter
-          </button>
-        )}
-      </div>
-
-      <div className="flex items-center gap-2.5 overflow-x-auto scrollbar-none py-1.5 snap-x max-w-full">
-        {/* Promotional Under ₹250 / Mandi Rates Shortcut */}
+    <section>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-bold text-gray-900">Featured Categories</h2>
         <button
-          onClick={() => onCategorySelect('UNDER_250')}
-          className={`snap-start flex items-center gap-2 px-3.5 py-2 rounded-2xl text-xs font-extrabold transition-all shadow-sm flex-shrink-0 border ${
-            selectedCategory === 'UNDER_250'
-              ? 'bg-amber-500 text-white border-amber-600 shadow-md scale-105'
-              : 'bg-gradient-to-r from-amber-50 to-orange-50 text-amber-900 border-amber-200/80 hover:border-amber-400'
-          }`}
+          onClick={() => onCategorySelect('ALL')}
+          className={`text-xs font-bold transition ${isFresh ? 'text-emerald-700 hover:text-emerald-800' : 'text-rose-600 hover:text-rose-700'}`}
         >
-          <span className="text-base">🏷️</span>
-          <div className="text-left leading-tight">
-            <span className="block text-[10px] text-amber-700 font-extrabold uppercase">DEALS UNDER</span>
-            <span className="block text-xs font-black">₹250</span>
-          </div>
+          View all
         </button>
-
-        {/* Category Pills */}
-        {categories.map((cat) => {
-          const isSelected = selectedCategory === cat.id;
-
-          return (
-            <button
-              key={cat.id}
-              onClick={() => onCategorySelect(cat.id)}
-              className={`snap-start flex items-center gap-2 px-3.5 py-2 rounded-2xl text-xs font-extrabold transition-all whitespace-nowrap flex-shrink-0 border ${
-                isSelected
-                  ? isFresh
-                    ? 'bg-[#168A5B] text-white border-[#168A5B] shadow-md scale-105'
-                    : 'bg-[#E51B4B] text-white border-[#E51B4B] shadow-md scale-105'
-                  : cat.isHeader
-                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100 shadow-sm font-black'
-                    : 'bg-white text-[#17181C] border-[#E8E9ED] hover:border-[#CBD5E1] shadow-sm hover:shadow-md'
-              }`}
-            >
-              <span className="text-base">{cat.icon}</span>
-              <span>{cat.label}</span>
-            </button>
-          );
-        })}
       </div>
-    </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
+        {categories.map(({ id, label, image, fallback }) => (
+          <button
+            key={id}
+            onClick={() => onCategorySelect(id)}
+            className={`fc-card fc-card-hover p-2.5 text-center transition group flex flex-col items-center ${
+              selectedCategory === id ? activeColor : 'border-gray-200 hover:border-gray-300'
+            }`}
+          >
+            <div className="w-full h-20 sm:h-24 rounded-lg bg-gray-100 overflow-hidden mb-2 relative">
+              <img
+                src={image}
+                alt={label}
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                onError={(e) => {
+                  e.currentTarget.onerror = null;
+                  e.currentTarget.src = fallback;
+                }}
+              />
+            </div>
+            <div className="text-xs font-semibold text-gray-800 leading-tight truncate w-full">
+              {label}
+            </div>
+          </button>
+        ))}
+      </div>
+    </section>
   );
 }
-

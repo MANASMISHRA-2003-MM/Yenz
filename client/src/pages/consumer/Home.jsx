@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useMode } from '../../context/ModeContext';
 import API from '../../services/api';
 import Navbar from '../../components/Navbar';
+import FreshCartFooter from '../../components/FreshCartFooter';
 import PromotionCarousel from '../../components/PromotionCarousel';
 import CategoryRail from '../../components/CategoryRail';
 import FilterRail from '../../components/FilterRail';
@@ -11,7 +12,7 @@ import FreshProductCard from '../../components/FreshProductCard';
 import BuildBasketWidget from '../../components/BuildBasketWidget';
 import StickyBasketBar from '../../components/StickyBasketBar';
 import MobileBottomNavigation from '../../components/MobileBottomNavigation';
-import { Flame, Leaf, Sparkles, ArrowRight, ShieldCheck, Zap, MapPin, Store, Utensils, Compass } from 'lucide-react';
+import { ArrowRight, Compass, Leaf, Utensils, Truck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export default function Home() {
@@ -20,31 +21,23 @@ export default function Home() {
   const [featuredFoods, setFeaturedFoods] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Active Discovery Filters
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [fastDelivery, setFastDelivery] = useState(false);
   const [ratingFourPlus, setRatingFourPlus] = useState(false);
-  const [pureVeg, setPureVeg] = useState(() => {
-    return localStorage.getItem('krawing_veg_only') === 'true';
-  });
   const [under250, setUnder250] = useState(false);
+  const [pureVeg, setPureVeg] = useState(() => localStorage.getItem('krawing_veg_only') === 'true');
 
   useEffect(() => {
     fetchHomeData();
-
-    const handleLocationChange = () => fetchHomeData();
-    const handleVegEvent = (e) => {
-      if (e.detail && typeof e.detail.isVegOnly === 'boolean') {
-        setPureVeg(e.detail.isVegOnly);
-      }
+    const loc = () => fetchHomeData();
+    const veg = e => {
+      if (typeof e.detail?.isVegOnly === 'boolean') setPureVeg(e.detail.isVegOnly);
     };
-
-    window.addEventListener('krawing_location_changed', handleLocationChange);
-    window.addEventListener('krawing_veg_toggled', handleVegEvent);
-
+    window.addEventListener('krawing_location_changed', loc);
+    window.addEventListener('krawing_veg_toggled', veg);
     return () => {
-      window.removeEventListener('krawing_location_changed', handleLocationChange);
-      window.removeEventListener('krawing_veg_toggled', handleVegEvent);
+      window.removeEventListener('krawing_location_changed', loc);
+      window.removeEventListener('krawing_veg_toggled', veg);
     };
   }, [mode]);
 
@@ -55,41 +48,40 @@ export default function Home() {
       const vendorStoreType = isFresh ? 'FRESH_MARKET' : 'FOOD_RESTAURANT';
       const productType = isFresh ? 'VEGETABLE,FRUIT,GROCERY' : 'FOOD';
 
-      let locationParams = '&radius=5';
-      const savedCoords = localStorage.getItem('krawing_user_coords');
-      if (savedCoords) {
+      // Set radius=50 to fetch all shops/restaurants from database
+      let locationParams = '&radius=50';
+      const saved = localStorage.getItem('krawing_user_coords');
+      if (saved) {
         try {
-          const { lat, lng } = JSON.parse(savedCoords);
-          if (lat && lng) {
-            locationParams = `&lat=${lat}&lng=${lng}&radius=5`;
-          }
-        } catch (e) {}
+          const { lat, lng } = JSON.parse(saved);
+          if (lat && lng) locationParams = `&lat=${lat}&lng=${lng}&radius=50`;
+        } catch {}
       }
 
-      const [resStores, resFoods] = await Promise.all([
+      const [stores, foods] = await Promise.all([
         API.get(`/restaurants?vendorType=${vendorStoreType}${locationParams}`),
         API.get(`/foods?vendorType=${vendorTypeParam}&productType=${productType}`)
       ]);
 
-      if (resStores.data.success) setRestaurants(resStores.data.restaurants);
-      if (resFoods.data.success) setFeaturedFoods(resFoods.data.foods);
-    } catch (err) {
-      console.error('Error loading homepage data:', err);
+      if (stores.data.success) setRestaurants(stores.data.restaurants || []);
+      if (foods.data.success) setFeaturedFoods(foods.data.foods || []);
+    } catch (e) {
+      console.error('Error loading homepage data:', e);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleToggleFilter = (filterKey) => {
-    if (filterKey === 'fastDelivery') setFastDelivery(!fastDelivery);
-    if (filterKey === 'ratingFourPlus') setRatingFourPlus(!ratingFourPlus);
-    if (filterKey === 'pureVeg') {
-      const nextVeg = !pureVeg;
-      setPureVeg(nextVeg);
-      localStorage.setItem('krawing_veg_only', String(nextVeg));
-      window.dispatchEvent(new CustomEvent('krawing_veg_toggled', { detail: { isVegOnly: nextVeg } }));
+  const handleToggleFilter = k => {
+    if (k === 'fastDelivery') setFastDelivery(v => !v);
+    if (k === 'ratingFourPlus') setRatingFourPlus(v => !v);
+    if (k === 'under250') setUnder250(v => !v);
+    if (k === 'pureVeg') {
+      const n = !pureVeg;
+      setPureVeg(n);
+      localStorage.setItem('krawing_veg_only', String(n));
+      window.dispatchEvent(new CustomEvent('krawing_veg_toggled', { detail: { isVegOnly: n } }));
     }
-    if (filterKey === 'under250') setUnder250(!under250);
   };
 
   const handleResetFilters = () => {
@@ -101,293 +93,220 @@ export default function Home() {
     localStorage.setItem('krawing_veg_only', 'false');
   };
 
-  // Filter Logic Applied to Restaurants
-  const filteredRestaurants = restaurants.filter(rest => {
-    if (pureVeg && !rest.isVeg && rest.cuisine && !rest.cuisine.some(c => c.toLowerCase().includes('veg'))) return false;
-    if (ratingFourPlus && (rest.rating || 0) < 4.0) return false;
-    if (fastDelivery && !(rest.deliveryTime?.includes('15') || rest.deliveryTime?.includes('20') || rest.deliveryTime?.includes('25'))) return false;
-    if (under250 && rest.priceRange && rest.priceRange.includes('500')) return false;
-    if (selectedCategory !== 'ALL' && selectedCategory !== 'UNDER_250' && selectedCategory !== 'FRESH_PRODUCE' && selectedCategory !== 'GROCERY_ESSENTIALS') {
-      const matchCuisine = rest.cuisine && rest.cuisine.some(c => c.toLowerCase().includes(selectedCategory.toLowerCase()));
-      const matchName = rest.name.toLowerCase().includes(selectedCategory.toLowerCase());
-      if (!matchCuisine && !matchName) return false;
-    }
-    return true;
-  });
+  const filteredFoods = useMemo(() => {
+    return featuredFoods.filter(food => {
+      if (pureVeg && !food.isVeg) return false;
+      if (ratingFourPlus && (food.rating || 0) < 4) return false;
+      if (under250 && food.price > 250) return false;
+      if (selectedCategory === 'UNDER_250' && food.price > 250) return false;
 
-  // Filter Logic Applied to Featured Foods / Products
-  const filteredFoods = featuredFoods.filter(food => {
-    if (pureVeg && !food.isVeg) return false;
-    if (ratingFourPlus && (food.rating || 0) < 4.0) return false;
-    if (under250 && food.price > 250) return false;
-    if (selectedCategory === 'UNDER_250' && food.price > 250) return false;
+      if (selectedCategory === 'FRESH_PRODUCE') {
+        const ok = ['VEGETABLE', 'FRUIT'].includes(food.productType) ||
+          ['Vegetable', 'Fruit', 'Greens', 'Produce', 'Mandi'].some(k =>
+            (food.category || '').toLowerCase().includes(k.toLowerCase()) ||
+            (food.name || '').toLowerCase().includes(k.toLowerCase())
+          );
+        if (!ok) return false;
+      } else if (selectedCategory === 'GROCERY_ESSENTIALS') {
+        const ok = food.productType === 'GROCERY' ||
+          ['Rice', 'Pulse', 'Dal', 'Flour', 'Atta', 'Oil', 'Ghee', 'Spice', 'Dairy', 'Snack', 'Grocery'].some(k =>
+            (food.category || '').toLowerCase().includes(k.toLowerCase()) ||
+            (food.name || '').toLowerCase().includes(k.toLowerCase())
+          );
+        if (!ok) return false;
+      } else if (selectedCategory !== 'ALL') {
+        const q = selectedCategory.toLowerCase();
+        const matchCat = (food.category || '').toLowerCase().includes(q);
+        const matchName = (food.name || '').toLowerCase().includes(q);
+        const matchType = (food.productType || '').toLowerCase().includes(q);
+        const matchDesc = (food.description || '').toLowerCase().includes(q);
+        if (!matchCat && !matchName && !matchType && !matchDesc) return false;
+      }
+      return true;
+    });
+  }, [featuredFoods, selectedCategory, pureVeg, ratingFourPlus, under250]);
 
-    if (selectedCategory === 'FRESH_PRODUCE') {
-      const isProduce = food.productType === 'VEGETABLE' || food.productType === 'FRUIT' ||
-        ['Vegetable', 'Fruit', 'Greens', 'Onion', 'Herb', 'Seasonal', 'Mandi'].some(k => 
-          (food.category || '').toLowerCase().includes(k.toLowerCase()) || (food.name || '').toLowerCase().includes(k.toLowerCase())
-        );
-      if (!isProduce) return false;
-    } else if (selectedCategory === 'GROCERY_ESSENTIALS') {
-      const isGrocery = food.productType === 'GROCERY' ||
-        ['Rice', 'Pulse', 'Dal', 'Flour', 'Atta', 'Oil', 'Ghee', 'Spice', 'Salt', 'Sugar', 'Dry Fruit', 'Nut', 'Snack', 'Biscuit', 'Packaged', 'Breakfast', 'Cereal', 'Beverage', 'Essential'].some(k => 
-          (food.category || '').toLowerCase().includes(k.toLowerCase()) || (food.name || '').toLowerCase().includes(k.toLowerCase())
-        );
-      if (!isGrocery) return false;
-    } else if (selectedCategory !== 'ALL') {
-      const catLower = selectedCategory.toLowerCase();
-      const matchCategory = food.category && food.category.toLowerCase().includes(catLower);
-      const matchName = food.name && food.name.toLowerCase().includes(catLower);
-      const matchType = food.productType && food.productType.toLowerCase().includes(catLower);
-      if (!matchCategory && !matchName && !matchType) return false;
-    }
-    return true;
-  });
+  const filteredRestaurants = useMemo(() => {
+    const matchingVendorIds = new Set(
+      selectedCategory !== 'ALL' ? filteredFoods.map(f => f.vendorId || f.restaurantId) : []
+    );
 
-  // Display real stores from the database for both Cravings and Fresh Mandi modes
-  const displayStores = React.useMemo(() => {
-    return filteredRestaurants;
-  }, [filteredRestaurants]);
+    return restaurants.filter(rest => {
+      if (pureVeg && !rest.isVegOnly && rest.cuisine && !rest.cuisine.some(c => c.toLowerCase().includes('veg'))) return false;
+      if (ratingFourPlus && (rest.rating || 0) < 4) return false;
+      if (fastDelivery && !(rest.deliveryTime?.includes('15') || rest.deliveryTime?.includes('20') || rest.deliveryTime?.includes('25'))) return false;
+      if (under250 && rest.priceRange?.includes('500')) return false;
 
-  // High rated local gems
-  const localGems = filteredRestaurants.filter(r => (r.rating || 0) >= 4.5);
-  // Deals section
-  const recommendedDeals = filteredRestaurants.filter(r => r.offers && r.offers.length > 0);
+      if (selectedCategory !== 'ALL' && selectedCategory !== 'UNDER_250' && selectedCategory !== 'FRESH_PRODUCE' && selectedCategory !== 'GROCERY_ESSENTIALS') {
+        const q = selectedCategory.toLowerCase();
+        const matchCuisine = (rest.cuisine || []).some(c => c.toLowerCase().includes(q));
+        const matchName = (rest.name || '').toLowerCase().includes(q);
+        const matchTag = (rest.freshTagline || '').toLowerCase().includes(q);
+        const matchVendorType = (rest.vendorType || '').toLowerCase().includes(q);
+        const hasMatchingProduct = matchingVendorIds.has(rest.id || rest._id);
+
+        if (!matchCuisine && !matchName && !matchTag && !matchVendorType && !hasMatchingProduct) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [restaurants, filteredFoods, selectedCategory, pureVeg, ratingFourPlus, fastDelivery, under250]);
+
+  const deals = useMemo(() => filteredRestaurants.filter(r => r.offers?.length), [filteredRestaurants]);
+  const gems = useMemo(() => filteredRestaurants.filter(r => (r.rating || 0) >= 4.5), [filteredRestaurants]);
 
   return (
-    <div className="min-h-screen bg-[#FAFAF8] text-[#17181C] pb-32">
-      {/* 1. Header (Navbar) */}
-      <Navbar onVegToggle={(val) => setPureVeg(val)} />
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 space-y-7">
-
-        {/* 2. Mode Switcher Banner Pill (Mobile & Desktop) */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-white p-3 sm:p-4 rounded-2xl border border-[#E8E9ED] shadow-sm gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0 ${
-              isFresh ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
-            }`}>
-              {isFresh ? '🥬' : '🍔'}
+    <div className="fc-page pb-24">
+      <Navbar onVegToggle={setPureVeg} />
+      <main className="fc-container py-6 space-y-8">
+        <div className="fc-card p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className={`w-11 h-11 rounded-md flex items-center justify-center ${isFresh ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-[rgb(229,27,75)]'}`}>
+              {isFresh ? <Leaf className="w-5 h-5" /> : <Utensils className="w-5 h-5" />}
             </div>
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.2 rounded-md ${
-                  isFresh ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
-                }`}>
-                  Active Channel
-                </span>
-                {pureVeg && (
-                  <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.2 rounded-md bg-emerald-700 text-white">
-                    🌱 Pure Veg On
-                  </span>
-                )}
-              </div>
-              <h2 className="text-sm sm:text-base font-extrabold text-[#17181C] leading-tight mt-0.5 truncate">
-                {isFresh ? 'Sabzi Mandi & Grocery' : 'Cravings Food & Meals'}
-              </h2>
+            <div>
+              <div className="fc-eyebrow">Shopping channel</div>
+              <h2 className="text-lg font-bold text-gray-900">{isFresh ? 'Fresh Mandi' : 'Cravings'}</h2>
+              <p className="text-xs text-gray-500">{isFresh ? 'Daily produce, fruits & grocery essentials' : 'Restaurants, dishes & meals around you'}</p>
             </div>
           </div>
-
-          <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-auto">
-            <button
-              onClick={() => switchMode('cravings')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition ${
-                !isFresh
-                  ? 'bg-[#E51B4B] text-white shadow-sm'
-                  : 'bg-[#F5F6F7] text-[#686D78] hover:bg-[#E8E9ED]'
-              }`}
-            >
-              🍔 Cravings
+          <div className="flex items-center gap-2">
+            <button onClick={() => switchMode('cravings')} className={`fc-btn py-2 text-xs ${!isFresh ? 'fc-btn-cravings' : 'fc-btn-soft'}`}>
+              Cravings
             </button>
-            <button
-              onClick={() => switchMode('fresh')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition ${
-                isFresh
-                  ? 'bg-[#168A5B] text-white shadow-sm'
-                  : 'bg-[#F5F6F7] text-[#686D78] hover:bg-[#E8E9ED]'
-              }`}
-            >
-              🥬 Fresh Mandi
+            <button onClick={() => switchMode('fresh')} className={`fc-btn py-2 text-xs ${isFresh ? 'fc-btn-fresh' : 'fc-btn-soft'}`}>
+              Fresh Mandi
             </button>
           </div>
         </div>
 
-        {/* 3. Promotional Carousel Area */}
         <PromotionCarousel />
+        <CategoryRail selectedCategory={selectedCategory} onCategorySelect={setSelectedCategory} />
 
-        {/* 4. Food Category Discovery Rail */}
-        <CategoryRail
-          selectedCategory={selectedCategory}
-          onCategorySelect={(cat) => setSelectedCategory(cat)}
-        />
+        <section>
+          <div className="flex items-end justify-between mb-3">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-800">Refine your selection</h2>
+              <p className="text-xs text-gray-500 mt-1">Filter stores and products from the database.</p>
+            </div>
+          </div>
+          <FilterRail
+            fastDelivery={fastDelivery}
+            ratingFourPlus={ratingFourPlus}
+            pureVeg={pureVeg}
+            under250={under250}
+            onToggleFilter={handleToggleFilter}
+            onResetFilters={handleResetFilters}
+          />
+        </section>
 
-        {/* 5. Quick Filter Rail */}
-        <FilterRail
-          fastDelivery={fastDelivery}
-          ratingFourPlus={ratingFourPlus}
-          pureVeg={pureVeg}
-          under250={under250}
-          onToggleFilter={handleToggleFilter}
-          onResetFilters={handleResetFilters}
-        />
-
-        {/* Build My Basket Widget (Fresh Mode Only) */}
         {isFresh && <BuildBasketWidget />}
 
-        {/* 6. RECOMMENDED WITH DEALS (Horizontal Mobile Rail / Responsive Grid) */}
-        {!isFresh && recommendedDeals.length > 0 && (
-          <div className="space-y-3.5">
-            <div className="flex items-center justify-between">
+        {!isFresh && deals.length > 0 && (
+          <section>
+            <div className="flex items-center justify-between mb-3">
               <div>
-                <h2 className="text-lg sm:text-xl font-extrabold text-[#17181C] tracking-tight">
-                  Recommended with deals
-                </h2>
-                <p className="text-xs text-[#686D78] font-medium">Great food at pocket-friendly prices</p>
+                <h2 className="text-xl font-semibold text-gray-800">Popular stores with deals</h2>
+                <p className="text-xs text-gray-500 mt-1">Offers from nearby restaurants.</p>
               </div>
+              <Link to="/search" className="text-xs font-semibold text-green-600 flex items-center gap-1">
+                See all <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
             </div>
-
-            <div className="flex sm:grid sm:grid-cols-2 lg:grid-cols-3 gap-4 overflow-x-auto scrollbar-none pb-2 snap-x">
-              {recommendedDeals.map(rest => (
-                <div key={rest._id} className="min-w-[280px] sm:min-w-0 snap-start flex-shrink-0">
-                  <RestaurantCard restaurant={rest} />
-                </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {deals.slice(0, 6).map(r => (
+                <RestaurantCard key={r._id || r.id} restaurant={r} />
               ))}
             </div>
-          </div>
+          </section>
         )}
 
-        {/* 7. TOP PICKS NEAR YOU */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
+        <section>
+          <div className="flex items-end justify-between mb-3">
             <div>
-              <h2 className="text-lg sm:text-xl font-extrabold text-[#17181C] tracking-tight">
-                {isFresh ? 'Top Fresh Mandi Stores' : 'Top picks near you'}
-              </h2>
-              <p className="text-xs text-[#686D78] font-medium">
-                {isFresh ? 'Wholesale fresh mandi vendors near your location' : 'Popular restaurants and outlets near your location'}
-              </p>
+              <h2 className="text-xl font-semibold text-gray-800">{isFresh ? 'Top fresh stores near you' : 'Top picks near you'}</h2>
+              <p className="text-xs text-gray-500 mt-1">All verified database stores and mandi vendors.</p>
             </div>
-            <Link to="/search" className="text-xs font-extrabold text-[#E51B4B] hover:underline flex items-center gap-1">
-              <span>See all</span>
-              <ArrowRight className="w-3.5 h-3.5" />
+            <Link to="/search" className="text-xs font-semibold text-green-600">
+              View all →
             </Link>
           </div>
-
           {loading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {[1, 2, 3].map(n => (
-                <div key={n} className="h-64 rounded-2xl bg-slate-200/60 skeleton-loading-pulse" />
+                <div key={n} className="h-72 rounded-lg bg-gray-100 animate-pulse" />
               ))}
             </div>
-          ) : displayStores.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {displayStores.map(rest => (
-                <RestaurantCard key={rest.cardKey || rest._id || rest.id} restaurant={rest} />
+          ) : filteredRestaurants.length ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredRestaurants.map(r => (
+                <RestaurantCard key={r._id || r.id} restaurant={r} />
               ))}
             </div>
           ) : (
-            <div className="bg-white p-8 rounded-3xl text-center border border-slate-200 space-y-3">
-              <Compass className="w-10 h-10 text-slate-400 mx-auto" />
-              <h3 className="text-base font-extrabold text-slate-800">No restaurants match active filters</h3>
-              <p className="text-xs text-slate-500 font-medium">Try removing pure veg or rating filters to view more local spots.</p>
-              <button
-                onClick={handleResetFilters}
-                className="px-4 py-2 bg-rose-50 text-rose-700 font-extrabold text-xs rounded-xl border border-rose-200"
-              >
-                Reset All Filters
+            <div className="fc-card p-10 text-center">
+              <Compass className="w-10 h-10 mx-auto text-gray-400" />
+              <h3 className="mt-3 text-base font-semibold text-gray-800">No stores match these filters</h3>
+              <button className="mt-4 fc-btn fc-btn-soft text-xs" onClick={handleResetFilters}>
+                Reset filters
               </button>
             </div>
           )}
-        </div>
+        </section>
 
-        {/* 8. POPULAR DISHES / PRODUCE GRID */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg sm:text-xl font-extrabold text-[#17181C] tracking-tight">
-                {isFresh ? '🌱 Fresh Mandi Produce & Essentials' : '🔥 Popular dishes & meals'}
-              </h2>
-              <p className="text-xs text-[#686D78] font-medium">Order items loved by your neighbors</p>
-            </div>
+        <section>
+          <div className="mb-3">
+            <h2 className="text-xl font-semibold text-gray-800">{isFresh ? 'Fresh produce & everyday essentials' : 'Popular dishes & meals'}</h2>
+            <p className="text-xs text-gray-500 mt-1">Products fetched directly from the Yenz database.</p>
           </div>
-
           {loading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {[1, 2, 3, 4].map(n => (
-                <div key={n} className="h-64 rounded-2xl bg-slate-200/60 skeleton-loading-pulse" />
+                <div key={n} className="h-72 rounded-lg bg-gray-100 animate-pulse" />
               ))}
             </div>
-          ) : filteredFoods.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {filteredFoods.map(item => (
-                isFresh ? (
-                  <FreshProductCard key={item._id} product={item} />
-                ) : (
-                  <FoodCard key={item._id} food={item} />
-                )
-              ))}
+          ) : filteredFoods.length ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {filteredFoods.map(item =>
+                isFresh ? <FreshProductCard key={item._id || item.id} product={item} /> : <FoodCard key={item._id || item.id} food={item} />
+              )}
             </div>
           ) : (
-            <div className="bg-white p-8 rounded-3xl text-center border border-slate-200 space-y-2">
-              <Utensils className="w-10 h-10 text-slate-400 mx-auto" />
-              <h3 className="text-base font-extrabold text-slate-800">No food items found</h3>
-              <p className="text-xs text-slate-500">Try changing your category choice or filter criteria.</p>
+            <div className="fc-card p-10 text-center">
+              <p className="text-sm font-semibold text-gray-700">No items found</p>
+              <p className="mt-1 text-xs text-gray-500">Try another category or filter.</p>
             </div>
           )}
-        </div>
+        </section>
 
-        {/* 9. LOCAL GEMS SECTION */}
-        {!isFresh && localGems.length > 0 && (
-          <div className="bg-gradient-to-r from-rose-50/80 via-white to-amber-50/60 p-6 rounded-3xl border border-[#E8E9ED] space-y-4 shadow-sm">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xl">📍</span>
-                <h2 className="text-lg sm:text-xl font-extrabold text-[#17181C]">Local gems</h2>
-              </div>
-              <p className="text-xs text-[#686D78] font-medium">Small places. Good food. Rated 4.5+ near home.</p>
+        {!isFresh && gems.length > 0 && (
+          <section>
+            <div className="mb-3">
+              <h2 className="text-xl font-semibold text-gray-800">Local favourites</h2>
+              <p className="text-xs text-gray-500 mt-1">Highly rated nearby places.</p>
             </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {localGems.slice(0, 3).map(rest => (
-                <RestaurantCard key={rest._id} restaurant={rest} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {gems.slice(0, 3).map(r => (
+                <RestaurantCard key={r._id || r.id} restaurant={r} />
               ))}
             </div>
-          </div>
+          </section>
         )}
 
-        {/* 10. CROSSOVER BANNER */}
-        <div className={`p-6 rounded-3xl border flex flex-col sm:flex-row items-center justify-between gap-4 ${
-          isFresh
-            ? 'bg-[#FFF0F3] border-[#E51B4B]/20 text-[#17181C]'
-            : 'bg-[#ECF8F1] border-[#168A5B]/20 text-[#17181C]'
-        }`}>
-          <div className="space-y-1 text-center sm:text-left">
-            <h3 className="font-heading font-extrabold text-base text-[#17181C]">
-              {isFresh ? '🍔 Craving hot food instead?' : '🥬 Need fresh sabzi & fruits?'}
-            </h3>
-            <p className="text-xs text-[#686D78] font-medium">
-              {isFresh
-                ? 'Order momos, biryani, pizzas and thalis from nearby top-rated outlets.'
-                : 'Direct morning harvest vegetables & staples at wholesale prices.'}
-            </p>
+        <div className="fc-card p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div>
+            <h3 className="text-base font-semibold text-gray-800">{isFresh ? 'Craving a hot meal?' : 'Need fresh vegetables or groceries?'}</h3>
+            <p className="text-xs text-gray-500 mt-1">Switch between both Yenz shopping channels without changing the cart architecture.</p>
           </div>
-
-          <button
-            onClick={() => switchMode(isFresh ? 'cravings' : 'fresh')}
-            className={`px-5 py-2.5 rounded-xl text-xs font-extrabold text-white shadow-sm transition whitespace-nowrap active:scale-95 ${
-              isFresh ? 'bg-[#E51B4B] hover:bg-[#B90F38]' : 'bg-[#168A5B] hover:bg-[#0F6945]'
-            }`}
-          >
-            {isFresh ? 'Explore Cravings Food →' : 'Explore Fresh Mandi →'}
+          <button onClick={() => switchMode(isFresh ? 'cravings' : 'fresh')} className={`fc-btn ${isFresh ? 'fc-btn-cravings' : 'fc-btn-fresh'} text-xs`}>
+            {isFresh ? 'Explore Cravings' : 'Explore Fresh Mandi'}
+            <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
-
+        <FreshCartFooter />
       </main>
-
-      {/* 11. Mobile Sticky Basket Bar (Appears when cart has items on mobile) */}
       <StickyBasketBar />
-
-      {/* 12. Persistent Mobile Bottom Navigation */}
       <MobileBottomNavigation />
     </div>
   );

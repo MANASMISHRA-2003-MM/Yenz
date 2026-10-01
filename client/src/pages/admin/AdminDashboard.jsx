@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import API from '../../services/api';
 import Navbar from '../../components/Navbar';
+import FreshCartFooter from '../../components/FreshCartFooter';
 import OrderStatusBadge from '../../components/OrderStatusBadge';
 import ProductModal from '../../components/ProductModal';
 import VendorModal from '../../components/VendorModal';
@@ -9,7 +11,7 @@ import {
 } from 'recharts';
 import {
   ShieldCheck, CheckCircle2, XCircle, FileText, Store, Bike, Plus, Edit2,
-  Trash2, History, Utensils, ShoppingBag, Eye, Tag, AlertCircle, Search, X
+  Trash2, History, Utensils, ShoppingBag, Eye, Tag, AlertCircle, Search, X, FileCheck2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getUniversalProfileIcon } from '../../utils/imageUtils';
@@ -343,6 +345,12 @@ export default function AdminDashboard() {
                 {tab.label}
               </button>
             ))}
+            <Link
+              to="/admin/applications"
+              className="px-3.5 py-2 rounded-xl text-xs font-extrabold bg-purple-100 hover:bg-purple-200 text-purple-800 border border-purple-300 flex items-center gap-1.5 transition ml-1"
+            >
+              <FileCheck2 className="w-3.5 h-3.5 text-purple-700" /> Full Applications Hub
+            </Link>
           </div>
         </div>
 
@@ -1189,6 +1197,7 @@ export default function AdminDashboard() {
           </div>
         )}
 
+      <FreshCartFooter />
       </main>
 
       {/* Product Modal */}

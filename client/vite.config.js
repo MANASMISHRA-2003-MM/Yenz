@@ -26,10 +26,10 @@ export default defineConfig({
         target: 'http://localhost:5000',
         changeOrigin: true,
         ws: true,
-        // Don't treat ECONNRESET as fatal — browser may close mid-handshake
+        // Suppress ECONNREFUSED & ECONNRESET when backend server is starting or offline
         configure: (proxy) => {
           proxy.on('error', (err) => {
-            if (err.code !== 'ECONNRESET') {
+            if (err.code !== 'ECONNRESET' && err.code !== 'ECONNREFUSED') {
               console.error('[socket.io proxy error]', err.message);
             }
           });

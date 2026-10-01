@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Star, Clock, Tag, Leaf } from 'lucide-react';
+import { Star, Clock, Tag, Leaf, MapPin } from 'lucide-react';
 import { getAccurateRestaurantImage } from '../utils/imageUtils';
 
 export default function RestaurantCard({ restaurant }) {
@@ -8,96 +8,24 @@ export default function RestaurantCard({ restaurant }) {
   const restaurantId = restaurant.id || restaurant._id;
   const imageUrl = restaurant.image || restaurant.bannerImage || getAccurateRestaurantImage(restaurant.name, restaurant.image, isFresh);
   const targetUrl = restaurant.linkUrl || `/restaurant/${restaurantId}`;
-
+  const accent = isFresh ? 'rgb(22,138,91)' : 'rgb(229,27,75)';
   return (
-    <Link
-      to={targetUrl}
-      className="restaurant-food-card restaurant-food-card-hover rounded-2xl overflow-hidden flex flex-col justify-between p-4 group bg-white border border-[#E8E9ED] shadow-sm hover:shadow-md transition"
-    >
-      <div>
-        {/* Cover Image & Badges */}
-        <div className="relative h-44 w-full rounded-xl overflow-hidden mb-3 bg-[#F5F6F7]">
-          <img
-            src={imageUrl}
-            alt={restaurant.name}
-            loading="lazy"
-            decoding="async"
-            onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = '/favicon.png'; }}
-            className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ${
-              restaurant.status !== 'open' ? 'opacity-70 grayscale-[40%]' : ''
-            }`}
-          />
-
-          {/* Mode Tag & Status */}
-          <div className="absolute top-3 left-3 flex flex-col gap-1 items-start">
-            <div className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold flex items-center gap-1 shadow-sm ${
-              isFresh ? 'bg-[#168A5B] text-white' : 'bg-[#E51B4B] text-white'
-            }`}>
-              {isFresh ? <Leaf className="w-3 h-3 fill-white" /> : '🍔'}
-              <span>{isFresh ? (restaurant.name?.toLowerCase().includes('grocer') ? 'GROCERY STORE' : 'SABZI MANDI') : 'RESTAURANT'}</span>
-            </div>
-
-            {restaurant.status !== 'open' && (
-              <span className="bg-rose-600 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-md uppercase shadow-md flex items-center gap-1">
-                <span>🔴</span> CLOSED
-              </span>
-            )}
-          </div>
-
-          {/* Rating Pill (⭐ 4.8 · 39) */}
-          <div className="absolute top-3 right-3 bg-white/95 backdrop-blur-md px-2 py-1 rounded-xl text-xs font-extrabold text-[#17181C] shadow-sm flex items-center gap-1 border border-[#E8E9ED]">
-            <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-            <span>{restaurant.rating || 4.8}</span>
-            <span className="text-[10px] text-[#9095A1] font-normal">· {restaurant.numRatings || 12}</span>
-          </div>
-
-          {/* Closed Banner Overlay */}
-          {restaurant.status !== 'open' ? (
-            <div className="absolute bottom-2.5 left-2.5 right-2.5 bg-rose-950/90 backdrop-blur-md text-rose-200 px-2.5 py-1 rounded-lg text-[10px] font-extrabold flex items-center justify-center gap-1.5 shadow-md border border-rose-500/40">
-              <span>🔴 Store is Offline / Closed</span>
-            </div>
-          ) : (
-            restaurant.offers && restaurant.offers.length > 0 && (
-              <div className="absolute bottom-2.5 left-2.5 right-2.5 bg-slate-900/90 backdrop-blur-md text-white px-2.5 py-1 rounded-lg text-[10px] font-extrabold flex items-center gap-1.5 shadow-md">
-                <Tag className="w-3 h-3 text-amber-400 flex-shrink-0" />
-                <span className="truncate">{restaurant.offers[0]}</span>
-              </div>
-            )
-          )}
-        </div>
-
-        {/* Info Content */}
-        <div className="space-y-1">
-          <h3 className={`font-heading font-extrabold text-base text-[#17181C] line-clamp-1 transition-colors ${
-            isFresh ? 'group-hover:text-[#168A5B]' : 'group-hover:text-[#E51B4B]'
-          }`}>
-            {restaurant.name || 'Fresh Sabzi near you'}
-          </h3>
-
-          <p className="text-xs text-[#686D78] font-medium truncate">
-            {restaurant.cuisine ? (Array.isArray(restaurant.cuisine) ? restaurant.cuisine.join(' • ') : restaurant.cuisine) : 'Hyperlocal Gourmet'}
-          </p>
-
-          {restaurant.priceRange && (
-            <p className="text-[11px] text-[#9095A1] font-semibold">
-              {restaurant.priceRange}
-            </p>
-          )}
-        </div>
+    <Link to={targetUrl} className="fc-card fc-card-hover overflow-hidden block group">
+      <div className="relative h-48 bg-gray-100 overflow-hidden">
+        <img src={imageUrl} alt={restaurant.name} loading="lazy" className={`w-full h-full object-cover transition duration-300 group-hover:scale-105 ${restaurant.status !== 'open' ? 'grayscale opacity-70' : ''}`} onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = '/favicon.png'; }} />
+        <span className="absolute top-3 left-3 px-2 py-1 rounded-md text-[10px] font-bold text-white" style={{ background: accent }}>{isFresh ? 'FRESH MANDI' : 'RESTAURANT'}</span>
+        {restaurant.status !== 'open' && <span className="absolute top-3 right-3 px-2 py-1 rounded-md bg-white text-red-600 text-[10px] font-bold border border-red-200">CLOSED</span>}
+        {restaurant.offers?.length > 0 && <span className="absolute left-3 bottom-3 flex items-center gap-1 px-2 py-1 rounded-md bg-white/95 text-gray-800 text-[10px] font-bold shadow-sm"><Tag className="w-3 h-3 text-amber-500" /> Deals available</span>}
       </div>
-
-      {/* Footer ETA, 5km Distance & Delivery Fee */}
-      <div className="pt-3 mt-3 border-t border-[#E8E9ED] flex items-center justify-between text-xs text-[#686D78] font-medium">
-        <span className="flex items-center gap-1 font-bold text-[#17181C]">
-          <Clock className="w-3.5 h-3.5 text-[#9095A1]" />
-          <span>⚡ {restaurant.deliveryTime || '20-30 min'}</span>
-        </span>
-
-        <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-          📍 {restaurant.distanceKm ? `${restaurant.distanceKm} km` : '< 5 km'}
-        </span>
-
-        <span>₹{restaurant.deliveryFee || 30} delivery</span>
+      <div className="p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0"><h3 className="text-base font-bold text-gray-900 truncate group-hover:text-green-600">{restaurant.name}</h3><p className="mt-1 text-xs text-gray-500 truncate">{restaurant.cuisine?.join(' · ') || 'Hyperlocal'} </p></div>
+          <div className="flex items-center gap-1 text-xs font-bold text-gray-800"><Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />{restaurant.rating || '4.8'}</div>
+        </div>
+        <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
+          <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{restaurant.deliveryTime || '20–30 min'}</span>
+          <span className="flex items-center gap-1 truncate max-w-[55%]"><MapPin className="w-3.5 h-3.5 flex-shrink-0" />{restaurant.address?.city || restaurant.city || 'Nearby'}</span>
+        </div>
       </div>
     </Link>
   );
