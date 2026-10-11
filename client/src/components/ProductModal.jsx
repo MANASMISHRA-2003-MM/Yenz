@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import API from '../services/api';
-import { Upload, Plus, Trash2, X, Image as ImageIcon } from 'lucide-react';
+import { Upload, Plus, Trash2, X, Image as ImageIcon, Camera } from 'lucide-react';
+import CameraCaptureModal from './CameraCaptureModal';
 import { toast } from 'sonner';
 
 export default function ProductModal({ isOpen, onClose, product, vendorId, vendorType = 'CRAVINGS', categories = [], onSaved }) {
@@ -22,6 +23,7 @@ export default function ProductModal({ isOpen, onClose, product, vendorId, vendo
   const [variants, setVariants] = useState([]);
   const [newVariant, setNewVariant] = useState({ name: '', quantity: '1', unit: 'KG', price: '', discountPrice: '', stockQuantity: '100' });
   const [uploading, setUploading] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
 
   useEffect(() => {
     if (product) {
@@ -61,25 +63,50 @@ export default function ProductModal({ isOpen, onClose, product, vendorId, vendo
 
   if (!isOpen) return null;
 
-  const handleImageUpload = async (e) => {
-    const file = e.target.files[0];
+  const handleImageUpload = (e) => {
+    const file = e.target.files?.[0];
     if (!file) return;
 
+    // Check size limit (< 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image file too large. Please select an image under 5MB.');
+      return;
+    }
+
+    setUploading(true);
     const reader = new FileReader();
-    reader.onloadend = async () => {
-      try {
-        setUploading(true);
-        const base64 = reader.result;
-        const res = await API.post('/admin/upload-image', { image: base64, folder: 'krawing/products' });
-        if (res.data.success) {
-          setFormData(prev => ({ ...prev, image: res.data.secureUrl, imagePublicId: res.data.publicId }));
-          toast.success('Image uploaded to Cloudinary successfully');
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        // Compress & scale to max 1024x1024 for fast database storage
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        const maxDim = 1024;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
         }
-      } catch (err) {
-        toast.error('Cloudinary image upload failed');
-      } finally {
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+
+        setFormData(prev => ({ ...prev, image: compressedDataUrl, imagePublicId: null }));
+        toast.success('📸 Product photo loaded! Will be saved directly in database.');
         setUploading(false);
-      }
+      };
+      img.onerror = () => {
+        toast.error('Invalid image file');
+        setUploading(false);
+      };
+      img.src = event.target.result;
     };
     reader.readAsDataURL(file);
   };
@@ -263,37 +290,53 @@ export default function ProductModal({ isOpen, onClose, product, vendorId, vendo
             </label>
           </div>
 
-          {/* Cloudinary Image Selector */}
+          {/* Direct Photo Selector (Direct to Database, No Cloudinary/ImageKit) */}
           <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
-            <label className="block font-extrabold text-slate-900 flex items-center justify-between">
-              <span>Cloudinary Product Image</span>
-              {uploading && <span className="text-purple-600 text-[10px] animate-pulse">Uploading to Cloudinary...</span>}
+            <label className="block font-extrabold text-slate-900 flex items-center justify-between text-xs">
+              <span className="flex items-center gap-1.5">
+                <ImageIcon className="w-4 h-4 text-purple-600" />
+                Restaurant Menu Item Photo (Saved Directly in Database)
+              </span>
+              <span className="text-emerald-700 font-bold text-[10px] bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                Direct DB Storage • No Cloudinary
+              </span>
             </label>
 
             <div className="flex flex-col sm:flex-row items-center gap-4">
               {formData.image ? (
-                <div className="relative w-20 h-20 rounded-xl overflow-hidden border border-slate-200 bg-white">
+                <div className="relative w-20 h-20 rounded-xl overflow-hidden border border-slate-200 bg-white shrink-0 shadow-sm">
                   <img src={formData.image} alt="preview" className="w-full h-full object-cover" />
                 </div>
               ) : (
-                <div className="w-20 h-20 rounded-xl border border-dashed border-slate-300 bg-white flex flex-col items-center justify-center text-slate-400">
+                <div className="w-20 h-20 rounded-xl border border-dashed border-slate-300 bg-white flex flex-col items-center justify-center text-slate-400 shrink-0">
                   <ImageIcon className="w-6 h-6" />
                 </div>
               )}
 
               <div className="flex-1 space-y-2 w-full">
+                <div className="flex items-center gap-2">
+                  <label className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-slate-300 hover:border-purple-500 text-slate-800 rounded-xl text-xs font-extrabold cursor-pointer shadow-sm transition">
+                    <Upload className="w-3.5 h-3.5 text-purple-600" /> Choose Photo from Device
+                    <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={() => setCameraOpen(true)}
+                    className="inline-flex items-center gap-2 px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-extrabold shadow-sm transition"
+                  >
+                    <Camera className="w-3.5 h-3.5" /> Take with Camera
+                  </button>
+                </div>
+
                 <input
                   type="text"
-                  value={formData.image}
+                  value={formData.image?.startsWith('data:') ? '📸 Direct photo stored in database' : formData.image}
                   onChange={e => setFormData({ ...formData, image: e.target.value })}
-                  placeholder="https://res.cloudinary.com/milegafood/image/upload/..."
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-purple-500 font-mono"
+                  placeholder="Or enter image URL..."
+                  disabled={formData.image?.startsWith('data:')}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-purple-500 font-mono disabled:bg-slate-100 disabled:text-slate-500"
                 />
-
-                <label className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 hover:border-slate-300 text-slate-700 rounded-xl text-xs font-extrabold cursor-pointer shadow-sm transition">
-                  <Upload className="w-3.5 h-3.5 text-purple-600" /> Upload New Asset
-                  <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
-                </label>
               </div>
             </div>
           </div>
@@ -385,6 +428,18 @@ export default function ProductModal({ isOpen, onClose, product, vendorId, vendo
         </form>
 
       </div>
+
+      {/* Live Camera Modal for Direct Photo Capture */}
+      <CameraCaptureModal
+        isOpen={cameraOpen}
+        onClose={() => setCameraOpen(false)}
+        onCapture={(photo) => {
+          setFormData(prev => ({ ...prev, image: photo, imagePublicId: null }));
+          toast.success('📸 Dish photo captured via camera and saved to product!');
+        }}
+        title="Capture Menu Item Photo"
+        subtitle="Point camera at the freshly prepared dish to take photo"
+      />
     </div>
   );
 }

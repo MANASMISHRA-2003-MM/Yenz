@@ -509,7 +509,9 @@ const getOrderDispatchHistory = async (req, res, next) => {
           id: order.Delivery.User.id,
           name: order.Delivery.User.fullName,
           phone: order.Delivery.User.phone
-        } : null
+        } : null,
+        vendorHandoverPhoto: order.vendorHandoverPhoto || order.Delivery?.vendorHandoverPhoto || null,
+        riderDeliveryPhoto: order.riderDeliveryPhoto || order.Delivery?.riderDeliveryPhoto || null
       },
       dispatchAudit: {
         totalOffersSent: offers.length,

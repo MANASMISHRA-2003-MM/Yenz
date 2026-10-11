@@ -43,6 +43,7 @@ export default function AdminDashboard() {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [editingVendor, setEditingVendor] = useState(null);
   const [priceHistoryModal, setPriceHistoryModal] = useState({ isOpen: false, history: [], title: '' });
+  const [proofPhotoModal, setProofPhotoModal] = useState({ isOpen: false, url: '', title: '' });
 
   // New Category Input
   const [newCatName, setNewCatName] = useState('');
@@ -1137,6 +1138,7 @@ export default function AdminDashboard() {
                     <th className="p-3">Amount</th>
                     <th className="p-3">Status</th>
                     <th className="p-3">Assigned Driver</th>
+                    <th className="p-3">Delivery Proofs</th>
                     <th className="p-3">Central Control Actions</th>
                   </tr>
                 </thead>
@@ -1149,6 +1151,45 @@ export default function AdminDashboard() {
                       <td className="p-3 font-extrabold text-brand-600">₹{o.totalAmount}</td>
                       <td className="p-3"><OrderStatusBadge status={o.status} /></td>
                       <td className="p-3 text-slate-700 font-bold">{o.deliveryPartner?.name || 'Unassigned'}</td>
+                      <td className="p-3">
+                        <div className="flex items-center gap-2">
+                          {o.vendorHandoverPhoto ? (
+                            <button
+                              type="button"
+                              onClick={() => setProofPhotoModal({ isOpen: true, url: o.vendorHandoverPhoto, title: `Vendor Handover Proof • Order #${o.orderNumber || o.id.slice(0, 8)}` })}
+                              className="group relative flex flex-col items-center"
+                              title="Click to view full vendor package handover photo"
+                            >
+                              <img
+                                src={o.vendorHandoverPhoto}
+                                alt="Vendor Handover"
+                                className="w-9 h-9 rounded-lg object-cover border border-amber-300 shadow-sm group-hover:scale-105 transition"
+                              />
+                              <span className="text-[9px] font-extrabold text-amber-700 mt-0.5">Store</span>
+                            </button>
+                          ) : (
+                            <span className="text-[10px] text-slate-300 font-mono italic">No store pic</span>
+                          )}
+
+                          {o.riderDeliveryPhoto ? (
+                            <button
+                              type="button"
+                              onClick={() => setProofPhotoModal({ isOpen: true, url: o.riderDeliveryPhoto, title: `Rider Dropoff Proof • Order #${o.orderNumber || o.id.slice(0, 8)}` })}
+                              className="group relative flex flex-col items-center"
+                              title="Click to view full rider delivery dropoff photo"
+                            >
+                              <img
+                                src={o.riderDeliveryPhoto}
+                                alt="Rider Dropoff"
+                                className="w-9 h-9 rounded-lg object-cover border border-emerald-500 shadow-sm group-hover:scale-105 transition"
+                              />
+                              <span className="text-[9px] font-extrabold text-emerald-700 mt-0.5">Dropoff</span>
+                            </button>
+                          ) : (
+                            <span className="text-[10px] text-slate-300 font-mono italic">No dropoff pic</span>
+                          )}
+                        </div>
+                      </td>
                       <td className="p-3 flex items-center gap-2">
                         <select
                           value={o.deliveryPartner?._id || o.deliveryPartner?.id || ''}
@@ -1253,6 +1294,39 @@ export default function AdminDashboard() {
             ) : (
               <p className="text-xs text-slate-500 font-medium py-4 text-center">No price change audit records found for this product.</p>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Delivery Proof Photo Inspection Modal */}
+      {proofPhotoModal.isOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white max-w-lg w-full rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <h3 className="text-sm font-extrabold text-slate-900">{proofPhotoModal.title}</h3>
+              <button
+                onClick={() => setProofPhotoModal({ isOpen: false, url: '', title: '' })}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 bg-slate-950 flex items-center justify-center">
+              <img
+                src={proofPhotoModal.url}
+                alt="Delivery Proof"
+                className="max-h-[60vh] w-auto max-w-full rounded-2xl object-contain shadow-lg"
+              />
+            </div>
+            <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 font-medium">
+              <span>Live Camera Verified • Stored in PostgreSQL</span>
+              <button
+                onClick={() => setProofPhotoModal({ isOpen: false, url: '', title: '' })}
+                className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-xl transition text-[11px]"
+              >
+                Close Viewer
+              </button>
+            </div>
           </div>
         </div>
       )}

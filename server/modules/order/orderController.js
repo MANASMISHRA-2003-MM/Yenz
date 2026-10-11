@@ -131,7 +131,9 @@ const formatOrderObj = (ord) => {
       paidAt: paymentObj.paidAt
     } : null,
     items,
-    timeline
+    timeline,
+    vendorHandoverPhoto: ord.vendorHandoverPhoto || ord.Delivery?.vendorHandoverPhoto || null,
+    riderDeliveryPhoto: ord.riderDeliveryPhoto || ord.Delivery?.riderDeliveryPhoto || null
   };
 };
 
@@ -557,7 +559,7 @@ exports.getOrderById = async (req, res) => {
 exports.updateOrderStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    let { status, note, deliveryPin } = req.body;
+    let { status, note, deliveryPin, vendorHandoverPhoto, riderDeliveryPhoto } = req.body;
 
     const validStatuses = ['PENDING', 'CONFIRMED', 'PREPARING', 'PACKING', 'READY_FOR_PICKUP', 'ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'];
     if (!validStatuses.includes(status)) {
@@ -715,19 +717,23 @@ exports.updateOrderStatus = async (req, res) => {
 
     const now = new Date();
 
+    const orderUpdatePayload = {
+      status,
+      updatedAt: now,
+      OrderTimeline: {
+        create: {
+          id: crypto.randomUUID(),
+          status,
+          note
+        }
+      }
+    };
+    if (vendorHandoverPhoto) orderUpdatePayload.vendorHandoverPhoto = vendorHandoverPhoto;
+    if (riderDeliveryPhoto) orderUpdatePayload.riderDeliveryPhoto = riderDeliveryPhoto;
+
     const updatedOrder = await prisma.order.update({
       where: { id: targetOrder.id },
-      data: {
-        status,
-        updatedAt: now,
-        OrderTimeline: {
-          create: {
-            id: crypto.randomUUID(),
-            status,
-            note
-          }
-        }
-      },
+      data: orderUpdatePayload,
       include: {
         Vendor: true,
         Address: true,
@@ -740,21 +746,51 @@ exports.updateOrderStatus = async (req, res) => {
       }
     });
 
-    // Synchronize delivery record status
+    // Synchronize delivery record status & photos
+    const deliveryUpdateData = {};
     if (status === 'OUT_FOR_DELIVERY' || status === 'PICKED_UP') {
-      await prisma.delivery.updateMany({
-        where: { orderId: targetOrder.id },
-        data: { status: 'OUT_FOR_DELIVERY', pickupAt: now }
-      });
+      deliveryUpdateData.status = 'OUT_FOR_DELIVERY';
+      deliveryUpdateData.pickupAt = now;
     } else if (status === 'DELIVERED') {
-      await prisma.delivery.updateMany({
-        where: { orderId: targetOrder.id },
-        data: { status: 'DELIVERED', deliveredAt: now }
-      });
+      deliveryUpdateData.status = 'DELIVERED';
+      deliveryUpdateData.deliveredAt = now;
       await prisma.payment.updateMany({
         where: { orderId: targetOrder.id, method: 'COD' },
         data: { status: 'PAID', paidAt: now, collectedBy: req.user.id }
       });
+    }
+    if (vendorHandoverPhoto) deliveryUpdateData.vendorHandoverPhoto = vendorHandoverPhoto;
+    if (riderDeliveryPhoto) deliveryUpdateData.riderDeliveryPhoto = riderDeliveryPhoto;
+
+    if (Object.keys(deliveryUpdateData).length > 0) {
+      await prisma.delivery.updateMany({
+        where: { orderId: targetOrder.id },
+        data: deliveryUpdateData
+      });
+    }
+
+    // Record immutable audit logs for verification photos
+    if (vendorHandoverPhoto) {
+      await prisma.verificationAuditLog.create({
+        data: {
+          id: crypto.randomUUID(),
+          actorId: req.user.id,
+          action: 'VENDOR_HANDOVER_PHOTO',
+          targetId: targetOrder.id,
+          metadata: { photo: vendorHandoverPhoto, orderId: targetOrder.id, verifiedAt: now }
+        }
+      }).catch(e => console.warn('Vendor handover photo audit log error:', e.message));
+    }
+    if (riderDeliveryPhoto) {
+      await prisma.verificationAuditLog.create({
+        data: {
+          id: crypto.randomUUID(),
+          actorId: req.user.id,
+          action: 'RIDER_DELIVERY_PHOTO',
+          targetId: targetOrder.id,
+          metadata: { photo: riderDeliveryPhoto, orderId: targetOrder.id, verifiedAt: now }
+        }
+      }).catch(e => console.warn('Rider delivery photo audit log error:', e.message));
     }
 
     // Trigger intelligent 3 km dispatch to nearby riders ONLY when status transition is CONFIRMED (PENDING -> CONFIRMED)

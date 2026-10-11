@@ -151,7 +151,9 @@ const formatDeliveryObj = (d) => {
       quantity: it.quantity,
       selectedWeight: it.selectedWeight,
       price: Number(it.unitPrice)
-    })) || []
+    })) || [],
+    vendorHandoverPhoto: d.vendorHandoverPhoto || ord?.vendorHandoverPhoto || null,
+    riderDeliveryPhoto: d.riderDeliveryPhoto || ord?.riderDeliveryPhoto || null
   };
 };
 
@@ -390,7 +392,7 @@ const getMyDeliveryApplication = async (req, res, next) => {
 const updateDeliveryStatus = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { status, deliveryPin } = req.body; // e.g. PICKED_UP, OUT_FOR_DELIVERY, DELIVERED
+    const { status, deliveryPin, riderDeliveryPhoto, vendorHandoverPhoto } = req.body; // e.g. PICKED_UP, OUT_FOR_DELIVERY, DELIVERED
 
     const delivery = await prisma.delivery.findFirst({
       where: {
@@ -537,13 +539,17 @@ const updateDeliveryStatus = async (req, res, next) => {
     }
 
     const now = new Date();
+    const deliveryUpdateData = {
+      status: deliveryStatus,
+      pickupAt: (status === 'PICKED_UP' || status === 'OUT_FOR_DELIVERY') ? (delivery.pickupAt || now) : delivery.pickupAt,
+      deliveredAt: status === 'DELIVERED' ? now : delivery.deliveredAt
+    };
+    if (riderDeliveryPhoto) deliveryUpdateData.riderDeliveryPhoto = riderDeliveryPhoto;
+    if (vendorHandoverPhoto) deliveryUpdateData.vendorHandoverPhoto = vendorHandoverPhoto;
+
     const updatedDelivery = await prisma.delivery.update({
       where: { id: delivery.id },
-      data: {
-        status: deliveryStatus,
-        pickupAt: (status === 'PICKED_UP' || status === 'OUT_FOR_DELIVERY') ? (delivery.pickupAt || now) : delivery.pickupAt,
-        deliveredAt: status === 'DELIVERED' ? now : delivery.deliveredAt
-      },
+      data: deliveryUpdateData,
       include: {
         User: true,
         Order: {
@@ -557,19 +563,47 @@ const updateDeliveryStatus = async (req, res, next) => {
       }
     });
 
-    await prisma.order.update({
-      where: { id: delivery.orderId },
-      data: {
-        status: orderStatus,
-        OrderTimeline: {
-          create: {
-            id: crypto.randomUUID(),
-            status: orderStatus,
-            note: timelineNote
-          }
+    const orderUpdateData = {
+      status: orderStatus,
+      OrderTimeline: {
+        create: {
+          id: crypto.randomUUID(),
+          status: orderStatus,
+          note: timelineNote
         }
       }
+    };
+    if (riderDeliveryPhoto) orderUpdateData.riderDeliveryPhoto = riderDeliveryPhoto;
+    if (vendorHandoverPhoto) orderUpdateData.vendorHandoverPhoto = vendorHandoverPhoto;
+
+    await prisma.order.update({
+      where: { id: delivery.orderId },
+      data: orderUpdateData
     });
+
+    // Record immutable audit logs for verification photos
+    if (riderDeliveryPhoto) {
+      await prisma.verificationAuditLog.create({
+        data: {
+          id: crypto.randomUUID(),
+          actorId: req.user.id,
+          action: 'RIDER_DELIVERY_PHOTO',
+          targetId: delivery.orderId,
+          metadata: { photo: riderDeliveryPhoto, deliveryId: delivery.id, verifiedAt: now }
+        }
+      }).catch(e => console.warn('Rider photo audit error:', e.message));
+    }
+    if (vendorHandoverPhoto) {
+      await prisma.verificationAuditLog.create({
+        data: {
+          id: crypto.randomUUID(),
+          actorId: req.user.id,
+          action: 'VENDOR_HANDOVER_PHOTO',
+          targetId: delivery.orderId,
+          metadata: { photo: vendorHandoverPhoto, deliveryId: delivery.id, verifiedAt: now }
+        }
+      }).catch(e => console.warn('Vendor photo audit error:', e.message));
+    }
 
     if (status === 'DELIVERED') {
       await prisma.payment.updateMany({

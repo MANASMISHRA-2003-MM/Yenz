@@ -12,6 +12,7 @@ import { startRepeatingAlert, stopAlertSound, playActionSound, unlockAudio } fro
 import { requestNotificationPermission, showBrowserAlert } from '../../utils/browserNotification';
 
 import StoreStatusSlider from '../../components/StoreStatusSlider';
+import CameraCaptureModal from '../../components/CameraCaptureModal';
 
 const formatOrderTiming = (dateStr) => {
   if (!dateStr) return { time: 'Recently', elapsed: 'Just now' };
@@ -41,6 +42,8 @@ export default function VendorDashboard() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('orders'); // 'orders', 'products', 'history'
   const [pendingAlertOrder, setPendingAlertOrder] = useState(null);
+  const [cameraModalOpen, setCameraModalOpen] = useState(false);
+  const [cameraOrderTarget, setCameraOrderTarget] = useState(null);
 
   useEffect(() => {
     restaurantRef.current = restaurant;
@@ -170,6 +173,32 @@ export default function VendorDashboard() {
       }
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to update order status');
+    }
+  };
+
+  const initiateHandoverWithPhoto = (order) => {
+    setCameraOrderTarget(order);
+    setCameraModalOpen(true);
+  };
+
+  const handleConfirmHandoverPhoto = async (photoDataUrl) => {
+    if (!cameraOrderTarget) return;
+    const orderId = cameraOrderTarget._id || cameraOrderTarget.id;
+    try {
+      const res = await API.put(`/orders/${orderId}/status`, {
+        status: 'PICKED_UP',
+        note: 'Store captured package photo and handed over to delivery partner.',
+        vendorHandoverPhoto: photoDataUrl
+      });
+      if (res.data.success) {
+        toast.success('📸 Food package photo verified & handed over to delivery partner!');
+        fetchOrders();
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update order status');
+    } finally {
+      setCameraModalOpen(false);
+      setCameraOrderTarget(null);
     }
   };
 
@@ -649,13 +678,13 @@ export default function VendorDashboard() {
                               </p>
                             </div>
 
-                            {/* Handed over to rider button */}
+                            {/* Handed over to rider button with Camera Verification */}
                             <button
-                              onClick={() => handleUpdateStatus(ord._id || ord.id, 'PICKED_UP', 'Store handed package over to delivery partner.')}
+                              onClick={() => initiateHandoverWithPhoto(ord)}
                               className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-1.5 active:scale-95"
                             >
                               <PackageCheck className="w-4 h-4" />
-                              <span>Mark Handed Over to Rider</span>
+                              <span>Take Package Photo & Hand Over to Rider</span>
                             </button>
                           </div>
                         )}
@@ -838,6 +867,18 @@ export default function VendorDashboard() {
 
       <FreshCartFooter />
       </main>
+
+      {/* Live Camera Capture Modal for Handover Verification */}
+      <CameraCaptureModal
+        isOpen={cameraModalOpen}
+        onClose={() => {
+          setCameraModalOpen(false);
+          setCameraOrderTarget(null);
+        }}
+        onCapture={handleConfirmHandoverPhoto}
+        title="Capture Handover Package Photo"
+        subtitle={`Order #${cameraOrderTarget?.orderNumber || cameraOrderTarget?.id?.slice(0, 8)} • Click live photo of food/package before giving to rider`}
+      />
     </div>
   );
 }

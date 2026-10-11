@@ -10,8 +10,9 @@ import DeliveryTimeline from '../../components/DeliveryTimeline';
 import {
   Bike, MapPin, Navigation, Phone, KeyRound, Package, Store,
   CheckCircle2, ArrowLeft, ArrowRight, Clock, Timer, Compass,
-  ShieldCheck, Route, ChevronRight, AlertTriangle, ExternalLink
+  ShieldCheck, Route, ChevronRight, AlertTriangle, ExternalLink, Camera, RefreshCw
 } from 'lucide-react';
+import CameraCaptureModal from '../../components/CameraCaptureModal';
 import { toast } from 'sonner';
 import { playActionSound } from '../../utils/alertSound';
 import { reverseGeocode } from '../../utils/reverseGeocode';
@@ -73,6 +74,8 @@ export default function ActiveTrip() {
   const [pinSubmitting, setPinSubmitting] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [hasArrivedAtCustomer, setHasArrivedAtCustomer] = useState(false);
+  const [dropoffPhoto, setDropoffPhoto] = useState(null);
+  const [dropoffCameraModalOpen, setDropoffCameraModalOpen] = useState(false);
 
   const watchIdRef = useRef(null);
   const deliveryRef = useRef(null);
@@ -202,6 +205,11 @@ export default function ActiveTrip() {
   };
 
   const handleVerifyPinAndComplete = async () => {
+    if (!dropoffPhoto) {
+      toast.warning('📸 Camera photo of the delivered package is required before completing!');
+      setDropoffCameraModalOpen(true);
+      return;
+    }
     if (deliveryPinInput.length !== 4) {
       toast.error('Please enter the 4-digit PIN provided by the customer');
       return;
@@ -213,11 +221,12 @@ export default function ActiveTrip() {
         status: 'DELIVERED',
         deliveryPin: deliveryPinInput,
         currentLat: riderCoords?.lat,
-        currentLng: riderCoords?.lng
+        currentLng: riderCoords?.lng,
+        riderDeliveryPhoto: dropoffPhoto
       });
       if (res.data.success) {
         playActionSound();
-        toast.success('🎉 Delivery completed! Earnings added.');
+        toast.success('🎉 Delivery completed! Proof photo saved.');
         setDeliveryPinInput('');
         navigate('/delivery/dashboard', { replace: true });
       }
@@ -229,11 +238,12 @@ export default function ActiveTrip() {
             status: 'DELIVERED',
             deliveryPin: deliveryPinInput,
             currentLat: riderCoords?.lat,
-            currentLng: riderCoords?.lng
+            currentLng: riderCoords?.lng,
+            riderDeliveryPhoto: dropoffPhoto
           });
           if (res2.data.success) {
             playActionSound();
-            toast.success('🎉 Delivery completed! Earnings added.');
+            toast.success('🎉 Delivery completed! Proof photo saved.');
             setDeliveryPinInput('');
             navigate('/delivery/dashboard', { replace: true });
             return;
@@ -669,6 +679,51 @@ export default function ActiveTrip() {
                 )}
               </div>
 
+              {/* Photo Verification Banner / Shutter Trigger */}
+              <div className="p-3 bg-slate-900 border border-slate-800 rounded-2xl flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  {dropoffPhoto ? (
+                    <img
+                      src={dropoffPhoto}
+                      alt="Delivery dropoff proof"
+                      className="w-12 h-12 rounded-xl object-cover border border-emerald-500 shadow-sm shrink-0"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0 text-slate-400">
+                      <Camera className="w-5 h-5 text-amber-400" />
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <h5 className="text-xs font-black text-white flex items-center gap-1.5">
+                      {dropoffPhoto ? (
+                        <>
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                          <span className="text-emerald-400">Delivery Photo Captured</span>
+                        </>
+                      ) : (
+                        <span>Step 1: Take Photo of Delivered Food</span>
+                      )}
+                    </h5>
+                    <p className="text-[11px] text-slate-400 truncate">
+                      {dropoffPhoto ? 'Photo verified for delivery history' : 'Camera-only live photo required before completing'}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setDropoffCameraModalOpen(true)}
+                  className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
+                    dropoffPhoto
+                      ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
+                      : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-md shadow-emerald-500/20'
+                  }`}
+                >
+                  <Camera className="w-3.5 h-3.5" />
+                  <span>{dropoffPhoto ? 'Retake' : 'Open Camera'}</span>
+                </button>
+              </div>
+
               {!isWithin350m && (
                 <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-xs text-amber-200 font-bold space-y-1">
                   <p className="flex items-center gap-1.5 text-amber-300">
@@ -761,6 +816,18 @@ export default function ActiveTrip() {
 
       <FreshCartFooter />
       </main>
+
+      {/* Live Camera Modal for Rider Dropoff Verification */}
+      <CameraCaptureModal
+        isOpen={dropoffCameraModalOpen}
+        onClose={() => setDropoffCameraModalOpen(false)}
+        onCapture={(photo) => {
+          setDropoffPhoto(photo);
+          toast.success('📸 Dropoff proof photo captured successfully!');
+        }}
+        title="Capture Delivery Dropoff Photo"
+        subtitle="Point camera at the food / package at the customer location"
+      />
     </div>
   );
 }
