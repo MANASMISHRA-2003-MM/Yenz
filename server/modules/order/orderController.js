@@ -794,8 +794,9 @@ exports.updateOrderStatus = async (req, res) => {
       if (updatedOrder.vendorId) {
         io.to(`vendor_${updatedOrder.vendorId}`).emit('order:status_updated', statusPayload);
       }
-      if (updatedOrder.deliveryPartnerId) {
-        io.to(`driver_${updatedOrder.deliveryPartnerId}`).emit('order:status_updated', statusPayload);
+      const driverRoomId = updatedOrder.deliveryPartnerId || updatedOrder.Delivery?.deliveryPartnerId;
+      if (driverRoomId) {
+        io.to(`driver_${driverRoomId}`).emit('order:status_updated', statusPayload);
       }
     } catch (e) {
       console.log('Socket emit warning:', e.message);

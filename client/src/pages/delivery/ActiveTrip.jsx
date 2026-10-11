@@ -72,6 +72,7 @@ export default function ActiveTrip() {
   const [deliveryPinInput, setDeliveryPinInput] = useState('');
   const [pinSubmitting, setPinSubmitting] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [hasArrivedAtCustomer, setHasArrivedAtCustomer] = useState(false);
 
   const watchIdRef = useRef(null);
   const deliveryRef = useRef(null);
@@ -170,6 +171,9 @@ export default function ActiveTrip() {
     if (!delivery) return;
     setUpdatingStatus(true);
     try {
+      if (status === 'ARRIVED_AT_CUSTOMER') {
+        setHasArrivedAtCustomer(true);
+      }
       const targetId = delivery._id || delivery.id;
       const res = await API.put(`/deliveries/${targetId}/status`, { status });
       if (res.data.success) {
@@ -248,8 +252,14 @@ export default function ActiveTrip() {
   // Current step index for progress bar
   const getCurrentStepIndex = () => {
     if (!delivery) return 0;
-    const idx = TRIP_STEPS.findIndex(s => s.key === delivery.status);
-    return idx >= 0 ? idx : 0;
+    const st = delivery.status;
+    if (st === 'ASSIGNED') return 0;
+    if (st === 'ARRIVED_AT_PICKUP' || st === 'WAITING_PICKUP') return 1;
+    if (st === 'PICKED_UP') return 2;
+    if (st === 'OUT_FOR_DELIVERY') return hasArrivedAtCustomer ? 4 : 3;
+    if (st === 'ARRIVED_AT_CUSTOMER') return 4;
+    if (st === 'DELIVERED') return 5;
+    return 0;
   };
 
   // Get the next action for the rider
@@ -258,22 +268,26 @@ export default function ActiveTrip() {
     switch (delivery.status) {
       case 'ASSIGNED':
       case 'PREPARING':
-      case 'READY_FOR_PICKUP':
         return {
           primary: { label: '🏪 Arrived at Store', status: 'ARRIVED_AT_PICKUP', color: 'from-amber-500 to-orange-500' },
-          secondary: { label: '📦 Skip to Picked Up', status: 'PICKED_UP', color: 'bg-cyan-600 hover:bg-cyan-700' }
+          secondary: { label: '📦 Picked Up & Start Delivery', status: 'OUT_FOR_DELIVERY', color: 'bg-cyan-600 hover:bg-cyan-700' }
         };
+      case 'WAITING_PICKUP':
       case 'ARRIVED_AT_PICKUP':
+      case 'READY_FOR_PICKUP':
         return {
-          primary: { label: '📦 Confirm Order Picked Up', status: 'PICKED_UP', color: 'from-cyan-500 to-blue-500' }
+          primary: { label: '📦 Confirm Order Picked Up & Start Delivery', status: 'OUT_FOR_DELIVERY', color: 'from-cyan-500 to-blue-500' }
         };
       case 'PICKED_UP':
         return {
           primary: { label: '🛵 Start Delivery Trip', status: 'OUT_FOR_DELIVERY', color: 'from-purple-500 to-indigo-500' }
         };
       case 'OUT_FOR_DELIVERY':
+        if (hasArrivedAtCustomer) {
+          return { showPinVerification: true };
+        }
         return {
-          primary: { label: '📍 Arrived at Customer', status: 'ARRIVED_AT_CUSTOMER', color: 'from-emerald-500 to-teal-500' }
+          primary: { label: '📍 I Have Arrived at Customer', status: 'ARRIVED_AT_CUSTOMER', color: 'from-emerald-500 to-teal-500' }
         };
       case 'ARRIVED_AT_CUSTOMER':
         return { showPinVerification: true };
@@ -315,10 +329,10 @@ export default function ActiveTrip() {
   const nextAction = getNextAction();
   const vendorName = delivery.restaurant?.name || delivery.restaurantId?.name || 'Store';
   const customerName = delivery.customer?.name || delivery.customerId?.name || 'Customer';
-  const isHeadingToVendor = ['ASSIGNED', 'PREPARING', 'READY_FOR_PICKUP'].includes(delivery.status);
-  const isHeadingToCustomer = ['PICKED_UP', 'OUT_FOR_DELIVERY'].includes(delivery.status);
-  const isAtCustomer = delivery.status === 'ARRIVED_AT_CUSTOMER';
-  const showPinInterface = ['OUT_FOR_DELIVERY', 'PICKED_UP', 'ARRIVED_AT_CUSTOMER'].includes(delivery.status);
+  const isHeadingToVendor = ['ASSIGNED', 'PREPARING', 'WAITING_PICKUP', 'ARRIVED_AT_PICKUP', 'READY_FOR_PICKUP'].includes(delivery.status);
+  const isHeadingToCustomer = ['PICKED_UP', 'OUT_FOR_DELIVERY'].includes(delivery.status) && !hasArrivedAtCustomer;
+  const isAtCustomer = delivery.status === 'ARRIVED_AT_CUSTOMER' || hasArrivedAtCustomer;
+  const showPinInterface = ['OUT_FOR_DELIVERY', 'PICKED_UP', 'ARRIVED_AT_CUSTOMER'].includes(delivery.status) || hasArrivedAtCustomer;
 
   // Build Google Maps navigation URL
   const vendorNavUrl = `https://www.google.com/maps/dir/?api=1&destination=${delivery.pickupLat || delivery.restaurant?.latitude || 28.57},${delivery.pickupLng || delivery.restaurant?.longitude || 77.32}`;
@@ -355,8 +369,48 @@ export default function ActiveTrip() {
 
       <main className="max-w-5xl mx-auto px-4 py-4 space-y-5">
 
-        {/* Modern Live Delivery Timeline */}
-        <DeliveryTimeline status={delivery.status} isFresh={delivery.orderType === 'FRESH'} />
+        {/* Modern Live Synchronized Delivery Timeline */}
+        <DeliveryTimeline
+          status={delivery.order?.status || delivery.status}
+          orderStatus={delivery.order?.status}
+          deliveryStatus={delivery.status}
+          deliveryPartner={delivery.deliveryPartner}
+          isFresh={delivery.orderType === 'FRESH' || delivery.order?.orderType === 'FRESH'}
+        />
+
+        {/* Realtime Kitchen Preparation Notification Banner for Rider */}
+        {isHeadingToVendor && (
+          <div className={`p-4 rounded-2xl border flex items-center justify-between gap-3 text-xs font-bold ${
+            delivery.order?.status === 'READY_FOR_PICKUP'
+              ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-200'
+              : 'bg-amber-950/80 border-amber-500/50 text-amber-200'
+          }`}>
+            <div className="flex items-center gap-2.5">
+              <span className="text-xl">
+                {delivery.order?.status === 'READY_FOR_PICKUP' ? '✅' : '🍳'}
+              </span>
+              <div>
+                <p className="font-extrabold text-sm text-white">
+                  {delivery.order?.status === 'READY_FOR_PICKUP'
+                    ? 'Food is PREPARED by Store!'
+                    : 'Kitchen is currently PREPARING food'}
+                </p>
+                <p className="text-[11px] opacity-80 mt-0.5">
+                  {delivery.order?.status === 'READY_FOR_PICKUP'
+                    ? 'Store has completed preparation. Pick up package directly from counter.'
+                    : 'Order is being cooked/packed. Head to store for pickup.'}
+                </p>
+              </div>
+            </div>
+            <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider shrink-0 border ${
+              delivery.order?.status === 'READY_FOR_PICKUP'
+                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                : 'bg-amber-500/20 text-amber-300 border-amber-500/40 animate-pulse'
+            }`}>
+              {delivery.order?.status === 'READY_FOR_PICKUP' ? 'Ready for Pickup' : 'Cooking in Kitchen'}
+            </span>
+          </div>
+        )}
 
         {/* Navigation Direction Banner */}
         <div className={`rounded-3xl p-5 border-2 transition-all ${

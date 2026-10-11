@@ -478,6 +478,12 @@ async function acceptOffer(offerId, riderId) {
     }
   });
 
+  // Also update Order record with deliveryPartnerId
+  await prisma.order.update({
+    where: { id: order.id },
+    data: { deliveryPartnerId: riderId }
+  });
+
   // Append OrderTimeline
   await prisma.orderTimeline.create({
     data: {
@@ -491,24 +497,39 @@ async function acceptOffer(offerId, riderId) {
   // Notify customer & tracking rooms that driver has been assigned
   try {
     const io = getIO();
+    const driverPayload = {
+      _id: offer.User.id,
+      id: offer.User.id,
+      name: offer.User.fullName,
+      phone: offer.User.phone,
+      vehicleType: offer.User.vehicleType || 'Bike',
+      ratings: offer.User.ratings || 4.9,
+      avatar: 'https://img.icons8.com/?size=100&id=85147&format=png&color=000000'
+    };
+
     io.to(`order_${order.id}`).emit('order:driver_assigned', {
       orderId: order.id,
       orderNumber: order.orderNumber,
-      deliveryPartner: {
-        id: offer.User.id,
-        name: offer.User.fullName,
-        phone: offer.User.phone,
-        vehicleType: offer.User.vehicleType || 'Bike',
-        ratings: offer.User.ratings || 4.9,
-        avatar: 'https://img.icons8.com/?size=100&id=85147&format=png&color=000000'
-      }
+      deliveryPartner: driverPayload
     });
-    io.to(`order_${order.id}`).emit('order:status_updated', {
+
+    const statusPayload = {
       orderId: order.id,
-      status: 'CONFIRMED',
+      orderNumber: order.orderNumber,
+      status: order.status,
       deliveryStatus: 'ASSIGNED',
+      deliveryPartner: driverPayload,
       timelineNote: `Delivery partner ${offer.User.fullName} assigned for pickup.`
-    });
+    };
+
+    io.to(`order_${order.id}`).emit('order:status_updated', statusPayload);
+    if (order.vendorId) {
+      io.to(`vendor_${order.vendorId}`).emit('order:driver_assigned', {
+        orderId: order.id,
+        deliveryPartner: driverPayload
+      });
+      io.to(`vendor_${order.vendorId}`).emit('order:status_updated', statusPayload);
+    }
   } catch (e) {
     console.warn('[Dispatch] Socket driver_assigned emit warning:', e.message);
   }

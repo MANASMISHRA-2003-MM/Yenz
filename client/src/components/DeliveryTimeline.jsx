@@ -3,14 +3,24 @@ import { Clock, CheckCircle2, Flame, Bike, PackageCheck, XCircle, Store, MapPin 
 
 const TIMELINE_STEPS = [
   { key: 'PENDING', label: 'Order placed', sublabel: 'We received your order', icon: Clock },
-  { key: 'CONFIRMED', label: 'Store accepted', sublabel: 'Store accepted & preparing', icon: Store },
-  { key: 'ASSIGNED', label: 'Rider assigned', sublabel: 'Rider accepted & at store', icon: Bike },
-  { key: 'OUT_FOR_DELIVERY', label: 'Rider on the way', sublabel: 'Rider picked up order', icon: PackageCheck },
+  { key: 'CONFIRMED', label: 'Store accepted', sublabel: 'Kitchen accepted & preparing', icon: Store },
+  { key: 'READY_FOR_PICKUP', label: 'Food prepared', sublabel: 'Food prepared & packed', icon: Flame },
+  { key: 'OUT_FOR_DELIVERY', label: 'Out for delivery', sublabel: 'Rider picked up & on the way', icon: Bike },
   { key: 'DELIVERED', label: 'Delivered', sublabel: 'PIN verified & delivered', icon: CheckCircle2 }
 ];
 
-export default function DeliveryTimeline({ status, isFresh = false, compact = false }) {
-  if (status === 'CANCELLED') {
+export default function DeliveryTimeline({
+  status,
+  orderStatus,
+  deliveryStatus,
+  deliveryPartner,
+  isFresh = false,
+  compact = false
+}) {
+  const currentOrderStatus = orderStatus || status;
+  const currentDeliveryStatus = deliveryStatus || (['WAITING_PICKUP', 'ARRIVED_AT_PICKUP', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'ARRIVED_AT_CUSTOMER'].includes(status) ? status : null);
+
+  if (currentOrderStatus === 'CANCELLED' || status === 'CANCELLED') {
     return (
       <div className="rounded-2xl border p-4 flex items-center gap-3 bg-rose-50 border-rose-200 text-rose-800">
         <XCircle className="w-5 h-5 shrink-0 text-rose-600" />
@@ -23,31 +33,59 @@ export default function DeliveryTimeline({ status, isFresh = false, compact = fa
   }
 
   // Get index matching the exact order progression flow
-  const getStepIndex = (st) => {
-    switch (st) {
-      case 'PENDING':
-        return 0;
-      case 'CONFIRMED':
-      case 'PREPARING':
-      case 'PACKING':
-        return 1;
-      case 'READY_FOR_PICKUP':
-      case 'ASSIGNED':
-      case 'WAITING_PICKUP':
-      case 'ARRIVED_AT_PICKUP':
-        return 2;
-      case 'PICKED_UP':
-      case 'OUT_FOR_DELIVERY':
-      case 'ARRIVED_AT_CUSTOMER':
-        return 3;
-      case 'DELIVERED':
-        return 4;
-      default:
-        return 0;
+  const getStepIndex = (st, dSt) => {
+    if (st === 'DELIVERED' || dSt === 'DELIVERED') return 4;
+    if (
+      st === 'OUT_FOR_DELIVERY' ||
+      st === 'PICKED_UP' ||
+      dSt === 'OUT_FOR_DELIVERY' ||
+      dSt === 'PICKED_UP' ||
+      dSt === 'ARRIVED_AT_CUSTOMER'
+    ) {
+      return 3;
     }
+    if (
+      st === 'READY_FOR_PICKUP' ||
+      st === 'PREPARING' ||
+      st === 'PACKING' ||
+      dSt === 'WAITING_PICKUP' ||
+      dSt === 'ARRIVED_AT_PICKUP'
+    ) {
+      return 2;
+    }
+    if (st === 'CONFIRMED' || st === 'ASSIGNED' || dSt === 'ASSIGNED') {
+      return 1;
+    }
+    return 0;
   };
 
-  const safeCurrent = getStepIndex(status);
+  const safeCurrent = getStepIndex(currentOrderStatus, currentDeliveryStatus);
+
+  // Dynamic context note for clarity
+  const getLiveContextBadge = () => {
+    if (safeCurrent === 1) {
+      if (deliveryPartner?.name) {
+        return `🚴 Rider assigned: ${deliveryPartner.name} • Heading to store`;
+      }
+      return '📡 Store accepted order • Assigning nearby rider...';
+    }
+    if (safeCurrent === 2) {
+      if (currentDeliveryStatus === 'WAITING_PICKUP' || currentDeliveryStatus === 'ARRIVED_AT_PICKUP') {
+        return `🏪 Rider ${deliveryPartner?.name ? `(${deliveryPartner.name}) ` : ''}arrived at store for pickup`;
+      }
+      return '🍳 Food prepared by store • Ready for pickup';
+    }
+    if (safeCurrent === 3) {
+      if (currentDeliveryStatus === 'ARRIVED_AT_CUSTOMER' || status === 'ARRIVED_AT_CUSTOMER') {
+        return '📍 Rider arrived at your address • Share PIN to receive order';
+      }
+      return `🛵 Rider ${deliveryPartner?.name ? `(${deliveryPartner.name}) ` : ''}is out for delivery to customer`;
+    }
+    if (safeCurrent === 4) {
+      return '🎉 Order delivered successfully! Verified with 4-digit PIN.';
+    }
+    return '⏱️ Awaiting store confirmation...';
+  };
 
   return (
     <div className={compact ? '' : 'rounded-3xl border border-gray-200 p-5 bg-white shadow-xs'}>
@@ -102,6 +140,12 @@ export default function DeliveryTimeline({ status, isFresh = false, compact = fa
           );
         })}
       </div>
+
+      {!compact && (
+        <div className="mt-3.5 pt-3 border-t border-gray-100 flex items-center justify-between text-[11px] font-bold text-emerald-800 bg-emerald-50/70 px-3 py-1.5 rounded-xl border border-emerald-100">
+          <span>{getLiveContextBadge()}</span>
+        </div>
+      )}
     </div>
   );
 }

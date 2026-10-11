@@ -34,8 +34,9 @@ export default function OrderTracking() {
         setOrder(prev => prev ? {
           ...prev,
           status: data.status,
+          deliveryStatus: data.deliveryStatus || prev.deliveryStatus,
           timeline: data.timeline || prev.timeline,
-          deliveryPartner: data.deliveryPartner !== undefined ? data.deliveryPartner : prev.deliveryPartner
+          deliveryPartner: (data.deliveryPartner && (data.deliveryPartner.name || data.deliveryPartner.fullName)) ? data.deliveryPartner : prev.deliveryPartner
         } : prev);
       }
     };
@@ -139,27 +140,6 @@ export default function OrderTracking() {
 
   const isFresh = order.orderType === 'FRESH' || order.shoppingMode === 'FRESH_MANDI';
 
-  const steps = isFresh ? [
-    { key: 'PENDING', label: 'Order Placed' },
-    { key: 'CONFIRMED', label: 'Vendor Packing' },
-    { key: 'OUT_FOR_DELIVERY', label: 'Out for Delivery' },
-    { key: 'DELIVERED', label: 'Delivered' }
-  ] : [
-    { key: 'PENDING', label: 'Order Placed' },
-    { key: 'PREPARING', label: 'Kitchen Preparing' },
-    { key: 'OUT_FOR_DELIVERY', label: 'Out for Delivery' },
-    { key: 'DELIVERED', label: 'Delivered' }
-  ];
-
-  let currentStepIndex = steps.findIndex(s => s.key === order.status);
-  if (currentStepIndex === -1) {
-    if (['ASSIGNED', 'PICKED_UP', 'READY_FOR_PICKUP'].includes(order.status)) {
-      currentStepIndex = 2;
-    } else {
-      currentStepIndex = 0;
-    }
-  }
-
   const rawPin = order.deliveryPin ? String(order.deliveryPin).trim() : '';
   const pinDigits = rawPin ? rawPin.padStart(4, '0').slice(0, 4).split('') : [];
 
@@ -241,17 +221,14 @@ export default function OrderTracking() {
                 </div>
               </section>
 
-              {/* Timeline */}
-              <section className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-soft">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h2 className="font-extrabold text-slate-900 text-sm">Delivery Progress Timeline</h2>
-                    <p className="text-xs text-slate-500 mt-0.5">{steps[Math.max(0, currentStepIndex)]?.label || 'Order placed'}</p>
-                  </div>
-                  <span className="text-xs font-black text-slate-400">{Math.max(0, currentStepIndex) + 1}/{steps.length}</span>
-                </div>
-                <DeliveryTimeline status={order.status} isFresh={isFresh} />
-              </section>
+              {/* Synchronized Realtime Order Timeline */}
+              <DeliveryTimeline
+                status={order.status}
+                orderStatus={order.status}
+                deliveryStatus={order.deliveryStatus || order.Delivery?.status}
+                deliveryPartner={order.deliveryPartner}
+                isFresh={isFresh}
+              />
 
             </div>
 

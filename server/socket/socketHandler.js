@@ -268,7 +268,8 @@ const initSocket = (io) => {
           where: {
             OR: [
               { id: String(orderId) },
-              { orderNumber: String(orderId) }
+              { orderNumber: String(orderId) },
+              { Delivery: { id: String(orderId) } }
             ]
           },
           include: {

@@ -566,7 +566,13 @@ export default function VendorDashboard() {
                     </div>
 
                       <div className="pt-2 border-t border-slate-100">
-                        <DeliveryTimeline status={ord.status} compact={true} />
+                        <DeliveryTimeline
+                          status={ord.status}
+                          orderStatus={ord.status}
+                          deliveryStatus={ord.deliveryStatus || ord.Delivery?.status}
+                          deliveryPartner={ord.deliveryPartner}
+                          compact={true}
+                        />
                       </div>
 
                       <div className="pt-2 border-t border-slate-100 space-y-2">
@@ -589,7 +595,7 @@ export default function VendorDashboard() {
                           </div>
                         )}
 
-                        {['CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP', 'ASSIGNED'].includes(ord.status) && (
+                        {['CONFIRMED', 'ASSIGNED', 'PREPARING'].includes(ord.status) && (
                           <div className="space-y-2">
                             {ord.deliveryPartner ? (
                               <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 space-y-1">
@@ -604,7 +610,7 @@ export default function VendorDashboard() {
                                     </a>
                                   )}
                                 </div>
-                                <p className="text-[11px] text-emerald-700 font-medium">Hand package to <strong>"{ord.deliveryPartner.name}"</strong> when they arrive.</p>
+                                <p className="text-[11px] text-emerald-700 font-medium">Preparing food in kitchen. Hand package when ready.</p>
                               </div>
                             ) : (
                               <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-center gap-2 font-bold animate-pulse">
@@ -613,23 +619,53 @@ export default function VendorDashboard() {
                               </div>
                             )}
 
-                            {/* Vendor Button 2: Mark order given to delivery partner */}
+                            {/* Vendor Button 1: Mark Food Prepared */}
                             <button
-                              onClick={() => handleUpdateStatus(ord._id || ord.id, 'READY_FOR_PICKUP', 'Store packed package and handed over to rider.')}
-                              className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-1.5 active:scale-95"
+                              onClick={() => handleUpdateStatus(ord._id || ord.id, 'READY_FOR_PICKUP', 'Food prepared by kitchen. Ready for rider pickup.')}
+                              className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-1.5 active:scale-95"
                             >
-                              <PackageCheck className="w-4 h-4" />
-                              <span>Mark Order Given to Delivery Partner</span>
+                              <Flame className="w-4 h-4" />
+                              <span>Mark Food Prepared & Ready for Pickup</span>
                             </button>
                           </div>
                         )}
 
-                      {['PICKED_UP', 'OUT_FOR_DELIVERY'].includes(ord.status) && (
-                        <div className="py-2.5 px-3 bg-purple-50 text-purple-800 text-xs font-extrabold rounded-xl border border-purple-200 flex items-center justify-center gap-1.5">
-                          <Bike className="w-4 h-4" />
-                          <span>Picked Up by Rider • Out for Delivery</span>
-                        </div>
-                      )}
+                        {ord.status === 'READY_FOR_PICKUP' && (
+                          <div className="space-y-2">
+                            <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-xs text-amber-900 space-y-1">
+                              <div className="flex items-center justify-between font-extrabold text-amber-900">
+                                <span className="flex items-center gap-1.5">
+                                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                                  <span>Food Marked Prepared</span>
+                                </span>
+                                {ord.deliveryPartner?.phone && (
+                                  <a href={`tel:${ord.deliveryPartner.phone}`} className="font-bold text-amber-900 underline bg-amber-200 px-2 py-0.5 rounded-md text-[11px]">
+                                    Call Rider
+                                  </a>
+                                )}
+                              </div>
+                              <p className="text-[11px] text-amber-800 font-medium">
+                                {ord.deliveryPartner ? `Waiting for rider "${ord.deliveryPartner.name}" to pick up package.` : 'Waiting for nearby delivery rider assignment.'}
+                              </p>
+                            </div>
+
+                            {/* Handed over to rider button */}
+                            <button
+                              onClick={() => handleUpdateStatus(ord._id || ord.id, 'PICKED_UP', 'Store handed package over to delivery partner.')}
+                              className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-1.5 active:scale-95"
+                            >
+                              <PackageCheck className="w-4 h-4" />
+                              <span>Mark Handed Over to Rider</span>
+                            </button>
+                          </div>
+                        )}
+
+                        {['PICKED_UP', 'OUT_FOR_DELIVERY'].includes(ord.status) && (
+                          <div className="py-2.5 px-3 bg-purple-50 text-purple-800 text-xs font-extrabold rounded-xl border border-purple-200 flex items-center justify-center gap-1.5">
+                            <Bike className="w-4 h-4" />
+                            <span>Food Picked Up by Rider • Out for Delivery</span>
+                          </div>
+                        )}
 
                       {ord.status === 'CANCELLED' && (
                         <div className="py-2.5 px-3 bg-rose-50 text-rose-800 text-xs font-extrabold rounded-xl border border-rose-200 flex items-center justify-center gap-1.5">

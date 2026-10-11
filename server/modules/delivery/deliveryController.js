@@ -19,6 +19,7 @@ const formatDeliveryObj = (d) => {
   const vendorObj = ord?.Vendor || null;
   const addressObj = ord?.Address || null;
   const customerObj = ord?.User_Order_customerIdToUser || null;
+  const driverUser = d.User || ord?.User_Order_deliveryPartnerIdToUser || null;
 
   const pickupLat = d.pickupLat ? Number(d.pickupLat) : (vendorObj?.latitude ? Number(vendorObj.latitude) : null);
   const pickupLng = d.pickupLng ? Number(d.pickupLng) : (vendorObj?.longitude ? Number(vendorObj.longitude) : null);
@@ -135,6 +136,15 @@ const formatDeliveryObj = (d) => {
       status: ord.status,
       orderType: ord.orderType
       // deliveryPin is intentionally omitted to prevent driver bypass
+    } : null,
+    deliveryPartner: driverUser ? {
+      _id: driverUser.id,
+      id: driverUser.id,
+      name: driverUser.fullName || driverUser.name || 'Delivery Partner',
+      phone: driverUser.phone,
+      vehicleType: driverUser.vehicleType || 'Bike',
+      ratings: driverUser.ratings || 4.9,
+      avatar: 'https://img.icons8.com/?size=100&id=85147&format=png&color=000000'
     } : null,
     items: ord?.OrderItem?.map(it => ({
       name: it.name,
@@ -535,6 +545,7 @@ const updateDeliveryStatus = async (req, res, next) => {
         deliveredAt: status === 'DELIVERED' ? now : delivery.deliveredAt
       },
       include: {
+        User: true,
         Order: {
           include: {
             Vendor: true,
