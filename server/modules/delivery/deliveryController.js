@@ -603,7 +603,7 @@ const updateDeliveryStatus = async (req, res, next) => {
           2500
         );
 
-               if (!geoCheck.valid && process.env.NODE_ENV === 'production') {
+             if (!geoCheck.valid && process.env.NODE_ENV === 'production') {
           return res.status(400).json({
             success: false,
             message: geoCheck.message,
@@ -615,7 +615,7 @@ const updateDeliveryStatus = async (req, res, next) => {
 
       // Clear any failed attempts upon success
       clearPinAttempts(orderId);
-    }
+    }         
 
     let orderStatus = delivery.Order.status;
     let deliveryStatus = delivery.status;
