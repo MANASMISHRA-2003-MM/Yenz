@@ -8,7 +8,7 @@ import OrderStatusBadge from '../../components/OrderStatusBadge';
 import DeliveryTimeline from '../../components/DeliveryTimeline';
 import { Store, Flame, RefreshCw, PackageCheck, Tag, BellRing, CheckCircle2, XCircle, Bike, Volume2, Clock, MapPin, Timer, History, ArrowRight, Navigation } from 'lucide-react';
 import { toast } from 'sonner';
-import { startRepeatingAlert, stopAlertSound, playActionSound, unlockAudio } from '../../utils/alertSound';
+import { startRepeatingAlert, stopAlertSound, playActionSound, unlockAudio, playCashRegisterSound, triggerHaptics } from '../../utils/alertSound';
 import { requestNotificationPermission, showBrowserAlert } from '../../utils/browserNotification';
 
 import StoreStatusSlider from '../../components/StoreStatusSlider';
@@ -267,9 +267,9 @@ export default function VendorDashboard() {
             type="button"
             onClick={() => {
               unlockAudio();
-              playActionSound();
+              playCashRegisterSound();
               triggerHaptics();
-              toast.success('🔔 Sound alarm & mobile vibration tested successfully!');
+              toast.success('🔔 Cash register alarm sound & mobile vibration tested successfully!');
             }}
             className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-[11px] rounded-xl shadow-sm transition active:scale-95"
           >

@@ -1,5 +1,8 @@
-// High-Performance Cross-Platform Audio Synthesizer & Haptic Engine
-// Supports Android, iOS (Safari/Chrome), Web, Tablets, Linux, macOS & Windows
+// High-Performance Dedicated Audio & Haptic Engine
+// Strictly uses /sounds/cash_register.wav for all active orders, delivery trips, and notifications
+// Fully supports Android, iOS (Safari/Chrome), Web, Mobile, Tablets & Desktop
+
+const SOUND_PATHS = ['/sounds/cash_register.wav', '/sound/cash_register.wav'];
 
 let audioCtx = null;
 let activeInterval = null;
@@ -7,7 +10,11 @@ let repeatTimeout = null;
 let isAlertActive = false;
 let audioUnlocked = false;
 
-// Initialize or resume AudioContext safely across browsers & OS platforms
+// Preloaded HTML5 Audio objects for instant zero-latency playback
+let preloadedAudio = null;
+let decodedAudioBuffer = null;
+
+// Initialize or resume AudioContext safely across browsers
 export function getAudioContext() {
   if (typeof window === 'undefined') return null;
   if (!audioCtx) {
@@ -26,128 +33,180 @@ export function getAudioContext() {
   return audioCtx;
 }
 
-// Play silent buffer to unlock AudioContext on iOS Safari & strict autoplay browsers
+// Preload the cash register audio file
+function initPreloadAudio() {
+  if (typeof window === 'undefined') return;
+  if (!preloadedAudio) {
+    preloadedAudio = new Audio(SOUND_PATHS[0]);
+    preloadedAudio.preload = 'auto';
+    preloadedAudio.volume = 1.0;
+    preloadedAudio.onerror = () => {
+      // Fallback to secondary path if primary fails
+      preloadedAudio.src = SOUND_PATHS[1];
+      preloadedAudio.load();
+    };
+  }
+
+  // Pre-fetch and decode cash_register.wav into Web Audio memory buffer
+  if (!decodedAudioBuffer) {
+    try {
+      fetch(SOUND_PATHS[0])
+        .then((res) => {
+          if (!res.ok) return fetch(SOUND_PATHS[1]);
+          return res;
+        })
+        .then((res) => res.arrayBuffer())
+        .then((arrayBuffer) => {
+          const ctx = getAudioContext();
+          if (ctx) {
+            ctx.decodeAudioData(arrayBuffer, (decoded) => {
+              decodedAudioBuffer = decoded;
+            }, () => {});
+          }
+        })
+        .catch(() => {});
+    } catch (e) {}
+  }
+}
+
+// Initialize preloading immediately on module load
+if (typeof window !== 'undefined') {
+  initPreloadAudio();
+}
+
+// Unlock audio on iOS Safari & strict autoplay browsers
 export function unlockAudio() {
   try {
-    const ctx = getAudioContext();
-    if (!ctx) return;
+    initPreloadAudio();
 
-    if (ctx.state === 'suspended') {
+    const ctx = getAudioContext();
+    if (ctx && ctx.state === 'suspended') {
       ctx.resume().catch(() => {});
     }
 
-    // iOS Safari silent buffer unlock trick
-    const buffer = ctx.createBuffer(1, 1, 22050);
-    const source = ctx.createBufferSource();
-    source.buffer = buffer;
-    source.connect(ctx.destination);
-    source.start(0);
+    if (preloadedAudio) {
+      // Warm up audio channel
+      preloadedAudio.load();
+    }
+
     audioUnlocked = true;
   } catch (e) {}
 }
 
-// Global user gesture listener to unlock audio on any touch/click event anywhere on screen
+// Global user gesture listener to unlock audio on any touch/click event
 if (typeof window !== 'undefined') {
   const unlockEvents = ['click', 'touchstart', 'touchend', 'keydown', 'pointerdown'];
   const handleUnlock = () => {
     unlockAudio();
   };
-  unlockEvents.forEach(evt => window.addEventListener(evt, handleUnlock, { passive: true, once: false }));
+  unlockEvents.forEach((evt) =>
+    window.addEventListener(evt, handleUnlock, { passive: true, once: false })
+  );
 }
 
-// Loud, distinctive double-chime alarm sound for vendors, riders & consumers
+/**
+ * Cross-platform mobile & tablet haptic vibration
+ * Distinctive multi-pulse vibration pattern for orders and rides
+ */
+export function triggerHaptics() {
+  if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+    try {
+      // Distinctive 5-pulse ring pattern: vibrate 500ms, pause 150ms...
+      navigator.vibrate([500, 150, 500, 150, 500, 150, 1000]);
+    } catch (e) {}
+  }
+}
+
+/**
+ * Play authentic /sounds/cash_register.wav sound
+ * Strictly plays the actual recorded audio file — NO synthetic oscillator beeps.
+ */
 export function playCashRegisterSound() {
   try {
-    // 1. Direct HTML5 Audio playback attempt
+    triggerHaptics();
+
+    // Strategy 1: Play via preloaded/new HTML5 Audio element
+    let played = false;
     if (typeof Audio !== 'undefined') {
       try {
-        const audio = new Audio('/sounds/cash_register.wav');
+        const audio = new Audio(SOUND_PATHS[0]);
         audio.volume = 1.0;
+        audio.onerror = () => {
+          audio.src = SOUND_PATHS[1];
+          audio.play().catch(() => {});
+        };
         const playPromise = audio.play();
         if (playPromise !== undefined) {
-          playPromise.catch(() => {});
+          playPromise
+            .then(() => {
+              played = true;
+            })
+            .catch(() => {
+              // If promise rejected due to autoplay, fall back to Web Audio buffer
+              playFromDecodedBuffer();
+            });
         }
-      } catch (e) {}
+      } catch (e) {
+        playFromDecodedBuffer();
+      }
+    } else {
+      playFromDecodedBuffer();
     }
+  } catch (err) {
+    console.warn('[AlertSound] Play note:', err);
+  }
+}
 
-    // 2. High-Fidelity Web Audio Synthesizer (Guaranteed loud ring on all browsers)
+// Fallback helper to play cash_register.wav directly from Web Audio buffer
+function playFromDecodedBuffer() {
+  try {
     const ctx = getAudioContext();
     if (!ctx) return;
     if (ctx.state === 'suspended') {
       ctx.resume().catch(() => {});
     }
 
-    const now = ctx.currentTime;
-
-    // Alarm Tone 1: High Pitch Ring 880Hz -> 1760Hz
-    const osc1 = ctx.createOscillator();
-    const gain1 = ctx.createGain();
-    osc1.type = 'square';
-    osc1.frequency.setValueAtTime(880, now);
-    osc1.frequency.setValueAtTime(1760, now + 0.1);
-    gain1.gain.setValueAtTime(0.35, now);
-    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
-    osc1.connect(gain1);
-    gain1.connect(ctx.destination);
-    osc1.start(now);
-    osc1.stop(now + 0.35);
-
-    // Alarm Tone 2: Echo Harmonic Ring 1320Hz -> 2640Hz
-    const osc2 = ctx.createOscillator();
-    const gain2 = ctx.createGain();
-    osc2.type = 'triangle';
-    osc2.frequency.setValueAtTime(1320, now + 0.15);
-    osc2.frequency.setValueAtTime(2640, now + 0.25);
-    gain2.gain.setValueAtTime(0.45, now + 0.15);
-    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
-    osc2.connect(gain2);
-    gain2.connect(ctx.destination);
-    osc2.start(now + 0.15);
-    osc2.stop(now + 0.55);
-  } catch (err) {
-    console.warn('Audio ring note:', err);
-  }
+    if (decodedAudioBuffer) {
+      const source = ctx.createBufferSource();
+      const gainNode = ctx.createGain();
+      gainNode.gain.setValueAtTime(1.0, ctx.currentTime);
+      source.buffer = decodedAudioBuffer;
+      source.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      source.start(0);
+    }
+  } catch (e) {}
 }
 
 // Alias for backwards compatibility
 export const playChimeBeep = playCashRegisterSound;
 
-// Subtle action chime for user UI feedback
+/**
+ * Action sound for user UI interactions (order updates, buttons)
+ * Also plays the cash_register.wav sound
+ */
 export function playActionSound() {
   try {
-    const ctx = getAudioContext();
-    if (!ctx) return;
-    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
-
-    const now = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(1046.5, now); // High C6
-    osc.frequency.setValueAtTime(1318.5, now + 0.08); // E6
-
-    gain.gain.setValueAtTime(0.25, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
-
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-
-    osc.start(now);
-    osc.stop(now + 0.3);
+    triggerHaptics();
+    if (typeof Audio !== 'undefined') {
+      const audio = new Audio(SOUND_PATHS[0]);
+      audio.volume = 0.8;
+      audio.onerror = () => {
+        audio.src = SOUND_PATHS[1];
+        audio.play().catch(() => {});
+      };
+      const p = audio.play();
+      if (p !== undefined) p.catch(() => {});
+    } else {
+      playFromDecodedBuffer();
+    }
   } catch (e) {}
 }
 
-// Cross-platform mobile & tablet haptic vibration
-export function triggerHaptics() {
-  if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-    try {
-      navigator.vibrate([500, 150, 500, 150, 500, 150, 1000]);
-    } catch (e) {}
-  }
-}
-
-// Start continuous repeating alert sound & haptics until user accepts/dismisses
+/**
+ * Start continuous repeating alert sound & haptics
+ * Loops /sounds/cash_register.wav and vibration every 2.5s until vendor/rider accepts or dismisses
+ */
 export function startRepeatingAlert(onTriggerCallback) {
   stopAlertSound();
   isAlertActive = true;
@@ -168,7 +227,9 @@ export function startRepeatingAlert(onTriggerCallback) {
   }, 2500);
 }
 
-// Stop sound and vibration immediately
+/**
+ * Stop sound and vibration immediately
+ */
 export function stopAlertSound() {
   isAlertActive = false;
   if (activeInterval) {
