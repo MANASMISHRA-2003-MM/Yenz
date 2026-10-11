@@ -495,12 +495,13 @@ const updateDeliveryStatus = async (req, res, next) => {
             message: geoCheck.message,
             distanceMeters: geoCheck.distanceMeters,
             maxAllowedMeters: 2500
-          });
+                   });
         }
+      }
+
       // Clear any failed attempts upon success
       clearPinAttempts(orderId);
     }
-
     let orderStatus = delivery.Order.status;
     let deliveryStatus = delivery.status;
     let timelineNote = `Delivery status updated to ${status}`;
