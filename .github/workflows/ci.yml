@@ -41,4 +41,10 @@ jobs:
       - name: Install Server Dependencies
         run: npm ci
       - name: Validate Prisma Schema
+        env:
+          DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/yenz_ci?schema=public"
         run: npx prisma validate
+      - name: Generate Prisma Client
+        env:
+          DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/yenz_ci?schema=public"
+        run: npx prisma generate
