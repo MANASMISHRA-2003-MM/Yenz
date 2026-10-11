@@ -153,26 +153,47 @@ export default function RiderApp() {
     return () => clearInterval(timer);
   }, [incomingOffer]);
 
-  // 4. GPS Location Broadcast simulation for Active Trips
+  // 4. GPS Location Broadcast for Active Trips
   useEffect(() => {
     if (activeDelivery && activeDelivery.status !== 'DELIVERED') {
-      locationIntervalRef.current = setInterval(() => {
-        const socket = getSocket();
-        // Shift slightly to simulate movement
-        const lat = 28.5355 + (Math.random() - 0.5) * 0.005;
-        const lng = 77.3910 + (Math.random() - 0.5) * 0.005;
-
-        // Push via socket
-        if (socket) {
-          socket.emit('driver:update_location', {
-            orderId: activeDelivery.orderId || activeDelivery.id,
-            lat,
-            lng
-          });
+      const getDeviceOrTripCoords = () => {
+        if (typeof navigator !== 'undefined' && navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              const lat = pos.coords.latitude;
+              const lng = pos.coords.longitude;
+              const socket = getSocket();
+              if (socket) {
+                socket.emit('driver:update_location', {
+                  orderId: activeDelivery.orderId || activeDelivery.id,
+                  lat,
+                  lng
+                });
+              }
+              mobileApi.post(API_ENDPOINTS.DELIVERY.LOCATION, { latitude: lat, longitude: lng }).catch(() => {});
+            },
+            () => {},
+            { enableHighAccuracy: true }
+          );
+        } else {
+          const lat = activeDelivery.currentLat || activeDelivery.dropLat || activeDelivery.pickupLat;
+          const lng = activeDelivery.currentLng || activeDelivery.dropLng || activeDelivery.pickupLng;
+          if (lat && lng) {
+            const socket = getSocket();
+            if (socket) {
+              socket.emit('driver:update_location', {
+                orderId: activeDelivery.orderId || activeDelivery.id,
+                lat,
+                lng
+              });
+            }
+            mobileApi.post(API_ENDPOINTS.DELIVERY.LOCATION, { latitude: lat, longitude: lng }).catch(() => {});
+          }
         }
-        // Also persist via REST endpoint
-        mobileApi.post(API_ENDPOINTS.DELIVERY.LOCATION, { latitude: lat, longitude: lng }).catch(() => {});
-      }, 5000);
+      };
+
+      getDeviceOrTripCoords();
+      locationIntervalRef.current = setInterval(getDeviceOrTripCoords, 5000);
     } else {
       if (locationIntervalRef.current) clearInterval(locationIntervalRef.current);
     }
@@ -471,14 +492,7 @@ export default function RiderApp() {
 
                 {/* Progressive Action Buttons based on delivery state */}
                 <View style={styles.tripActionContainer}>
-                  {activeDelivery.status === 'ASSIGNED' || activeDelivery.status === 'WAITING_PICKUP' ? (
-                    <TouchableOpacity
-                      style={[styles.btn, styles.actionBtnBlue]}
-                      onPress={() => handleUpdateTripStatus('ARRIVED_AT_PICKUP')}
-                    >
-                      <Text style={styles.btnText}>📍 I Have Arrived at Store</Text>
-                    </TouchableOpacity>
-                  ) : activeDelivery.status === 'ARRIVED_AT_PICKUP' ? (
+                  {activeDelivery.status === 'ASSIGNED' || activeDelivery.status === 'WAITING_PICKUP' || activeDelivery.status === 'ARRIVED_AT_PICKUP' ? (
                     <TouchableOpacity
                       style={[styles.btn, styles.actionBtnGreen]}
                       onPress={() => handleUpdateTripStatus('OUT_FOR_DELIVERY')}

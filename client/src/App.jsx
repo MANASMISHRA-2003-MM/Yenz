@@ -5,30 +5,32 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
 import { ModeProvider } from './context/ModeContext';
 
-// Eagerly loaded critical consumer pages
-import Home from './pages/consumer/Home';
+// 1. Customer App Module (Mirroring /mobile/customer)
+import { Home } from './modules/customer';
+const RestaurantDetail = lazy(() => import('./modules/customer').then(m => ({ default: m.RestaurantDetail })));
+const CartPage = lazy(() => import('./modules/customer').then(m => ({ default: m.CartPage })));
+const CheckoutPage = lazy(() => import('./modules/customer').then(m => ({ default: m.CheckoutPage })));
+const OrderTracking = lazy(() => import('./modules/customer').then(m => ({ default: m.OrderTracking })));
+const OrderHistory = lazy(() => import('./modules/customer').then(m => ({ default: m.OrderHistory })));
+const SearchPage = lazy(() => import('./modules/customer').then(m => ({ default: m.SearchPage })));
+const Profile = lazy(() => import('./modules/customer').then(m => ({ default: m.Profile })));
 
-// Lazy loaded secondary & role-specific pages
-const RestaurantDetail = lazy(() => import('./pages/consumer/RestaurantDetail'));
-const CartPage = lazy(() => import('./pages/consumer/CartPage'));
-const CheckoutPage = lazy(() => import('./pages/consumer/CheckoutPage'));
-const OrderTracking = lazy(() => import('./pages/consumer/OrderTracking'));
-const OrderHistory = lazy(() => import('./pages/consumer/OrderHistory'));
-const SearchPage = lazy(() => import('./pages/consumer/SearchPage'));
+// 2. Vendor App Module (Mirroring /mobile/vendor)
+const VendorDashboard = lazy(() => import('./modules/vendor').then(m => ({ default: m.VendorDashboard })));
+const VendorOnboarding = lazy(() => import('./modules/vendor').then(m => ({ default: m.VendorOnboarding })));
 
-const VendorDashboard = lazy(() => import('./pages/vendor/VendorDashboard'));
-const VendorOnboarding = lazy(() => import('./pages/vendor/VendorOnboarding'));
+// 3. Rider / Delivery Partner App Module (Mirroring /mobile/rider)
+const DeliveryDashboard = lazy(() => import('./modules/rider').then(m => ({ default: m.DeliveryDashboard })));
+const DeliveryOnboarding = lazy(() => import('./modules/rider').then(m => ({ default: m.DeliveryOnboarding })));
+const ActiveTrip = lazy(() => import('./modules/rider').then(m => ({ default: m.ActiveTrip })));
 
-const DeliveryDashboard = lazy(() => import('./pages/delivery/DeliveryDashboard'));
-const DeliveryOnboarding = lazy(() => import('./pages/delivery/DeliveryOnboarding'));
-const ActiveTrip = lazy(() => import('./pages/delivery/ActiveTrip'));
+// 4. Private Admin App Module (Mirroring /mobile/admin)
+const AdminDashboard = lazy(() => import('./modules/admin').then(m => ({ default: m.AdminDashboard })));
+const AdminApplications = lazy(() => import('./modules/admin').then(m => ({ default: m.AdminApplications })));
 
-const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
-const AdminApplications = lazy(() => import('./pages/admin/AdminApplications'));
-
+// Common Auth
 const Login = lazy(() => import('./pages/auth/Login'));
 const Register = lazy(() => import('./pages/auth/Register'));
-const Profile = lazy(() => import('./pages/consumer/Profile'));
 
 const PageFallback = () => (
   <div className="fc-page flex items-center justify-center">

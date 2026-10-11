@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const prisma = require('../utils/prisma');
+const routingService = require('../services/routingService');
 
 // Haversine distance formula in kilometers
 function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -25,10 +26,19 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
   return Math.round(d * 10) / 10; // Round to 1 decimal
 }
 
+function haversineDistanceMeters(lat1, lon1, lat2, lon2) {
+  const km = calculateDistance(lat1, lon1, lat2, lon2);
+  return km !== null ? Math.round(km * 1000) : 0;
+}
+
 let ioInstance = null;
 
 // Active online drivers pool with coordinates in memory
 const onlineDrivers = new Map(); // socketId -> { driverId, lat, lng, lastSeen }
+
+// DB write throttling: orderId -> timestamp & coords
+const lastDbPersistTimes = new Map();
+const lastPersistCoords = new Map();
 
 const initSocket = (io) => {
   ioInstance = io;
@@ -164,6 +174,37 @@ const initSocket = (io) => {
 
         socket.join(`order_${order.id}`);
         console.log(`✅ Authorized Socket ${socket.id} (${socket.user.fullName}) joined order_${order.id}`);
+
+        // Immediately send active route and latest location to the newly joined client
+        const activeRoute = routingService.getActiveRoute(order.id);
+        if (activeRoute) {
+          socket.emit('courier:route_update', {
+            orderId: order.id,
+            stage: activeRoute.stage,
+            geometry: activeRoute.geometry,
+            steps: activeRoute.steps,
+            distanceKm: activeRoute.distanceKm,
+            etaMinutes: activeRoute.durationMinutes,
+            isReroute: false
+          });
+        }
+
+        if (order.Delivery?.currentLat && order.Delivery?.currentLng) {
+          socket.emit('courier:location_update', {
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+            lat: Number(order.Delivery.currentLat),
+            lng: Number(order.Delivery.currentLng),
+            snappedLat: Number(order.Delivery.currentLat),
+            snappedLng: Number(order.Delivery.currentLng),
+            stage: activeRoute?.stage || 'TO_CUSTOMER',
+            distanceToCustomer: Number(order.Delivery.distanceKm || 1.5),
+            distanceToTarget: Number(order.Delivery.distanceKm || 1.5),
+            etaMinutes: order.Delivery.estimatedMinutes || 7,
+            statusText: `Rider is ${order.Delivery.distanceKm || 1.5} km away (~${order.Delivery.estimatedMinutes || 7} mins)`,
+            timestamp: Date.now()
+          });
+        }
       } catch (err) {
         console.error('join_order error:', err.message);
       }
@@ -241,8 +282,8 @@ const initSocket = (io) => {
       }
     });
 
-    // 4. Secure & Rate-Limited Driver Real-Time GPS Tracking
-    socket.on('driver:update_location', async ({ orderId, lat, lng }) => {
+    // 4. Secure & Rate-Limited Driver Real-Time GPS Tracking with Routing Engine Integration
+    socket.on('driver:update_location', async ({ orderId, lat, lng, heading, speed, accuracy, timestamp }) => {
       try {
         // A. Must be authenticated as DELIVERY_PARTNER
         if (!socket.user || socket.user.role !== 'DELIVERY_PARTNER') {
@@ -257,11 +298,17 @@ const initSocket = (io) => {
         }
         lastLocationUpdate = now;
 
-        // C. Validate latitude and longitude ranges and reject invalid or stale coordinates
+        // C. Validate latitude and longitude ranges and reject invalid coordinates
         if (typeof lat !== 'number' || typeof lng !== 'number') return;
         if (isNaN(lat) || isNaN(lng)) return;
         if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return;
         if (lat === 0 && lng === 0) return;
+
+        // Reject readings with poor accuracy if specified (> 120m)
+        if (typeof accuracy === 'number' && accuracy > 120) {
+          console.warn(`[GPS Filter] Discarded low accuracy (${accuracy}m) ping from driver ${socket.user.fullName}`);
+          return;
+        }
 
         // D. Look up order and verify sender is the assigned driver
         const order = await prisma.order.findFirst({
@@ -297,35 +344,158 @@ const initSocket = (io) => {
           return; // Ignore location pushes for completed/cancelled orders
         }
 
-        // F. Calculate live ETA and distance to customer dropoff
+        // F. Determine delivery stage & target destination
+        const isHeadingToPickup = ['ASSIGNED', 'PREPARING', 'READY_FOR_PICKUP', 'WAITING_PICKUP', 'ARRIVED_AT_PICKUP'].includes(order.status) ||
+          ['ASSIGNED', 'WAITING_PICKUP'].includes(order.Delivery?.status);
+        const stage = isHeadingToPickup ? 'TO_PICKUP' : 'TO_CUSTOMER';
+
+        const vendorLat = order.Vendor?.latitude ? Number(order.Vendor.latitude) : (order.Delivery?.pickupLat ? Number(order.Delivery.pickupLat) : 28.57);
+        const vendorLng = order.Vendor?.longitude ? Number(order.Vendor.longitude) : (order.Delivery?.pickupLng ? Number(order.Delivery.pickupLng) : 77.32);
+
         const dropLat = order.dropLat ? Number(order.dropLat) : (order.Delivery?.dropLat ? Number(order.Delivery.dropLat) : (order.Address?.latitude ? Number(order.Address.latitude) : null));
         const dropLng = order.dropLng ? Number(order.dropLng) : (order.Delivery?.dropLng ? Number(order.Delivery.dropLng) : (order.Address?.longitude ? Number(order.Address.longitude) : null));
 
-        const distanceToCustomer = (dropLat && dropLng) ? calculateDistance(lat, lng, dropLat, dropLng) : 1.0;
-        const etaMinutes = Math.max(2, Math.round(distanceToCustomer * 3));
+        const targetLat = stage === 'TO_PICKUP' ? vendorLat : (dropLat || vendorLat);
+        const targetLng = stage === 'TO_PICKUP' ? vendorLng : (dropLng || vendorLng);
 
-        // Asynchronously update delivery location in database
-        if (order.Delivery) {
-          prisma.delivery.update({
-            where: { id: order.Delivery.id },
-            data: {
-              currentLat: lat,
-              currentLng: lng,
-              distanceKm: distanceToCustomer,
-              estimatedMinutes: etaMinutes
-            }
-          }).catch(e => console.warn('Delivery current location update warning:', e.message));
+        // G. Active Route & Deviation/Rerouting Check
+        let activeRoute = routingService.getActiveRoute(order.id);
+
+        // If no active route cached or stage changed, calculate two-wheeler route
+        if (!activeRoute || activeRoute.stage !== stage) {
+          try {
+            activeRoute = await routingService.calculateBikeRoute({
+              origin: [lat, lng],
+              destination: [targetLat, targetLng],
+              stage,
+              orderId: order.id
+            });
+            // Broadcast initial road route to order room
+            io.to(`order_${order.id}`).emit('courier:route_update', {
+              orderId: order.id,
+              stage,
+              geometry: activeRoute.geometry,
+              steps: activeRoute.steps,
+              distanceKm: activeRoute.distanceKm,
+              etaMinutes: activeRoute.durationMinutes,
+              isReroute: false
+            });
+          } catch (rErr) {
+            console.warn('[Routing] Failed to calculate initial route:', rErr.message);
+          }
         }
 
-        // Broadcast to customer and vendor tracking this order
+        // Check if rider deviated significantly from active route
+        let snappedLat = lat;
+        let snappedLng = lng;
+        let currentRoad = null;
+        let nextManeuver = null;
+        let distanceToNextManeuver = null;
+        let remainingDistanceKm = activeRoute?.distanceKm || (calculateDistance(lat, lng, targetLat, targetLng) || 1.5);
+        let remainingEtaMinutes = activeRoute?.durationMinutes || Math.max(2, Math.round(remainingDistanceKm * 3));
+
+        if (activeRoute) {
+          const deviation = routingService.checkDeviationAndProgress({
+            currentLat: lat,
+            currentLng: lng,
+            orderId: order.id
+          });
+
+          if (deviation.snappedPosition) {
+            snappedLat = deviation.snappedPosition[0];
+            snappedLng = deviation.snappedPosition[1];
+          }
+
+          currentRoad = deviation.currentStep?.road || null;
+          nextManeuver = deviation.currentStep?.instruction || null;
+          distanceToNextManeuver = deviation.distanceToNextManeuver || null;
+
+          // If rider deviated significantly and cooldown has passed, execute reroute
+          if (deviation.shouldReroute) {
+            try {
+              const newRoute = await routingService.executeReroute({
+                currentLat: lat,
+                currentLng: lng,
+                orderId: order.id
+              });
+              if (newRoute) {
+                activeRoute = newRoute;
+                remainingDistanceKm = newRoute.distanceKm;
+                remainingEtaMinutes = newRoute.durationMinutes;
+
+                // Broadcast updated route to rider & customer without reloading
+                io.to(`order_${order.id}`).emit('courier:route_update', {
+                  orderId: order.id,
+                  stage,
+                  geometry: newRoute.geometry,
+                  steps: newRoute.steps,
+                  distanceKm: newRoute.distanceKm,
+                  etaMinutes: newRoute.durationMinutes,
+                  isReroute: true
+                });
+              }
+            } catch (reErr) {
+              console.warn('[Routing] Dynamic reroute error:', reErr.message);
+            }
+          }
+        }
+
+        // H. Throttled Database Persistence (every 20s or on moving > 100m)
+        const lastPersistTime = lastDbPersistTimes.get(order.id) || 0;
+        const lastCoord = lastPersistCoords.get(order.id);
+        const distMovedMeters = lastCoord ? haversineDistanceMeters(lat, lng, lastCoord.lat, lastCoord.lng) : Infinity;
+
+        if (now - lastPersistTime >= 20000 || distMovedMeters >= 100) {
+          lastDbPersistTimes.set(order.id, now);
+          lastPersistCoords.set(order.id, { lat, lng });
+
+          if (order.Delivery) {
+            prisma.delivery.update({
+              where: { id: order.Delivery.id },
+              data: {
+                currentLat: lat,
+                currentLng: lng,
+                distanceKm: remainingDistanceKm,
+                estimatedMinutes: remainingEtaMinutes
+              }
+            }).catch(e => console.warn('Delivery current location update warning:', e.message));
+
+            // Log coordinate history for trail
+            prisma.deliveryLocation.create({
+              data: {
+                id: crypto.randomUUID(),
+                deliveryId: order.Delivery.id,
+                latitude: lat,
+                longitude: lng
+              }
+            }).catch(e => {});
+          }
+        }
+
+        // I. Broadcast enriched live location & navigation status to customer and driver
+        const statusText = stage === 'TO_PICKUP'
+          ? `Rider is on the way to store (~${remainingEtaMinutes} mins)`
+          : `Rider is ${remainingDistanceKm} km away (~${remainingEtaMinutes} mins)`;
+
         io.to(`order_${order.id}`).emit('courier:location_update', {
           orderId: order.id,
           orderNumber: order.orderNumber,
           lat,
           lng,
-          distanceToCustomer,
-          etaMinutes,
-          statusText: `Rider is ${distanceToCustomer} km away (~${etaMinutes} mins)`
+          snappedLat,
+          snappedLng,
+          heading: typeof heading === 'number' ? heading : null,
+          speed: typeof speed === 'number' ? speed : null,
+          accuracy: typeof accuracy === 'number' ? accuracy : null,
+          stage,
+          distanceToCustomer: remainingDistanceKm,
+          distanceToTarget: remainingDistanceKm,
+          etaMinutes: remainingEtaMinutes,
+          currentRoad,
+          nextManeuver,
+          distanceToNextManeuver,
+          statusText,
+          timestamp: Date.now()
         });
       } catch (err) {
         console.error('Socket GPS error:', err.message);

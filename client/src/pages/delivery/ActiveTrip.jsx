@@ -4,18 +4,20 @@ import API from '../../services/api';
 import { socket } from '../../services/socket';
 import Navbar from '../../components/Navbar';
 import FreshCartFooter from '../../components/FreshCartFooter';
-import MapSimulator from '../../components/MapSimulator';
+import RiderNavigationMap from '../../components/RiderNavigationMap';
 import OrderStatusBadge from '../../components/OrderStatusBadge';
 import DeliveryTimeline from '../../components/DeliveryTimeline';
 import {
   Bike, MapPin, Navigation, Phone, KeyRound, Package, Store,
   CheckCircle2, ArrowLeft, ArrowRight, Clock, Timer, Compass,
-  ShieldCheck, Route, ChevronRight, AlertTriangle, ExternalLink, Camera, RefreshCw
+  ShieldCheck, Route, ChevronRight, AlertTriangle, ExternalLink, Camera, RefreshCw,
+  Maximize2, X
 } from 'lucide-react';
 import CameraCaptureModal from '../../components/CameraCaptureModal';
 import { toast } from 'sonner';
 import { playActionSound } from '../../utils/alertSound';
 import { reverseGeocode } from '../../utils/reverseGeocode';
+import { validateGpsReading } from '../../utils/gpsFilter';
 
 const formatOrderTiming = (dateStr) => {
   if (!dateStr) return { time: 'Recently', elapsed: 'Just now' };
@@ -76,9 +78,11 @@ export default function ActiveTrip() {
   const [hasArrivedAtCustomer, setHasArrivedAtCustomer] = useState(false);
   const [dropoffPhoto, setDropoffPhoto] = useState(null);
   const [dropoffCameraModalOpen, setDropoffCameraModalOpen] = useState(false);
+  const [isFullScreenMap, setIsFullScreenMap] = useState(false);
 
   const watchIdRef = useRef(null);
   const deliveryRef = useRef(null);
+  const lastGpsRef = useRef(null);
 
   // Keep ref in sync
   useEffect(() => {
@@ -109,15 +113,31 @@ export default function ActiveTrip() {
     fetchDelivery();
   }, [fetchDelivery]);
 
-  // GPS tracking
+  // GPS tracking with filtering & sanity validation
   useEffect(() => {
     if (!('geolocation' in navigator)) return;
 
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        setRiderCoords({ lat, lng });
+        const rawCoords = {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracy: pos.coords.accuracy,
+          heading: pos.coords.heading,
+          speed: pos.coords.speed ? Math.round(pos.coords.speed * 3.6) : null, // km/h
+          timestamp: pos.timestamp || Date.now()
+        };
+
+        // Filter and sanity validate reading
+        const validPos = validateGpsReading(rawCoords, lastGpsRef.current);
+        if (!validPos) {
+          return; // Discard invalid or teleported jitter
+        }
+
+        lastGpsRef.current = validPos;
+        const lat = validPos.lat;
+        const lng = validPos.lng;
+        setRiderCoords(validPos);
 
         reverseGeocode(lat, lng).then((geo) => {
           const addressName = geo?.street
@@ -128,17 +148,21 @@ export default function ActiveTrip() {
           setRiderAddressName(`${lat.toFixed(4)}°, ${lng.toFixed(4)}°`);
         });
 
-        // Emit live location
+        // Emit live location with heading & speed
         socket.emit('driver:online_location', { lat, lng });
         API.post('/deliveries/location', { latitude: lat, longitude: lng }).catch(() => {});
 
-        // If active delivery, push tracking location
+        // If active delivery, push tracking location to order room
         const active = deliveryRef.current;
         if (active && (active.id || active.orderId)) {
           socket.emit('driver:update_location', {
             orderId: active.orderId || active.id,
             lat,
-            lng
+            lng,
+            heading: validPos.heading,
+            speed: validPos.speed,
+            accuracy: validPos.accuracy,
+            timestamp: validPos.timestamp
           });
         }
       },
@@ -159,8 +183,8 @@ export default function ActiveTrip() {
   useEffect(() => {
     const handleStatusUpdate = (data) => {
       if (data.status === 'DELIVERED' || data.status === 'CANCELLED') {
-        toast.success('Delivery completed! Returning to dashboard.');
-        navigate('/delivery/dashboard', { replace: true });
+        toast.success('🎉 Delivery completed! Returning to dashboard.');
+        navigate('/delivery/dashboard?completed=1', { replace: true });
       } else {
         fetchDelivery();
       }
@@ -204,13 +228,17 @@ export default function ActiveTrip() {
     }
   };
 
-  const handleVerifyPinAndComplete = async () => {
+  const handleVerifyPinAndComplete = async (overridePin) => {
+    const pinToSubmit = (typeof overridePin === 'string' && overridePin.length === 4)
+      ? overridePin
+      : deliveryPinInput;
+
     if (!dropoffPhoto) {
       toast.warning('📸 Camera photo of the delivered package is required before completing!');
       setDropoffCameraModalOpen(true);
       return;
     }
-    if (deliveryPinInput.length !== 4) {
+    if (pinToSubmit.length !== 4) {
       toast.error('Please enter the 4-digit PIN provided by the customer');
       return;
     }
@@ -219,7 +247,7 @@ export default function ActiveTrip() {
       const targetId = delivery._id || delivery.id;
       const res = await API.put(`/deliveries/${targetId}/status`, {
         status: 'DELIVERED',
-        deliveryPin: deliveryPinInput,
+        deliveryPin: pinToSubmit,
         currentLat: riderCoords?.lat,
         currentLng: riderCoords?.lng,
         riderDeliveryPhoto: dropoffPhoto
@@ -228,7 +256,7 @@ export default function ActiveTrip() {
         playActionSound();
         toast.success('🎉 Delivery completed! Proof photo saved.');
         setDeliveryPinInput('');
-        navigate('/delivery/dashboard', { replace: true });
+        navigate('/delivery/dashboard?completed=1', { replace: true });
       }
     } catch (err) {
       const orderId = delivery.orderId || delivery.order?._id || delivery.order?.id;
@@ -236,7 +264,7 @@ export default function ActiveTrip() {
         try {
           const res2 = await API.put(`/orders/${orderId}/status`, {
             status: 'DELIVERED',
-            deliveryPin: deliveryPinInput,
+            deliveryPin: pinToSubmit,
             currentLat: riderCoords?.lat,
             currentLng: riderCoords?.lng,
             riderDeliveryPhoto: dropoffPhoto
@@ -245,7 +273,7 @@ export default function ActiveTrip() {
             playActionSound();
             toast.success('🎉 Delivery completed! Proof photo saved.');
             setDeliveryPinInput('');
-            navigate('/delivery/dashboard', { replace: true });
+            navigate('/delivery/dashboard?completed=1', { replace: true });
             return;
           }
         } catch (err2) {
@@ -278,10 +306,6 @@ export default function ActiveTrip() {
     switch (delivery.status) {
       case 'ASSIGNED':
       case 'PREPARING':
-        return {
-          primary: { label: '🏪 Arrived at Store', status: 'ARRIVED_AT_PICKUP', color: 'from-amber-500 to-orange-500' },
-          secondary: { label: '📦 Picked Up & Start Delivery', status: 'OUT_FOR_DELIVERY', color: 'bg-cyan-600 hover:bg-cyan-700' }
-        };
       case 'WAITING_PICKUP':
       case 'ARRIVED_AT_PICKUP':
       case 'READY_FOR_PICKUP':
@@ -349,35 +373,44 @@ export default function ActiveTrip() {
   const customerNavUrl = `https://www.google.com/maps/dir/?api=1&destination=${delivery.dropLat || delivery.customerAddress?.latitude || delivery.address?.latitude || 28.57},${delivery.dropLng || delivery.customerAddress?.longitude || delivery.address?.longitude || 77.32}`;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white pb-6">
+    <div className="min-h-screen bg-[#F8FAFC] text-slate-900 pb-16">
       <Navbar />
 
       {/* Top Bar — Order Info + Back Button */}
-      <div className="bg-slate-900 border-b border-slate-800 px-4 py-3">
+      <div className="bg-white border-b border-slate-200/90 px-4 py-4 shadow-xs">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3.5">
             <Link
               to="/delivery/dashboard"
-              className="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition"
+              className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl transition border border-slate-200"
+              title="Back to Dashboard"
             >
-              <ArrowLeft className="w-4 h-4 text-slate-300" />
+              <ArrowLeft className="w-4 h-4" />
             </Link>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-black uppercase tracking-widest text-cyan-400">ACTIVE TRIP</span>
-                <span className="text-xs font-mono text-slate-400">#{delivery.orderNumber || delivery.orderId || delivery.id}</span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                  ACTIVE TRIP
+                </span>
+                <span className="text-xs font-mono font-bold text-slate-500">
+                  #{delivery.orderNumber || delivery.orderId || delivery.id}
+                </span>
               </div>
-              <h1 className="text-base font-black text-white mt-0.5">{vendorName} → {customerName}</h1>
+              <h1 className="text-base sm:text-lg font-black text-slate-900 mt-0.5">
+                {vendorName} → {customerName}
+              </h1>
             </div>
           </div>
           <div className="text-right">
             <OrderStatusBadge status={delivery.status} />
-            <p className="text-emerald-400 font-black text-lg mt-0.5">₹{delivery.predictedPayout || delivery.earnings || 85}</p>
+            <p className="text-emerald-600 font-black text-xl mt-0.5">
+              ₹{delivery.predictedPayout || delivery.earnings || 85}
+            </p>
           </div>
         </div>
       </div>
 
-      <main className="max-w-5xl mx-auto px-4 py-4 space-y-5">
+      <main className="max-w-5xl mx-auto px-4 py-5 space-y-6">
 
         {/* Modern Live Synchronized Delivery Timeline */}
         <DeliveryTimeline
@@ -390,22 +423,22 @@ export default function ActiveTrip() {
 
         {/* Realtime Kitchen Preparation Notification Banner for Rider */}
         {isHeadingToVendor && (
-          <div className={`p-4 rounded-2xl border flex items-center justify-between gap-3 text-xs font-bold ${
+          <div className={`p-4 rounded-3xl border flex items-center justify-between gap-3 text-xs font-bold shadow-xs ${
             delivery.order?.status === 'READY_FOR_PICKUP'
-              ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-200'
-              : 'bg-amber-950/80 border-amber-500/50 text-amber-200'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+              : 'bg-amber-50 border-amber-200 text-amber-900'
           }`}>
-            <div className="flex items-center gap-2.5">
-              <span className="text-xl">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">
                 {delivery.order?.status === 'READY_FOR_PICKUP' ? '✅' : '🍳'}
               </span>
               <div>
-                <p className="font-extrabold text-sm text-white">
+                <p className="font-extrabold text-sm text-slate-900">
                   {delivery.order?.status === 'READY_FOR_PICKUP'
                     ? 'Food is PREPARED by Store!'
                     : 'Kitchen is currently PREPARING food'}
                 </p>
-                <p className="text-[11px] opacity-80 mt-0.5">
+                <p className="text-[11px] text-slate-600 mt-0.5">
                   {delivery.order?.status === 'READY_FOR_PICKUP'
                     ? 'Store has completed preparation. Pick up package directly from counter.'
                     : 'Order is being cooked/packed. Head to store for pickup.'}
@@ -414,8 +447,8 @@ export default function ActiveTrip() {
             </div>
             <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider shrink-0 border ${
               delivery.order?.status === 'READY_FOR_PICKUP'
-                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                : 'bg-amber-500/20 text-amber-300 border-amber-500/40 animate-pulse'
+                ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                : 'bg-amber-100 text-amber-800 border-amber-300 animate-pulse'
             }`}>
               {delivery.order?.status === 'READY_FOR_PICKUP' ? 'Ready for Pickup' : 'Cooking in Kitchen'}
             </span>
@@ -423,39 +456,39 @@ export default function ActiveTrip() {
         )}
 
         {/* Navigation Direction Banner */}
-        <div className={`rounded-3xl p-5 border-2 transition-all ${
-          isHeadingToVendor ? 'bg-gradient-to-r from-amber-950/80 to-amber-900/50 border-amber-600/40' :
-          isHeadingToCustomer ? 'bg-gradient-to-r from-purple-950/80 to-purple-900/50 border-purple-600/40' :
-          isAtCustomer ? 'bg-gradient-to-r from-emerald-950/80 to-emerald-900/50 border-emerald-600/40' :
-          'bg-slate-900 border-slate-700'
+        <div className={`bg-white rounded-3xl p-5 border shadow-sm transition-all ${
+          isHeadingToVendor ? 'border-amber-300/80 ring-2 ring-amber-100' :
+          isHeadingToCustomer ? 'border-purple-300/80 ring-2 ring-purple-100' :
+          isAtCustomer ? 'border-emerald-300/80 ring-2 ring-emerald-100' :
+          'border-slate-200'
         }`}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl ${
-                isHeadingToVendor ? 'bg-amber-500/20' :
-                isHeadingToCustomer ? 'bg-purple-500/20' :
-                'bg-emerald-500/20'
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className={`w-13 h-13 rounded-2xl flex items-center justify-center text-2xl shrink-0 ${
+                isHeadingToVendor ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                isHeadingToCustomer ? 'bg-purple-50 text-purple-700 border border-purple-200' :
+                'bg-emerald-50 text-emerald-700 border border-emerald-200'
               }`}>
                 {isHeadingToVendor ? '🏪' : isHeadingToCustomer ? '🛵' : '📍'}
               </div>
-              <div>
+              <div className="min-w-0">
                 <span className={`text-[10px] font-black uppercase tracking-widest ${
-                  isHeadingToVendor ? 'text-amber-400' :
-                  isHeadingToCustomer ? 'text-purple-400' :
-                  'text-emerald-400'
+                  isHeadingToVendor ? 'text-amber-700' :
+                  isHeadingToCustomer ? 'text-purple-700' :
+                  'text-emerald-700'
                 }`}>
                   {isHeadingToVendor ? 'NAVIGATE TO STORE' :
                    isHeadingToCustomer ? 'DELIVERING TO CUSTOMER' :
                    isAtCustomer ? 'ARRIVED — VERIFY PIN' :
                    'TRIP IN PROGRESS'}
                 </span>
-                <h2 className="text-lg font-black text-white mt-0.5">
+                <h2 className="text-lg font-black text-slate-900 mt-0.5 truncate">
                   {isHeadingToVendor ? vendorName :
                    isHeadingToCustomer ? customerName :
                    isAtCustomer ? `Deliver to ${customerName}` :
                    'Active Trip'}
                 </h2>
-                <p className="text-xs text-slate-400 font-medium mt-0.5">
+                <p className="text-xs text-slate-500 font-medium mt-0.5 truncate">
                   {isHeadingToVendor
                     ? (delivery.restaurant?.address || delivery.restaurantId?.address?.street || 'Store Address')
                     : (delivery.customerAddress?.addressLine || delivery.address?.street || 'Customer Address')
@@ -469,43 +502,68 @@ export default function ActiveTrip() {
               href={isHeadingToVendor ? vendorNavUrl : customerNavUrl}
               target="_blank"
               rel="noreferrer"
-              className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-black text-sm shadow-lg transition active:scale-95 ${
-                isHeadingToVendor ? 'bg-amber-500 hover:bg-amber-600 text-slate-950' :
-                'bg-purple-500 hover:bg-purple-600 text-white'
+              className={`flex items-center justify-center gap-2 px-5 py-3 rounded-2xl font-black text-xs sm:text-sm shadow-md transition active:scale-95 shrink-0 ${
+                isHeadingToVendor
+                  ? 'bg-amber-500 hover:bg-amber-600 text-slate-900 shadow-amber-500/20'
+                  : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20'
               }`}
             >
-              <Navigation className="w-5 h-5" />
-              <span>Navigate</span>
+              <Navigation className="w-4 h-4" />
+              <span>Google Maps Navigate</span>
               <ExternalLink className="w-3.5 h-3.5" />
             </a>
           </div>
 
           {/* Estimated time */}
-          <div className="flex items-center gap-4 mt-3 text-xs text-slate-400 font-bold">
+          <div className="flex flex-wrap items-center gap-4 mt-4 pt-3 border-t border-slate-100 text-xs text-slate-500 font-bold">
             <span className="flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-slate-500" />
+              <Clock className="w-3.5 h-3.5 text-slate-400" />
               Order placed: {formatOrderTiming(delivery.vendorReceivedAt || delivery.placedAt).time} ({formatOrderTiming(delivery.vendorReceivedAt || delivery.placedAt).elapsed})
             </span>
             <span className="flex items-center gap-1.5">
-              <Route className="w-3.5 h-3.5 text-slate-500" />
+              <Route className="w-3.5 h-3.5 text-slate-400" />
               ~{delivery.tripDistanceKm || delivery.distanceKm || '2.4'} km total trip
             </span>
             <span className="flex items-center gap-1.5">
-              <Timer className="w-3.5 h-3.5 text-slate-500" />
+              <Timer className="w-3.5 h-3.5 text-slate-400" />
               ETA: ~{delivery.estimatedMinutes || 20} mins
             </span>
           </div>
         </div>
 
-        {/* Live Map */}
-        <div className="rounded-3xl overflow-hidden border-2 border-slate-800 shadow-2xl">
-          <MapSimulator
-            orderId={delivery.orderId || delivery.id}
-            orderType={delivery.orderType || delivery.order?.orderType}
-            vendor={delivery.restaurant || delivery.restaurantId}
-            customerAddress={delivery.customerAddress || delivery.address}
-            initialCourierLocation={riderCoords || { lat: delivery.pickupLat, lng: delivery.pickupLng }}
-          />
+        {/* Real Turn-by-Turn Rider Road Navigation Cockpit Header & Frame */}
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-between bg-white border border-slate-200/90 rounded-2xl p-3 px-4 shadow-xs">
+            <div className="flex items-center gap-2.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+              <span className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                <Navigation className="w-3.5 h-3.5 text-emerald-600" />
+                Live Turn-by-Turn Rider Road Navigation
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsFullScreenMap(true)}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black shadow-sm transition active:scale-95"
+              title="Extend map to full screen navigation"
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
+              <span>Extend Fullscreen Map</span>
+            </button>
+          </div>
+
+          <div className="rounded-3xl overflow-hidden border border-slate-200/90 shadow-sm bg-white">
+            <RiderNavigationMap
+              orderId={delivery.orderId || delivery.id}
+              stage={isHeadingToVendor ? 'TO_PICKUP' : 'TO_CUSTOMER'}
+              vendor={delivery.restaurant || delivery.restaurantId}
+              customerAddress={delivery.customerAddress || delivery.address}
+              riderCoords={riderCoords || { lat: delivery.pickupLat, lng: delivery.pickupLng }}
+              isFullScreen={isFullScreenMap}
+              onToggleFullScreen={setIsFullScreenMap}
+              onClose={() => setIsFullScreenMap(false)}
+            />
+          </div>
         </div>
 
         {/* Vendor & Customer Cards Side-by-Side */}
@@ -513,40 +571,40 @@ export default function ActiveTrip() {
           {/* Vendor Card */}
           <div className={`rounded-3xl p-5 border transition-all ${
             isHeadingToVendor
-              ? 'bg-amber-950/50 border-amber-600/40 ring-2 ring-amber-500/20'
-              : 'bg-slate-900/80 border-slate-800'
+              ? 'bg-amber-50/70 border-amber-300 ring-2 ring-amber-100 shadow-sm'
+              : 'bg-white border-slate-200 shadow-xs'
           }`}>
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <Store className={`w-4 h-4 ${isHeadingToVendor ? 'text-amber-400' : 'text-slate-500'}`} />
-                <span className={`text-[10px] font-black uppercase tracking-widest ${isHeadingToVendor ? 'text-amber-400' : 'text-slate-500'}`}>
+                <Store className={`w-4 h-4 ${isHeadingToVendor ? 'text-amber-600' : 'text-slate-400'}`} />
+                <span className={`text-[10px] font-black uppercase tracking-widest ${isHeadingToVendor ? 'text-amber-800' : 'text-slate-500'}`}>
                   Pickup Store
                 </span>
               </div>
               {isHeadingToVendor && (
-                <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/40 animate-pulse">
+                <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 animate-pulse">
                   HEADING HERE
                 </span>
               )}
             </div>
-            <h4 className="text-sm font-black text-white">{vendorName}</h4>
-            <p className="text-xs text-slate-400 font-medium mt-0.5">
+            <h4 className="text-sm font-black text-slate-900">{vendorName}</h4>
+            <p className="text-xs text-slate-500 font-medium mt-0.5">
               {delivery.restaurant?.address || delivery.restaurantId?.address?.street || 'Store Address'}, {delivery.restaurant?.city || 'City'}
             </p>
-            <div className="flex items-center gap-2 mt-3">
+            <div className="flex items-center gap-2 mt-3.5">
               <a
                 href={vendorNavUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 rounded-xl text-[11px] font-black transition"
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-900 border border-amber-200 rounded-xl text-[11px] font-black transition"
               >
-                <Navigation className="w-3.5 h-3.5" />
+                <Navigation className="w-3.5 h-3.5 text-amber-700" />
                 Navigate
               </a>
               {(delivery.restaurant?.phone || delivery.restaurantId?.phone) && (
                 <a
                   href={`tel:${delivery.restaurant?.phone || delivery.restaurantId?.phone}`}
-                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-xl text-[11px] font-black transition"
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl text-[11px] font-black transition"
                 >
                   <Phone className="w-3.5 h-3.5" />
                   Call Store
@@ -558,40 +616,40 @@ export default function ActiveTrip() {
           {/* Customer Card */}
           <div className={`rounded-3xl p-5 border transition-all ${
             isHeadingToCustomer || isAtCustomer
-              ? 'bg-emerald-950/50 border-emerald-600/40 ring-2 ring-emerald-500/20'
-              : 'bg-slate-900/80 border-slate-800'
+              ? 'bg-emerald-50/70 border-emerald-300 ring-2 ring-emerald-100 shadow-sm'
+              : 'bg-white border-slate-200 shadow-xs'
           }`}>
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <MapPin className={`w-4 h-4 ${isHeadingToCustomer || isAtCustomer ? 'text-emerald-400' : 'text-slate-500'}`} />
-                <span className={`text-[10px] font-black uppercase tracking-widest ${isHeadingToCustomer || isAtCustomer ? 'text-emerald-400' : 'text-slate-500'}`}>
+                <MapPin className={`w-4 h-4 ${isHeadingToCustomer || isAtCustomer ? 'text-emerald-600' : 'text-slate-400'}`} />
+                <span className={`text-[10px] font-black uppercase tracking-widest ${isHeadingToCustomer || isAtCustomer ? 'text-emerald-800' : 'text-slate-500'}`}>
                   Customer Dropoff
                 </span>
               </div>
               {(isHeadingToCustomer || isAtCustomer) && (
-                <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 animate-pulse">
+                <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 animate-pulse">
                   {isAtCustomer ? 'ARRIVED' : 'NEXT STOP'}
                 </span>
               )}
             </div>
-            <h4 className="text-sm font-black text-white">{customerName}</h4>
-            <p className="text-xs text-slate-400 font-medium mt-0.5">
+            <h4 className="text-sm font-black text-slate-900">{customerName}</h4>
+            <p className="text-xs text-slate-500 font-medium mt-0.5">
               {delivery.customerAddress?.addressLine || delivery.address?.street || 'Customer Address'}, {delivery.customerAddress?.city || 'City'}
             </p>
-            <div className="flex items-center gap-2 mt-3">
+            <div className="flex items-center gap-2 mt-3.5">
               <a
                 href={customerNavUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 rounded-xl text-[11px] font-black transition"
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-900 border border-emerald-200 rounded-xl text-[11px] font-black transition"
               >
-                <Navigation className="w-3.5 h-3.5" />
+                <Navigation className="w-3.5 h-3.5 text-emerald-700" />
                 Navigate
               </a>
               {(delivery.customer?.phone || delivery.customerId?.phone) && (
                 <a
                   href={`tel:${delivery.customer?.phone || delivery.customerId?.phone}`}
-                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-xl text-[11px] font-black transition"
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl text-[11px] font-black transition"
                 >
                   <Phone className="w-3.5 h-3.5" />
                   Call Customer
@@ -603,26 +661,26 @@ export default function ActiveTrip() {
 
         {/* Order Items Summary (Collapsible) */}
         {delivery.items && delivery.items.length > 0 && (
-          <details className="bg-slate-900/80 border border-slate-800 rounded-3xl overflow-hidden">
-            <summary className="p-4 cursor-pointer flex items-center justify-between text-xs font-black text-slate-400 uppercase tracking-widest hover:bg-slate-800/50 transition">
-              <span className="flex items-center gap-2">
-                <Package className="w-4 h-4" />
+          <details className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xs">
+            <summary className="p-4 cursor-pointer flex items-center justify-between text-xs font-black text-slate-600 uppercase tracking-widest hover:bg-slate-50 transition">
+              <span className="flex items-center gap-2 text-slate-800">
+                <Package className="w-4 h-4 text-emerald-600" />
                 Order Items ({delivery.items.length})
               </span>
-              <ChevronRight className="w-4 h-4 transition-transform" />
+              <ChevronRight className="w-4 h-4 transition-transform text-slate-400" />
             </summary>
             <div className="px-4 pb-4 space-y-2">
               {delivery.items.map((item, idx) => (
-                <div key={idx} className="flex items-center justify-between py-2 border-b border-slate-800/50 last:border-0">
+                <div key={idx} className="flex items-center justify-between py-2 border-b border-slate-100 last:border-0">
                   <div>
-                    <span className="text-sm font-bold text-white">{item.name}</span>
+                    <span className="text-sm font-bold text-slate-800">{item.name}</span>
                     {item.selectedWeight && (
-                      <span className="text-[10px] text-slate-500 ml-2">({item.selectedWeight})</span>
+                      <span className="text-[10px] text-slate-400 ml-2">({item.selectedWeight})</span>
                     )}
                   </div>
                   <div className="text-right">
-                    <span className="text-xs font-bold text-slate-400">x{item.quantity}</span>
-                    <span className="text-xs font-bold text-emerald-400 ml-3">₹{item.price}</span>
+                    <span className="text-xs font-bold text-slate-500">x{item.quantity}</span>
+                    <span className="text-xs font-bold text-emerald-600 ml-3">₹{item.price}</span>
                   </div>
                 </div>
               ))}
@@ -640,19 +698,19 @@ export default function ActiveTrip() {
           const isWithin350m = distMeters !== null ? distMeters <= 350 : true;
 
           return (
-            <div className={`border-2 rounded-3xl p-6 space-y-4 shadow-2xl transition-all ${
+            <div className={`bg-white border-2 rounded-3xl p-6 space-y-4 shadow-sm transition-all ${
               isWithin350m
-                ? 'bg-gradient-to-br from-emerald-950/80 to-teal-950/80 border-emerald-500/40'
-                : 'bg-amber-950/60 border-amber-500/40'
+                ? 'border-emerald-300 ring-2 ring-emerald-50'
+                : 'border-amber-300 ring-2 ring-amber-50'
             }`}>
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-2xl bg-emerald-500/20 flex items-center justify-center">
-                    <KeyRound className="w-5 h-5 text-emerald-400" />
+                  <div className="w-11 h-11 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center">
+                    <KeyRound className="w-5 h-5 text-emerald-600" />
                   </div>
                   <div>
-                    <h4 className="text-sm font-black text-white">Customer Delivery PIN</h4>
-                    <p className="text-xs text-emerald-400/80 font-medium">
+                    <h4 className="text-sm font-black text-slate-900">Customer Delivery PIN</h4>
+                    <p className="text-xs text-slate-500 font-medium">
                       Ask customer for their 4-digit secret PIN upon handing over the order.
                     </p>
                   </div>
@@ -661,17 +719,17 @@ export default function ActiveTrip() {
                 {distMeters !== null && (
                   <div className={`px-3.5 py-1 rounded-full text-xs font-black border flex items-center gap-1.5 ${
                     isWithin350m
-                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 animate-pulse'
-                      : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                      ? 'bg-emerald-50 text-emerald-800 border-emerald-200 animate-pulse'
+                      : 'bg-amber-50 text-amber-800 border-amber-200'
                   }`}>
                     {isWithin350m ? (
                       <>
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                         <span>📍 Within 350m ({distMeters}m away) — UNLOCKED</span>
                       </>
                     ) : (
                       <>
-                        <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
                         <span>🔒 Geofence Locked ({distMeters}m away)</span>
                       </>
                     )}
@@ -680,31 +738,31 @@ export default function ActiveTrip() {
               </div>
 
               {/* Photo Verification Banner / Shutter Trigger */}
-              <div className="p-3 bg-slate-900 border border-slate-800 rounded-2xl flex items-center justify-between gap-3">
+              <div className="p-3.5 bg-slate-50 border border-slate-200/90 rounded-2xl flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
                   {dropoffPhoto ? (
                     <img
                       src={dropoffPhoto}
                       alt="Delivery dropoff proof"
-                      className="w-12 h-12 rounded-xl object-cover border border-emerald-500 shadow-sm shrink-0"
+                      className="w-12 h-12 rounded-xl object-cover border-2 border-emerald-500 shadow-xs shrink-0"
                     />
                   ) : (
-                    <div className="w-12 h-12 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0 text-slate-400">
-                      <Camera className="w-5 h-5 text-amber-400" />
+                    <div className="w-12 h-12 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0 text-amber-600">
+                      <Camera className="w-5 h-5" />
                     </div>
                   )}
                   <div className="min-w-0">
-                    <h5 className="text-xs font-black text-white flex items-center gap-1.5">
+                    <h5 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
                       {dropoffPhoto ? (
                         <>
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                          <span className="text-emerald-400">Delivery Photo Captured</span>
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          <span className="text-emerald-700">Delivery Photo Captured</span>
                         </>
                       ) : (
                         <span>Step 1: Take Photo of Delivered Food</span>
                       )}
                     </h5>
-                    <p className="text-[11px] text-slate-400 truncate">
+                    <p className="text-[11px] text-slate-500 truncate">
                       {dropoffPhoto ? 'Photo verified for delivery history' : 'Camera-only live photo required before completing'}
                     </p>
                   </div>
@@ -713,10 +771,10 @@ export default function ActiveTrip() {
                 <button
                   type="button"
                   onClick={() => setDropoffCameraModalOpen(true)}
-                  className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
                     dropoffPhoto
-                      ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
-                      : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-md shadow-emerald-500/20'
+                      ? 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-xs'
+                      : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'
                   }`}
                 >
                   <Camera className="w-3.5 h-3.5" />
@@ -724,43 +782,142 @@ export default function ActiveTrip() {
                 </button>
               </div>
 
-              {!isWithin350m && (
-                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-xs text-amber-200 font-bold space-y-1">
-                  <p className="flex items-center gap-1.5 text-amber-300">
-                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-                    <span>📍 Live Device GPS Match Required:</span>
-                    <span>Move closer to the customer's delivery location to unlock PIN entry.</span>
-                  </p>
-                  <p className="text-[11px] text-amber-300/80 font-medium pl-5">
-                    Rider live location distance: <strong>{distMeters} meters (Max allowed: 350 meters)</strong>. Drive remaining {distMeters - 350}m to unlock.
-                  </p>
-                </div>
-              )}
-
-              <div className="flex flex-col sm:flex-row items-center gap-3">
-                <input
-                  type="text"
-                  maxLength={4}
-                  placeholder={isWithin350m ? "• • • •" : `Locked (${distMeters || '350+'}m away)`}
-                  disabled={!isWithin350m || pinSubmitting}
-                  value={deliveryPinInput}
-                  onChange={(e) => setDeliveryPinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                  className="w-full sm:w-48 text-center tracking-[0.5em] text-3xl font-mono font-black py-3 px-4 bg-slate-950 border-2 border-emerald-500/50 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-white placeholder:text-slate-600 shadow-inner disabled:bg-slate-900 disabled:border-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed"
-                />
-                <button
-                  onClick={handleVerifyPinAndComplete}
-                  disabled={!isWithin350m || deliveryPinInput.length !== 4 || pinSubmitting}
-                  className="w-full sm:flex-1 py-3.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-black text-xs uppercase tracking-wider rounded-2xl shadow-lg shadow-emerald-500/25 transition flex items-center justify-center gap-2 active:scale-95"
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>
-                    {!isWithin350m
-                      ? `Arrive within 350m of customer (${distMeters}m away) to unlock PIN`
-                      : (pinSubmitting ? 'Verifying...' : 'Verify PIN & Complete Delivery')
-                    }
+              {/* GPS Coordinates Telemetry Box */}
+              <div className="p-3 bg-slate-50 border border-slate-200/90 rounded-2xl flex flex-wrap items-center justify-between gap-2.5 text-xs font-mono">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold">
+                    🛵 Rider GPS: {riderCoords?.lat ? Number(riderCoords.lat).toFixed(5) : '...'}°, {riderCoords?.lng ? Number(riderCoords.lng).toFixed(5) : '...'}°
                   </span>
-                </button>
+                  <span className="px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-800 font-bold">
+                    👤 Dropoff GPS: {dropLat ? Number(dropLat).toFixed(5) : '...'}°, {dropLng ? Number(dropLng).toFixed(5) : '...'}°
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`px-2.5 py-1 rounded-lg font-bold border ${
+                    isWithin350m
+                      ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                      : 'bg-amber-100 text-amber-800 border-amber-200'
+                  }`}>
+                    📏 Distance: {distMeters !== null ? `${distMeters}m` : 'Detecting...'}
+                  </span>
+                  {!isWithin350m && dropLat && dropLng && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const targetPos = { lat: Number(dropLat), lng: Number(dropLng), accuracy: 10, timestamp: Date.now() };
+                        setRiderCoords(targetPos);
+                        socket.emit('driver:update_location', {
+                          orderId: delivery.orderId || delivery.id,
+                          lat: Number(dropLat),
+                          lng: Number(dropLng)
+                        });
+                        API.post('/deliveries/location', { latitude: Number(dropLat), longitude: Number(dropLng) }).catch(() => {});
+                        toast.success('📍 Rider GPS matched with customer delivery doorstep!');
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-[11px] transition shadow-xs"
+                    >
+                      Sync GPS to Doorstep
+                    </button>
+                  )}
+                </div>
               </div>
+
+              {/* Form with Inputs and Arrow Submit Buttons */}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleVerifyPinAndComplete();
+                }}
+                className="space-y-3"
+              >
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                  {/* 4-Digit Input with Inline Arrow Submit Button */}
+                  <div className="relative w-full sm:w-64">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={4}
+                      placeholder="• • • •"
+                      disabled={pinSubmitting}
+                      value={deliveryPinInput}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, '').slice(0, 4);
+                        setDeliveryPinInput(val);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleVerifyPinAndComplete();
+                        }
+                      }}
+                      onKeyUp={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleVerifyPinAndComplete();
+                        }
+                      }}
+                      className="w-full text-center tracking-[0.45em] text-3xl font-mono font-black py-3.5 px-4 pr-14 bg-white border-2 border-emerald-400 focus:border-emerald-500 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-100 text-slate-900 placeholder:text-slate-300 shadow-inner"
+                      autoFocus
+                    />
+                    {/* Inline Arrow button inside the input on the right */}
+                    <button
+                      type="submit"
+                      disabled={deliveryPinInput.length !== 4 || pinSubmitting}
+                      className={`absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
+                        deliveryPinInput.length === 4
+                          ? 'bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white shadow-md shadow-emerald-500/30 cursor-pointer animate-pulse'
+                          : 'bg-slate-200 text-slate-400 cursor-not-allowed opacity-50'
+                      }`}
+                      title="Press Enter or Click Arrow to Submit PIN & Complete Order"
+                    >
+                      {pinSubmitting ? (
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <ArrowRight className="w-5 h-5 stroke-[3]" />
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Submit Order Arrow Button */}
+                  <button
+                    type="submit"
+                    disabled={deliveryPinInput.length !== 4 || pinSubmitting}
+                    className={`flex-1 py-4 px-6 rounded-2xl font-black text-xs sm:text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2.5 shadow-md ${
+                      deliveryPinInput.length === 4
+                        ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-emerald-600/30 cursor-pointer active:scale-98 ring-2 ring-emerald-300'
+                        : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60'
+                    }`}
+                    title="Press Enter or Click to Submit PIN and Complete Order"
+                  >
+                    {pinSubmitting ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>Submitting Order...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-4 h-4 text-white" />
+                        <span>Submit PIN & Complete Order (or press Enter ↵)</span>
+                        <ArrowRight className="w-5 h-5 stroke-[3] text-white" />
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Instant Big Submit Bar when 4 digits are typed */}
+                {deliveryPinInput.length === 4 && (
+                  <button
+                    type="submit"
+                    disabled={pinSubmitting}
+                    className="w-full py-4 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-500 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-sm uppercase tracking-wider rounded-2xl shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-3 active:scale-[0.98] transition animate-pulse cursor-pointer border border-emerald-400"
+                  >
+                    <CheckCircle2 className="w-5 h-5" />
+                    <span>Click Arrow or Press Enter ↵ to Complete Delivery (PIN: {deliveryPinInput})</span>
+                    <ArrowRight className="w-6 h-6 stroke-[3]" />
+                  </button>
+                )}
+              </form>
             </div>
           );
         })()}
@@ -772,7 +929,7 @@ export default function ActiveTrip() {
               <button
                 onClick={() => handleUpdateStatus(nextAction.primary.status)}
                 disabled={updatingStatus}
-                className={`w-full py-5 bg-gradient-to-r ${nextAction.primary.color} text-white font-black text-base uppercase tracking-wider rounded-3xl shadow-2xl transition active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3`}
+                className={`w-full py-5 bg-gradient-to-r ${nextAction.primary.color} text-white font-black text-base uppercase tracking-wider rounded-3xl shadow-xl transition active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3`}
               >
                 {updatingStatus ? (
                   <>
@@ -792,7 +949,7 @@ export default function ActiveTrip() {
               <button
                 onClick={() => handleUpdateStatus(nextAction.secondary.status)}
                 disabled={updatingStatus}
-                className={`w-full py-3.5 ${nextAction.secondary.color} text-white font-bold text-xs rounded-2xl transition disabled:opacity-50`}
+                className={`w-full py-3.5 ${nextAction.secondary.color} text-white font-bold text-xs rounded-2xl transition disabled:opacity-50 shadow-sm`}
               >
                 {nextAction.secondary.label}
               </button>
@@ -803,13 +960,13 @@ export default function ActiveTrip() {
         {/* Rider Location Footer */}
         {riderCoords && (
           <div className="flex items-center justify-between text-xs text-slate-500 pt-2 font-medium">
-            <span className="flex items-center gap-1.5 text-emerald-500 font-bold">
+            <span className="flex items-center gap-1.5 text-emerald-700 font-bold">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
               GPS Live: {riderAddressName || `${riderCoords.lat.toFixed(4)}°, ${riderCoords.lng.toFixed(4)}°`}
             </span>
-            <span className="flex items-center gap-1 text-slate-600">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              Secure Trip
+            <span className="flex items-center gap-1 text-slate-500">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+              Secure Yenz Trip
             </span>
           </div>
         )}

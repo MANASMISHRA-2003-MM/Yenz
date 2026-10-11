@@ -32,4 +32,11 @@ Thumbs.db
 # Temporary & Build artifacts
 *.tmp
 *.tmp*
+*.timestamp-*.mjs
+mobile/**/node_modules/
+mobile/**/.expo/
+.agents/
+.gemini/
+
+
 

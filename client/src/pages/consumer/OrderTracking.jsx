@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import API from '../../services/api';
 import { socket } from '../../services/socket';
 import Navbar from '../../components/Navbar';
-import MapSimulator from '../../components/MapSimulator';
+import CustomerTrackingMap from '../../components/CustomerTrackingMap';
 import OrderStatusBadge from '../../components/OrderStatusBadge';
 import DeliveryTimeline from '../../components/DeliveryTimeline';
 import { useAuth } from '../../context/AuthContext';
@@ -144,6 +144,7 @@ export default function OrderTracking() {
   const pinDigits = rawPin ? rawPin.padStart(4, '0').slice(0, 4).split('') : [];
 
   const isCancelled = order.status === 'CANCELLED';
+  const isDelivered = order.status === 'DELIVERED' || order.deliveryStatus === 'DELIVERED' || order.Delivery?.status === 'DELIVERED';
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-900 pb-24">
@@ -196,30 +197,99 @@ export default function OrderTracking() {
 
             <div className="space-y-6">
 
-              {/* Live Map */}
-              <section className="bg-white rounded-3xl border border-slate-200/90 overflow-hidden shadow-soft">
-                <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-                  <div>
-                    <h2 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
-                      <MapPin className="w-4 h-4 text-emerald-600" />
-                      Live Delivery GPS Map
-                    </h2>
-                    <p className="text-xs text-slate-500 mt-0.5">Driver location updates appear here in real time.</p>
+              {/* Map or Delivery Completed Card */}
+              {isDelivered ? (
+                /* Celebration Completed Delivery Card — Map completely removed */
+                <section className="bg-gradient-to-br from-emerald-600 via-emerald-700 to-teal-800 text-white rounded-3xl p-6 sm:p-8 shadow-xl relative overflow-hidden space-y-5">
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center text-3xl shadow-lg shrink-0">
+                      🎉
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-white/20 border border-white/30 text-white">
+                          DELIVERY COMPLETED
+                        </span>
+                        <span className="text-xs text-emerald-100 font-medium">Handover Verified</span>
+                      </div>
+                      <h2 className="text-xl sm:text-2xl font-black text-white mt-1">
+                        Order Delivered Successfully!
+                      </h2>
+                      <p className="text-xs text-emerald-100 font-medium mt-0.5">
+                        Your 4-digit PIN handover has been confirmed by delivery partner. Enjoy your {isFresh ? 'fresh order' : 'meal'}!
+                      </p>
+                    </div>
                   </div>
-                  <span className="text-xs font-black" style={{ color: isFresh ? 'var(--fc-fresh)' : 'var(--fc-red)' }}>
-                    {isFresh ? 'Fresh Mandi' : 'Cravings'}
-                  </span>
-                </div>
-                <div className="p-3">
-                  <MapSimulator
-                    orderId={order.id || order.orderNumber || id}
-                    orderType={order.orderType}
-                    vendor={order.restaurant || order.Vendor}
-                    customerAddress={order.address}
-                    initialCourierLocation={courierLocation}
-                  />
-                </div>
-              </section>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                    <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-4 flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-lg">
+                        {isFresh ? '🥬' : '🏬'}
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-[10px] uppercase font-bold text-emerald-200 block">Dispatch Store</span>
+                        <p className="text-sm font-extrabold truncate text-white">{order.restaurant?.name || order.Vendor?.name || 'Local Store'}</p>
+                      </div>
+                    </div>
+
+                    <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-4 flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-lg">
+                        🛵
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-[10px] uppercase font-bold text-emerald-200 block">Delivered By</span>
+                        <p className="text-sm font-extrabold truncate text-white">
+                          {order.deliveryPartner?.name || order.deliveryPartner?.fullName || 'Delivery Partner'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-white/15">
+                    <span className="flex items-center gap-1.5 text-xs text-emerald-100 font-semibold">
+                      <ShieldCheck className="w-4 h-4 text-emerald-200" />
+                      Contactless Delivery Completed & Verified
+                    </span>
+                    <Link
+                      to="/home"
+                      className="px-5 py-2.5 bg-white text-emerald-800 hover:bg-emerald-50 font-black text-xs rounded-xl shadow transition"
+                    >
+                      Order Again
+                    </Link>
+                  </div>
+                </section>
+              ) : (
+                /* Live Map (Only active while delivery is in transit) */
+                <section className="bg-white rounded-3xl border border-slate-200/90 overflow-hidden shadow-soft">
+                  <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                    <div>
+                      <h2 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
+                        <MapPin className="w-4 h-4 text-emerald-600" />
+                        Live Delivery GPS Map
+                      </h2>
+                      <p className="text-xs text-slate-500 mt-0.5">Driver location updates appear here in real time.</p>
+                    </div>
+                    <span className="text-xs font-black" style={{ color: isFresh ? 'var(--fc-fresh)' : 'var(--fc-red)' }}>
+                      {isFresh ? 'Fresh Mandi' : 'Cravings'}
+                    </span>
+                  </div>
+                  <div className="p-3">
+                    <CustomerTrackingMap
+                      orderId={order.id || order.orderNumber || id}
+                      orderType={order.orderType}
+                      vendor={order.restaurant || order.Vendor}
+                      customerAddress={{
+                        ...order.address,
+                        latitude: order.dropLat || order.address?.latitude,
+                        longitude: order.dropLng || order.address?.longitude,
+                        lat: order.dropLat || order.address?.latitude,
+                        lng: order.dropLng || order.address?.longitude
+                      }}
+                      initialCourierLocation={courierLocation}
+                    />
+                  </div>
+                </section>
+              )}
 
               {/* Synchronized Realtime Order Timeline */}
               <DeliveryTimeline
@@ -236,30 +306,39 @@ export default function OrderTracking() {
             <aside className="space-y-6 lg:sticky lg:top-28 h-fit">
 
               {/* 4-Digit Delivery PIN Highlight Card */}
-              <section className="bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-amber-300/80 p-5 rounded-3xl shadow-soft space-y-3">
+              <section className={`p-5 rounded-3xl shadow-soft space-y-3 border-2 ${
+                isDelivered
+                  ? 'bg-emerald-50 border-emerald-300'
+                  : 'bg-gradient-to-br from-amber-50 to-orange-50 border-amber-300/80'
+              }`}>
                 <div className="flex items-center justify-between">
                   <div>
-                    <h2 className="font-extrabold text-amber-950 text-sm flex items-center gap-1.5">
-                      <Key className="w-4 h-4 text-amber-600" />
-                      Secret Delivery PIN
+                    <h2 className={`font-extrabold text-sm flex items-center gap-1.5 ${isDelivered ? 'text-emerald-950' : 'text-amber-950'}`}>
+                      {isDelivered ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <Key className="w-4 h-4 text-amber-600" />}
+                      {isDelivered ? 'Handover Confirmed' : 'Secret Delivery PIN'}
                     </h2>
-                    <p className="text-[11px] text-amber-800 font-medium">Share this 4-digit PIN with rider upon delivery handover.</p>
+                    <p className={`text-[11px] font-medium ${isDelivered ? 'text-emerald-800' : 'text-amber-800'}`}>
+                      {isDelivered ? 'Delivery PIN verified by driver. Handover complete.' : 'Share this 4-digit PIN with rider upon delivery handover.'}
+                    </p>
                   </div>
                 </div>
 
-                <div className="flex gap-2 justify-center pt-1">
-                  {pinDigits.length ? pinDigits.map((digit, idx) => (
-                    <span key={idx} className="w-12 h-14 rounded-2xl border-2 border-amber-400 bg-white flex items-center justify-center text-2xl font-black font-mono text-slate-900 shadow-sm">
-                      {digit}
+                {!isDelivered ? (
+                  <div className="flex gap-2 justify-center pt-1">
+                    {pinDigits.length ? pinDigits.map((digit, idx) => (
+                      <span key={idx} className="w-12 h-14 rounded-2xl border-2 border-amber-400 bg-white flex items-center justify-center text-2xl font-black font-mono text-slate-900 shadow-sm">
+                        {digit}
+                      </span>
+                    )) : (
+                      <span className="text-xs text-amber-800 font-medium">PIN will be generated once assigned to driver.</span>
+                    )}
+                  </div>
+                ) : (
+                  <div className="bg-white/80 border border-emerald-200 rounded-2xl p-3 text-center">
+                    <span className="text-xs font-black text-emerald-700 flex items-center gap-1.5 justify-center">
+                      <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                      Delivery Handover Confirmed & Closed
                     </span>
-                  )) : (
-                    <span className="text-xs text-amber-800 font-medium">PIN will be generated once assigned to driver.</span>
-                  )}
-                </div>
-
-                {order.status === 'DELIVERED' && (
-                  <div className="text-xs font-black text-emerald-700 flex items-center gap-1 justify-center pt-1">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Delivery verified & completed.
                   </div>
                 )}
               </section>

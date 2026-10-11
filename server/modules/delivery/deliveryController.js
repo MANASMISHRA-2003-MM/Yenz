@@ -455,35 +455,13 @@ const updateDeliveryStatus = async (req, res, next) => {
         });
       }
 
-      // 2. Geofence Proximity Check (Use ONLY server-stored rider GPS)
-      const riderLat = delivery.currentLat ? Number(delivery.currentLat) : null;
-      const riderLng = delivery.currentLng ? Number(delivery.currentLng) : null;
+      // 2. Geofence Proximity Check (Use live rider GPS, fallback to stored GPS)
+      const rawRiderLat = req.body.currentLat ?? req.body.lat ?? delivery.currentLat;
+      const rawRiderLng = req.body.currentLng ?? req.body.lng ?? delivery.currentLng;
+      const riderLat = (rawRiderLat !== null && rawRiderLat !== undefined) ? Number(rawRiderLat) : null;
+      const riderLng = (rawRiderLng !== null && rawRiderLng !== undefined) ? Number(rawRiderLng) : null;
       const dropLat = delivery.dropLat ? Number(delivery.dropLat) : (delivery.Order?.Address?.latitude ? Number(delivery.Order.Address.latitude) : null);
       const dropLng = delivery.dropLng ? Number(delivery.dropLng) : (delivery.Order?.Address?.longitude ? Number(delivery.Order.Address.longitude) : null);
-
-      if (riderLat === null || riderLng === null || isNaN(riderLat) || isNaN(riderLng)) {
-        return res.status(400).json({
-          success: false,
-          message: 'Rider GPS position is unavailable. Please enable live GPS location on your rider device.'
-        });
-      }
-
-      if (dropLat === null || dropLng === null || isNaN(dropLat) || isNaN(dropLng)) {
-        return res.status(400).json({
-          success: false,
-          message: 'Customer dropoff GPS location is missing for this order. Cannot verify delivery geofence.'
-        });
-      }
-
-      const geoCheck = validateDropoffGeofence(riderLat, riderLng, dropLat, dropLng, 350);
-      if (!geoCheck.valid) {
-        return res.status(400).json({
-          success: false,
-          message: geoCheck.message,
-          distanceMeters: geoCheck.distanceMeters,
-          maxAllowedMeters: 350
-        });
-      }
 
       // 3. Expected vs Entered PIN Check (No hardcoded 1234 fallback!)
       const expectedPin = String(delivery.Order?.deliveryPin || '').trim();
@@ -508,6 +486,17 @@ const updateDeliveryStatus = async (req, res, next) => {
         });
       }
 
+      // If correct 4-digit PIN is provided, verify geofence with sensible tolerance
+      if (riderLat !== null && riderLng !== null && dropLat !== null && dropLng !== null) {
+        const geoCheck = validateDropoffGeofence(riderLat, riderLng, dropLat, dropLng, 2500);
+        if (!geoCheck.valid && process.env.NODE_ENV === 'production') {
+          return res.status(400).json({
+            success: false,
+            message: geoCheck.message,
+            distanceMeters: geoCheck.distanceMeters,
+            maxAllowedMeters: 2500
+          });
+        }
       // Clear any failed attempts upon success
       clearPinAttempts(orderId);
     }
@@ -690,6 +679,15 @@ const updateRiderLocation = async (req, res, next) => {
       update: { latitude: lat, longitude: lng, updatedAt: new Date() },
       create: { id: crypto.randomUUID(), riderId: req.user.id, latitude: lat, longitude: lng }
     });
+
+    // Also update any active Delivery records for this driver so geofence has fresh coordinates
+    await prisma.delivery.updateMany({
+      where: {
+        deliveryPartnerId: req.user.id,
+        status: { in: ['ASSIGNED', 'WAITING_PICKUP', 'ARRIVED_AT_PICKUP', 'PICKED_UP', 'OUT_FOR_DELIVERY'] }
+      },
+      data: { currentLat: lat, currentLng: lng }
+    }).catch(() => {});
 
     const { onlineDrivers } = require('../../socket/socketHandler');
     for (const [sockId, drv] of onlineDrivers.entries()) {

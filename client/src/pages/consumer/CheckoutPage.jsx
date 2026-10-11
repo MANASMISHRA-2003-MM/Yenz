@@ -107,6 +107,12 @@ export default function CheckoutPage({ modeOverride }) {
       setSavedAddresses(getSavedAddresses());
     };
     window.addEventListener('krawing_addresses_updated', handleUpdate);
+
+    // Auto-detect exact live device GPS if currently using fallback coordinates
+    if (navigator.geolocation && (address.latitude === 28.4866 || !address.latitude)) {
+      handleFetchLiveGps();
+    }
+
     return () => window.removeEventListener('krawing_addresses_updated', handleUpdate);
   }, []);
 
@@ -251,6 +257,8 @@ export default function CheckoutPage({ modeOverride }) {
       setLoading(true);
       const res = await API.post('/orders', {
         address,
+        dropLat: address.latitude || address.lat,
+        dropLng: address.longitude || address.lng,
         paymentMethod,
         deliveryNotes,
         shoppingMode: activeMode
@@ -316,6 +324,16 @@ export default function CheckoutPage({ modeOverride }) {
                 <button type="button" onClick={handleFetchLiveGps} disabled={locating} className="px-3 py-2 rounded-md border text-xs font-semibold" style={{ borderColor: 'rgba(22,138,91,.3)', color: 'var(--fc-fresh)', background: 'rgba(22,138,91,.06)' }}>
                   <span className="inline-flex items-center gap-1.5"><Navigation className={`w-3.5 h-3.5 ${locating ? 'animate-spin' : ''}`} />{locating ? 'Locating…' : 'Use live GPS'}</span>
                 </button>
+              </div>
+
+              {/* Exact Coordinates Display */}
+              <div className="mt-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs font-mono">
+                <span className="text-slate-600 font-semibold flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-emerald-600" /> Exact Dropoff GPS:
+                </span>
+                <span className="font-bold text-slate-900">
+                  {address.latitude ? Number(address.latitude).toFixed(5) : '...'}°, {address.longitude ? Number(address.longitude).toFixed(5) : '...'}°
+                </span>
               </div>
 
               <div className="grid sm:grid-cols-2 gap-4 mt-5">

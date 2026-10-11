@@ -27,6 +27,7 @@ const reviewRoutes = require('./modules/review/reviewRoutes');
 const adminRoutes = require('./modules/admin/adminRoutes');
 const analyticsRoutes = require('./modules/analytics/analyticsRoutes');
 const notificationRoutes = require('./modules/notification/notificationRoutes');
+const routingRoutes = require('./modules/routing/routingRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -96,6 +97,7 @@ app.use('/api/reviews', reviewRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/routing', routingRoutes);
 
 // Error Handling Middlewares
 app.use(notFound);

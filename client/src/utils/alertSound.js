@@ -93,10 +93,14 @@ export function unlockAudio() {
   } catch (e) {}
 }
 
+let userHasInteracted = false;
+let isVibrating = false;
+
 // Global user gesture listener to unlock audio on any touch/click event
 if (typeof window !== 'undefined') {
   const unlockEvents = ['click', 'touchstart', 'touchend', 'keydown', 'pointerdown'];
   const handleUnlock = () => {
+    userHasInteracted = true;
     unlockAudio();
   };
   unlockEvents.forEach((evt) =>
@@ -104,15 +108,25 @@ if (typeof window !== 'undefined') {
   );
 }
 
+// Safely check if vibration is permitted without triggering Chrome intervention
+function canVibrate() {
+  if (typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function') return false;
+  if (typeof navigator.userActivation !== 'undefined') {
+    return Boolean(navigator.userActivation.hasBeenActive);
+  }
+  return userHasInteracted;
+}
+
 /**
  * Cross-platform mobile & tablet haptic vibration
  * Distinctive multi-pulse vibration pattern for orders and rides
  */
 export function triggerHaptics() {
-  if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+  if (canVibrate()) {
     try {
       // Distinctive 5-pulse ring pattern: vibrate 500ms, pause 150ms...
       navigator.vibrate([500, 150, 500, 150, 500, 150, 1000]);
+      isVibrating = true;
     } catch (e) {}
   }
 }
@@ -240,9 +254,10 @@ export function stopAlertSound() {
     clearTimeout(repeatTimeout);
     repeatTimeout = null;
   }
-  if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+  if (isVibrating && canVibrate()) {
     try {
       navigator.vibrate(0);
+      isVibrating = false;
     } catch (e) {}
   }
 }

@@ -4,14 +4,14 @@ import API from '../../services/api';
 import { socket } from '../../services/socket';
 import Navbar from '../../components/Navbar';
 import FreshCartFooter from '../../components/FreshCartFooter';
-import MapSimulator from '../../components/MapSimulator';
 import OrderStatusBadge from '../../components/OrderStatusBadge';
 import DeliveryTimeline from '../../components/DeliveryTimeline';
 import {
   Bike, MapPin, Navigation, ToggleLeft, ToggleRight,
   BellRing, CheckCircle2, AlertTriangle, Phone, KeyRound,
   Compass, ArrowRight, ShieldCheck, RefreshCw, Clock, Timer, History, Store,
-  User, CreditCard, FileText, Lock, Eye, EyeOff, Edit3, Save, CheckCircle, Smartphone, Award, X
+  User, CreditCard, FileText, Lock, Eye, EyeOff, Edit3, Save, CheckCircle, Smartphone, Award, X,
+  Radio
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { startRepeatingAlert, stopAlertSound, playActionSound, unlockAudio, triggerHaptics, playCashRegisterSound } from '../../utils/alertSound';
@@ -462,8 +462,10 @@ export default function DeliveryDashboard() {
 
       if (res.data.success) {
         playActionSound();
-        toast.success('🎉 Delivery successfully verified and marked DELIVERED! Earnings added.');
+        toast.success('🎉 Ride complete! Delivery verified and earnings credited.');
         setDeliveryPinInput('');
+        setData(prev => prev ? { ...prev, activeDelivery: null } : prev);
+        setSearchParams({ completed: '1' });
         fetchDashboard();
       }
     } catch (err) {
@@ -478,8 +480,10 @@ export default function DeliveryDashboard() {
           });
           if (res2.data.success) {
             playActionSound();
-            toast.success('🎉 Delivery successfully verified and marked DELIVERED! Earnings added.');
+            toast.success('🎉 Ride complete! Delivery verified and earnings credited.');
             setDeliveryPinInput('');
+            setData(prev => prev ? { ...prev, activeDelivery: null } : prev);
+            setSearchParams({ completed: '1' });
             fetchDashboard();
             return;
           }
@@ -769,14 +773,27 @@ export default function DeliveryDashboard() {
                 <DeliveryTimeline status={activeDelivery.status} compact={true} />
               </div>
 
-              {/* Live Map Simulator */}
-              <MapSimulator
-                orderId={activeDelivery.orderId || activeDelivery.id}
-                orderType={activeDelivery.orderType || activeDelivery.order?.orderType}
-                vendor={activeDelivery.restaurant || activeDelivery.restaurantId}
-                customerAddress={activeDelivery.customerAddress || activeDelivery.address}
-                initialCourierLocation={riderCoords || { lat: activeDelivery.pickupLat, lng: activeDelivery.pickupLng }}
-              />
+              {/* Trip In-Progress Navigation Cockpit Launcher */}
+              <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white p-5 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-lg border border-slate-700">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-12 h-12 rounded-2xl bg-cyan-500/20 border border-cyan-400 text-cyan-300 flex items-center justify-center text-2xl shrink-0">
+                    🛵
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-wider text-cyan-400 block">Navigation Cockpit</span>
+                    <h4 className="text-base font-black text-white">Turn-by-turn road navigation is ready</h4>
+                    <p className="text-xs text-slate-300 font-medium mt-0.5">Follow live directions, next maneuver countdown & camera follow mode.</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => navigate('/delivery/active-trip')}
+                  className="w-full sm:w-auto px-6 py-3 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-xs rounded-xl shadow-lg transition flex items-center justify-center gap-2 active:scale-95 shrink-0"
+                >
+                  <Navigation className="w-4 h-4" />
+                  <span>Launch Live Navigation View</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
 
               {/* Pickup Store vs Dropoff Customer Details */}
               <div className="grid md:grid-cols-2 gap-4">
@@ -888,27 +905,78 @@ export default function DeliveryDashboard() {
                       </div>
                     )}
 
-                    <div className="flex flex-col sm:flex-row items-center gap-3">
-                      <input
-                        type="text"
-                        maxLength={4}
-                        placeholder={isWithin350m ? "e.g. 4821" : "Locked"}
-                        disabled={!isWithin350m || pinSubmitting}
-                        value={deliveryPinInput}
-                        onChange={(e) => setDeliveryPinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                        className="w-full sm:w-44 text-center tracking-widest text-2xl font-mono font-black py-2.5 px-4 bg-white border-2 border-emerald-400 text-slate-900 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-inner disabled:bg-slate-100 disabled:border-slate-300 disabled:text-slate-400 disabled:cursor-not-allowed"
-                      />
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        handleVerifyPinAndComplete(activeDelivery);
+                      }}
+                      className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3"
+                    >
+                      <div className="relative w-full sm:w-56">
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          maxLength={4}
+                          placeholder={isWithin350m ? "e.g. 4821" : "Locked"}
+                          disabled={!isWithin350m || pinSubmitting}
+                          value={deliveryPinInput}
+                          onChange={(e) => setDeliveryPinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleVerifyPinAndComplete(activeDelivery);
+                            }
+                          }}
+                          onKeyUp={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleVerifyPinAndComplete(activeDelivery);
+                            }
+                          }}
+                          className="w-full text-center tracking-widest text-2xl font-mono font-black py-3 px-4 pr-12 bg-white border-2 border-emerald-400 text-slate-900 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-inner disabled:bg-slate-100 disabled:border-slate-300 disabled:text-slate-400 disabled:cursor-not-allowed"
+                        />
+                        <button
+                          type="submit"
+                          disabled={!isWithin350m || deliveryPinInput.length !== 4 || pinSubmitting}
+                          className={`absolute right-1.5 top-1/2 -translate-y-1/2 w-9 h-9 rounded-xl flex items-center justify-center transition-all ${
+                            deliveryPinInput.length === 4
+                              ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-md cursor-pointer animate-pulse'
+                              : 'bg-slate-200 text-slate-400 cursor-not-allowed opacity-50'
+                          }`}
+                          title="Click Arrow or Press Enter to Submit PIN"
+                        >
+                          {pinSubmitting ? (
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <ArrowRight className="w-5 h-5 stroke-[3]" />
+                          )}
+                        </button>
+                      </div>
+
                       <button
-                        onClick={() => handleVerifyPinAndComplete(activeDelivery)}
+                        type="submit"
                         disabled={!isWithin350m || deliveryPinInput.length !== 4 || pinSubmitting}
-                        className="w-full sm:flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-extrabold text-xs rounded-2xl shadow-sm transition flex items-center justify-center gap-1.5"
+                        className={`w-full sm:flex-1 py-3.5 px-4 font-black text-xs uppercase tracking-wider rounded-2xl shadow-sm transition flex items-center justify-center gap-2 ${
+                          deliveryPinInput.length === 4
+                            ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/30 cursor-pointer active:scale-95'
+                            : 'bg-slate-200 text-slate-400 cursor-not-allowed opacity-60'
+                        }`}
                       >
-                        <CheckCircle2 className="w-4 h-4" />
-                        <span>
-                          {pinSubmitting ? 'Verifying PIN...' : 'Verify PIN & Complete Delivery'}
-                        </span>
+                        {pinSubmitting ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            <span>Verifying PIN...</span>
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle2 className="w-4 h-4" />
+                            <span>Submit PIN & Complete Order (or press Enter ↵)</span>
+                            <ArrowRight className="w-4 h-4 stroke-[3]" />
+                          </>
+                        )}
                       </button>
-                    </div>
+                    </form>
                   </div>
                 );
               })()}
@@ -938,12 +1006,103 @@ export default function DeliveryDashboard() {
 
             </div>
           ) : (
-            <div className="text-center py-16 bg-white rounded-3xl border border-slate-200 shadow-sm">
-              <Bike className="w-12 h-12 text-slate-400 mx-auto mb-3" />
-              <h3 className="text-base font-extrabold text-slate-800">No Active Delivery Job</h3>
-              <p className="text-xs text-slate-500 mt-1 font-medium max-w-md mx-auto">
-                When stores accept orders within your 3 km live GPS zone, real-time trip notifications will ring directly here.
-              </p>
+            <div className="space-y-4">
+              {/* Completed Ride Success Alert Banner */}
+              {searchParams.get('completed') === '1' && (
+                <div className="bg-gradient-to-r from-emerald-600 to-teal-700 text-white p-5 rounded-3xl shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-12 h-12 rounded-2xl bg-white/20 border border-white/30 flex items-center justify-center text-2xl shrink-0">
+                      🎉
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-white/20 text-white">
+                          RIDE COMPLETE
+                        </span>
+                        <span className="text-xs text-emerald-100 font-medium">Earnings Credited</span>
+                      </div>
+                      <h3 className="text-base font-black text-white mt-0.5">
+                        Delivery Finished & Verified with PIN!
+                      </h3>
+                      <p className="text-xs text-emerald-100 font-medium mt-0.5">
+                        Your dashboard has been refreshed. You are online and ready to accept new orders around your location.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setSearchParams({})}
+                    className="px-4 py-2 bg-white text-emerald-800 hover:bg-emerald-50 text-xs font-black rounded-xl shadow transition shrink-0"
+                  >
+                    Got It
+                  </button>
+                </div>
+              )}
+
+              {/* Ready for Orders Live Cockpit */}
+              <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/90 shadow-soft text-center space-y-6">
+                {/* Animated Scanning Radar */}
+                <div className="relative w-24 h-24 mx-auto flex items-center justify-center">
+                  <div className="absolute inset-0 rounded-full bg-emerald-500/15 animate-ping" />
+                  <div className="absolute inset-2 rounded-full bg-emerald-500/20 animate-pulse" />
+                  <div className="w-16 h-16 rounded-full bg-emerald-600 text-white flex items-center justify-center text-3xl shadow-xl z-10 border-4 border-white">
+                    🛵
+                  </div>
+                </div>
+
+                <div className="space-y-1 max-w-lg mx-auto">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-black">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    ONLINE & READY FOR ORDERS
+                  </div>
+                  <h3 className="text-xl font-black text-slate-900 mt-2">
+                    Waiting for Nearby Delivery Offers
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    New order notifications & sound alarms will ring on your device when stores place orders near your current location.
+                  </p>
+                </div>
+
+                {/* Driver's Current Location Display Card */}
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 max-w-xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-left">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-xl bg-cyan-50 border border-cyan-200 text-cyan-700 flex items-center justify-center shrink-0">
+                      <MapPin className="w-5 h-5 text-cyan-600" />
+                    </div>
+                    <div className="min-w-0">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
+                        Current Delivery Base Location
+                      </span>
+                      <p className="text-xs font-black text-slate-900 truncate">
+                        {riderAddressName || 'Detecting live address...'}
+                      </p>
+                      <p className="text-[10px] text-slate-400 font-medium">
+                        {riderCoords ? `GPS: ${riderCoords.lat.toFixed(4)}°, ${riderCoords.lng.toFixed(4)}°` : 'Live Geolocation Active'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      startWatchingLocation();
+                      toast.success('📍 Live GPS location refreshed!');
+                    }}
+                    className="px-3.5 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-black transition flex items-center gap-1.5 shrink-0 shadow-sm"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 text-cyan-600" />
+                    <span>Refresh Location</span>
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-slate-400 pt-2 font-medium">
+                  <span className="flex items-center gap-1">
+                    <Radio className="w-3.5 h-3.5 text-emerald-500" /> 5 km Dispatch Radar Active
+                  </span>
+                  <span>•</span>
+                  <span>🔔 Auto Ring on New Job</span>
+                  <span>•</span>
+                  <span>⚡ Instant Payouts</span>
+                </div>
+              </div>
             </div>
           )}
         </div>
