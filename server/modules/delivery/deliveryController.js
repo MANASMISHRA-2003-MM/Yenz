@@ -623,7 +623,7 @@ const updateDeliveryStatus = async (req, res, next) => {
       if (delivery.deliveryPartnerId) {
         io.to(`driver_${delivery.deliveryPartnerId}`).emit('order:status_updated', statusPayload);
       }
-    } catch (e) {
+     catch (e) {
       console.log('Socket emit warning:', e.message);
     }
 
