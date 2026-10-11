@@ -486,22 +486,25 @@ const updateDeliveryStatus = async (req, res, next) => {
         });
       }
 
+     
       // If correct 4-digit PIN is provided, verify geofence with sensible tolerance
       if (riderLat !== null && riderLng !== null && dropLat !== null && dropLng !== null) {
         const geoCheck = validateDropoffGeofence(riderLat, riderLng, dropLat, dropLng, 2500);
+
         if (!geoCheck.valid && process.env.NODE_ENV === 'production') {
           return res.status(400).json({
             success: false,
             message: geoCheck.message,
             distanceMeters: geoCheck.distanceMeters,
             maxAllowedMeters: 2500
-                   });
+          });
         }
       }
 
       // Clear any failed attempts upon success
       clearPinAttempts(orderId);
     }
+
     let orderStatus = delivery.Order.status;
     let deliveryStatus = delivery.status;
     let timelineNote = `Delivery status updated to ${status}`;
