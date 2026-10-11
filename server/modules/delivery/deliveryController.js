@@ -774,6 +774,7 @@ const updateDeliveryStatus = async (req, res, next) => {
           statusPayload
         );
       }
+      
 
       if (delivery.deliveryPartnerId) {
         io.to(`driver_${delivery.deliveryPartnerId}`).emit(
