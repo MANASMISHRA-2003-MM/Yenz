@@ -172,7 +172,9 @@ const getDeliveryDashboard = async (req, res, next) => {
             Vendor: true,
             Address: true,
             OrderItem: true,
-            User_Order_customerIdToUser: { select: { id: true, fullName: true, phone: true, avatar: true } }
+            User_Order_customerIdToUser: {
+              select: { id: true, fullName: true, phone: true, avatar: true }
+            }
           }
         }
       }
@@ -191,7 +193,9 @@ const getDeliveryDashboard = async (req, res, next) => {
           include: {
             Vendor: true,
             Address: true,
-            User_Order_customerIdToUser: { select: { id: true, fullName: true, phone: true, avatar: true } }
+            User_Order_customerIdToUser: {
+              select: { id: true, fullName: true, phone: true, avatar: true }
+            }
           }
         }
       },
@@ -215,7 +219,9 @@ const getDeliveryDashboard = async (req, res, next) => {
             Vendor: true,
             Address: true,
             OrderItem: true,
-            User_Order_customerIdToUser: { select: { id: true, fullName: true, phone: true, avatar: true } }
+            User_Order_customerIdToUser: {
+              select: { id: true, fullName: true, phone: true, avatar: true }
+            }
           }
         }
       },
@@ -227,7 +233,10 @@ const getDeliveryDashboard = async (req, res, next) => {
       const ord = pendingOffer.Order;
       const v = ord.Vendor;
       const a = ord.Address;
-      const remainingSecs = Math.max(0, Math.round((new Date(pendingOffer.expiresAt).getTime() - Date.now()) / 1000));
+      const remainingSecs = Math.max(
+        0,
+        Math.round((new Date(pendingOffer.expiresAt).getTime() - Date.now()) / 1000)
+      );
       const pickupLat = ord.pickupLat ? Number(ord.pickupLat) : (v?.latitude ? Number(v.latitude) : 28.4866);
       const pickupLng = ord.pickupLng ? Number(ord.pickupLng) : (v?.longitude ? Number(v.longitude) : 77.2918);
       const dropLat = ord.dropLat ? Number(ord.dropLat) : (a?.latitude ? Number(a.latitude) : pickupLat);
@@ -235,7 +244,9 @@ const getDeliveryDashboard = async (req, res, next) => {
       const tripDist = calculateDistance(pickupLat, pickupLng, dropLat, dropLng);
       const customerLocName = a
         ? [a.addressLine, a.city].filter(Boolean).join(', ')
-        : (ord.User_Order_customerIdToUser?.fullName ? `${ord.User_Order_customerIdToUser.fullName}'s Location` : 'Customer Address');
+        : (ord.User_Order_customerIdToUser?.fullName
+          ? `${ord.User_Order_customerIdToUser.fullName}'s Location`
+          : 'Customer Address');
 
       activeOfferData = {
         offerId: pendingOffer.id,
@@ -260,8 +271,7 @@ const getDeliveryDashboard = async (req, res, next) => {
         expiresInSeconds: remainingSecs
       };
     }
-
-    // 4. Fetch rider profile details (user info + latest DeliveryPartnerApplication)
+        // 4. Fetch rider profile details
     const riderUser = await prisma.user.findUnique({
       where: { id: req.user.id },
       select: {
@@ -327,8 +337,12 @@ const getDeliveryDashboard = async (req, res, next) => {
 const toggleOnlineStatus = async (req, res, next) => {
   try {
     const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+
     if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
     }
 
     const updated = await prisma.user.update({
@@ -344,14 +358,27 @@ const toggleOnlineStatus = async (req, res, next) => {
 
 const submitDeliveryApplication = async (req, res, next) => {
   try {
-    const { fullName, phone, email, address, vehicleType, vehicleNumber, dlNumber, bankDetails, documents } = req.body;
+    const {
+      fullName,
+      phone,
+      email,
+      address,
+      vehicleType,
+      vehicleNumber,
+      dlNumber,
+      bankDetails,
+      documents
+    } = req.body;
 
     const existingApp = await prisma.deliveryPartnerApplication.findFirst({
       where: { userId: req.user.id, status: 'PENDING' }
     });
 
     if (existingApp) {
-      return res.status(400).json({ success: false, message: 'You already have a pending delivery application under review' });
+      return res.status(400).json({
+        success: false,
+        message: 'You already have a pending delivery application under review'
+      });
     }
 
     const app = await prisma.deliveryPartnerApplication.create({
@@ -371,7 +398,11 @@ const submitDeliveryApplication = async (req, res, next) => {
       }
     });
 
-    res.status(201).json({ success: true, message: 'Delivery application submitted for admin review', application: app });
+    res.status(201).json({
+      success: true,
+      message: 'Delivery application submitted for admin review',
+      application: app
+    });
   } catch (err) {
     next(err);
   }
@@ -383,23 +414,25 @@ const getMyDeliveryApplication = async (req, res, next) => {
       where: { userId: req.user.id },
       orderBy: { createdAt: 'desc' }
     });
+
     res.json({ success: true, application: app });
   } catch (err) {
     next(err);
   }
 };
-
 const updateDeliveryStatus = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { status, deliveryPin, riderDeliveryPhoto, vendorHandoverPhoto } = req.body; // e.g. PICKED_UP, OUT_FOR_DELIVERY, DELIVERED
+    const {
+      status,
+      deliveryPin,
+      riderDeliveryPhoto,
+      vendorHandoverPhoto
+    } = req.body;
 
     const delivery = await prisma.delivery.findFirst({
       where: {
-        OR: [
-          { id },
-          { orderId: id }
-        ]
+        OR: [{ id }, { orderId: id }]
       },
       include: {
         Order: {
@@ -412,27 +445,64 @@ const updateDeliveryStatus = async (req, res, next) => {
       }
     });
 
-    if (!delivery) return res.status(404).json({ success: false, message: 'Delivery not found' });
-    if (delivery.deliveryPartnerId !== req.user.id && req.user.role !== 'ADMIN') {
-      return res.status(403).json({ success: false, message: 'Not authorized for this delivery' });
+    if (!delivery) {
+      return res.status(404).json({
+        success: false,
+        message: 'Delivery not found'
+      });
+    }
+
+    if (
+      delivery.deliveryPartnerId !== req.user.id &&
+      req.user.role !== 'ADMIN'
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized for this delivery'
+      });
     }
 
     if (delivery.status === 'DELIVERED') {
-      return res.status(400).json({ success: false, message: 'This delivery trip has already been completed.' });
+      return res.status(400).json({
+        success: false,
+        message: 'This delivery trip has already been completed.'
+      });
     }
 
     // Enforce valid delivery state machine
     const validDeliveryTransitions = {
-      'ASSIGNED': ['WAITING_PICKUP', 'ARRIVED_AT_PICKUP', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'ARRIVED_AT_CUSTOMER', 'DELIVERED'],
-      'WAITING_PICKUP': ['PICKED_UP', 'OUT_FOR_DELIVERY', 'ARRIVED_AT_CUSTOMER', 'DELIVERED'],
-      'ARRIVED_AT_PICKUP': ['PICKED_UP', 'OUT_FOR_DELIVERY', 'ARRIVED_AT_CUSTOMER', 'DELIVERED'],
-      'PICKED_UP': ['OUT_FOR_DELIVERY', 'ARRIVED_AT_CUSTOMER', 'DELIVERED'],
-      'OUT_FOR_DELIVERY': ['ARRIVED_AT_CUSTOMER', 'DELIVERED'],
-      'ARRIVED_AT_CUSTOMER': ['DELIVERED']
+      ASSIGNED: [
+        'WAITING_PICKUP',
+        'ARRIVED_AT_PICKUP',
+        'PICKED_UP',
+        'OUT_FOR_DELIVERY',
+        'ARRIVED_AT_CUSTOMER',
+        'DELIVERED'
+      ],
+      WAITING_PICKUP: [
+        'PICKED_UP',
+        'OUT_FOR_DELIVERY',
+        'ARRIVED_AT_CUSTOMER',
+        'DELIVERED'
+      ],
+      ARRIVED_AT_PICKUP: [
+        'PICKED_UP',
+        'OUT_FOR_DELIVERY',
+        'ARRIVED_AT_CUSTOMER',
+        'DELIVERED'
+      ],
+      PICKED_UP: [
+        'OUT_FOR_DELIVERY',
+        'ARRIVED_AT_CUSTOMER',
+        'DELIVERED'
+      ],
+      OUT_FOR_DELIVERY: ['ARRIVED_AT_CUSTOMER', 'DELIVERED'],
+      ARRIVED_AT_CUSTOMER: ['DELIVERED']
     };
 
     const currentDeliveryStatus = delivery.status || 'ASSIGNED';
     const allowedNext = validDeliveryTransitions[currentDeliveryStatus] || [];
+
     if (!allowedNext.includes(status) && req.user.role !== 'ADMIN') {
       return res.status(400).json({
         success: false,
@@ -440,12 +510,13 @@ const updateDeliveryStatus = async (req, res, next) => {
       });
     }
 
-    // 4-Digit PIN verification & Geofencing for completion
+    // 4-Digit PIN verification and geofencing
     if (status === 'DELIVERED') {
       const orderId = delivery.orderId;
 
-      // 1. PIN Rate Limit Check (3 failed attempts -> 2 min lockout)
+      // PIN rate limit check
       const rateLimitStatus = checkPinRateLimit(orderId);
+
       if (!rateLimitStatus.allowed) {
         return res.status(429).json({
           success: false,
@@ -455,22 +526,52 @@ const updateDeliveryStatus = async (req, res, next) => {
         });
       }
 
-      // 2. Geofence Proximity Check (Use live rider GPS, fallback to stored GPS)
-      const rawRiderLat = req.body.currentLat ?? req.body.lat ?? delivery.currentLat;
-      const rawRiderLng = req.body.currentLng ?? req.body.lng ?? delivery.currentLng;
-      const riderLat = (rawRiderLat !== null && rawRiderLat !== undefined) ? Number(rawRiderLat) : null;
-      const riderLng = (rawRiderLng !== null && rawRiderLng !== undefined) ? Number(rawRiderLng) : null;
-      const dropLat = delivery.dropLat ? Number(delivery.dropLat) : (delivery.Order?.Address?.latitude ? Number(delivery.Order.Address.latitude) : null);
-      const dropLng = delivery.dropLng ? Number(delivery.dropLng) : (delivery.Order?.Address?.longitude ? Number(delivery.Order.Address.longitude) : null);
+      // Rider GPS, falling back to stored GPS
+      const rawRiderLat =
+        req.body.currentLat ?? req.body.lat ?? delivery.currentLat;
+      const rawRiderLng =
+        req.body.currentLng ?? req.body.lng ?? delivery.currentLng;
 
-      // 3. Expected vs Entered PIN Check (No hardcoded 1234 fallback!)
+      const riderLat =
+        rawRiderLat !== null && rawRiderLat !== undefined
+          ? Number(rawRiderLat)
+          : null;
+
+      const riderLng =
+        rawRiderLng !== null && rawRiderLng !== undefined
+          ? Number(rawRiderLng)
+          : null;
+
+      const dropLat = delivery.dropLat
+        ? Number(delivery.dropLat)
+        : (
+            delivery.Order?.Address?.latitude
+              ? Number(delivery.Order.Address.latitude)
+              : null
+          );
+
+      const dropLng = delivery.dropLng
+        ? Number(delivery.dropLng)
+        : (
+            delivery.Order?.Address?.longitude
+              ? Number(delivery.Order.Address.longitude)
+              : null
+          );
+
+      // Expected vs entered PIN
       const expectedPin = String(delivery.Order?.deliveryPin || '').trim();
       const enteredPin = String(deliveryPin || '').trim();
+
       if (!expectedPin) {
-        return res.status(400).json({ success: false, message: 'Delivery PIN was not generated for this order. Contact support.' });
+        return res.status(400).json({
+          success: false,
+          message: 'Delivery PIN was not generated for this order. Contact support.'
+        });
       }
+
       if (!enteredPin || enteredPin !== expectedPin) {
         const attemptResult = recordFailedPinAttempt(orderId);
+
         if (attemptResult.locked) {
           return res.status(429).json({
             success: false,
@@ -479,6 +580,7 @@ const updateDeliveryStatus = async (req, res, next) => {
             remainingSeconds: attemptResult.remainingSeconds
           });
         }
+
         return res.status(400).json({
           success: false,
           message: attemptResult.message,
@@ -486,10 +588,20 @@ const updateDeliveryStatus = async (req, res, next) => {
         });
       }
 
-     
-      // If correct 4-digit PIN is provided, verify geofence with sensible tolerance
-      if (riderLat !== null && riderLng !== null && dropLat !== null && dropLng !== null) {
-        const geoCheck = validateDropoffGeofence(riderLat, riderLng, dropLat, dropLng, 2500);
+      // Geofence check
+      if (
+        riderLat !== null &&
+        riderLng !== null &&
+        dropLat !== null &&
+        dropLng !== null
+      ) {
+        const geoCheck = validateDropoffGeofence(
+          riderLat,
+          riderLng,
+          dropLat,
+          dropLng,
+          2500
+        );
 
         if (!geoCheck.valid && process.env.NODE_ENV === 'production') {
           return res.status(400).json({
@@ -501,7 +613,7 @@ const updateDeliveryStatus = async (req, res, next) => {
         }
       }
 
-      // Clear any failed attempts upon success
+      // Clear failed attempts upon success
       clearPinAttempts(orderId);
     }
 
@@ -532,13 +644,23 @@ const updateDeliveryStatus = async (req, res, next) => {
     }
 
     const now = new Date();
+
     const deliveryUpdateData = {
       status: deliveryStatus,
-      pickupAt: (status === 'PICKED_UP' || status === 'OUT_FOR_DELIVERY') ? (delivery.pickupAt || now) : delivery.pickupAt,
+      pickupAt:
+        status === 'PICKED_UP' || status === 'OUT_FOR_DELIVERY'
+          ? (delivery.pickupAt || now)
+          : delivery.pickupAt,
       deliveredAt: status === 'DELIVERED' ? now : delivery.deliveredAt
     };
-    if (riderDeliveryPhoto) deliveryUpdateData.riderDeliveryPhoto = riderDeliveryPhoto;
-    if (vendorHandoverPhoto) deliveryUpdateData.vendorHandoverPhoto = vendorHandoverPhoto;
+
+    if (riderDeliveryPhoto) {
+      deliveryUpdateData.riderDeliveryPhoto = riderDeliveryPhoto;
+    }
+
+    if (vendorHandoverPhoto) {
+      deliveryUpdateData.vendorHandoverPhoto = vendorHandoverPhoto;
+    }
 
     const updatedDelivery = await prisma.delivery.update({
       where: { id: delivery.id },
@@ -566,15 +688,21 @@ const updateDeliveryStatus = async (req, res, next) => {
         }
       }
     };
-    if (riderDeliveryPhoto) orderUpdateData.riderDeliveryPhoto = riderDeliveryPhoto;
-    if (vendorHandoverPhoto) orderUpdateData.vendorHandoverPhoto = vendorHandoverPhoto;
+
+    if (riderDeliveryPhoto) {
+      orderUpdateData.riderDeliveryPhoto = riderDeliveryPhoto;
+    }
+
+    if (vendorHandoverPhoto) {
+      orderUpdateData.vendorHandoverPhoto = vendorHandoverPhoto;
+    }
 
     await prisma.order.update({
       where: { id: delivery.orderId },
       data: orderUpdateData
     });
 
-    // Record immutable audit logs for verification photos
+    // Record audit logs for verification photos
     if (riderDeliveryPhoto) {
       await prisma.verificationAuditLog.create({
         data: {
@@ -582,10 +710,15 @@ const updateDeliveryStatus = async (req, res, next) => {
           actorId: req.user.id,
           action: 'RIDER_DELIVERY_PHOTO',
           targetId: delivery.orderId,
-          metadata: { photo: riderDeliveryPhoto, deliveryId: delivery.id, verifiedAt: now }
+          metadata: {
+            photo: riderDeliveryPhoto,
+            deliveryId: delivery.id,
+            verifiedAt: now
+          }
         }
       }).catch(e => console.warn('Rider photo audit error:', e.message));
     }
+
     if (vendorHandoverPhoto) {
       await prisma.verificationAuditLog.create({
         data: {
@@ -593,37 +726,62 @@ const updateDeliveryStatus = async (req, res, next) => {
           actorId: req.user.id,
           action: 'VENDOR_HANDOVER_PHOTO',
           targetId: delivery.orderId,
-          metadata: { photo: vendorHandoverPhoto, deliveryId: delivery.id, verifiedAt: now }
+          metadata: {
+            photo: vendorHandoverPhoto,
+            deliveryId: delivery.id,
+            verifiedAt: now
+          }
         }
       }).catch(e => console.warn('Vendor photo audit error:', e.message));
     }
 
     if (status === 'DELIVERED') {
       await prisma.payment.updateMany({
-        where: { orderId: delivery.orderId, method: 'COD' },
-        data: { status: 'PAID', paidAt: now, collectedBy: req.user.id }
+        where: {
+          orderId: delivery.orderId,
+          method: 'COD'
+        },
+        data: {
+          status: 'PAID',
+          paidAt: now,
+          collectedBy: req.user.id
+        }
       });
     }
 
-    // Socket notification to customer, vendor & driver rooms
+    // Socket notification to customer, vendor and driver
     try {
       const io = getIO();
+
       const statusPayload = {
         orderId: delivery.orderId,
         orderNumber: delivery.Order?.orderNumber,
         status: orderStatus,
         deliveryStatus: status,
         timelineNote,
-        deliveryPartner: formatDeliveryObj(updatedDelivery)?.deliveryPartner || null
+        deliveryPartner:
+          formatDeliveryObj(updatedDelivery)?.deliveryPartner || null
       };
-      io.to(`order_${delivery.orderId}`).emit('order:status_updated', statusPayload);
+
+      io.to(`order_${delivery.orderId}`).emit(
+        'order:status_updated',
+        statusPayload
+      );
+
       if (delivery.Order?.vendorId) {
-        io.to(`vendor_${delivery.Order.vendorId}`).emit('order:status_updated', statusPayload);
+        io.to(`vendor_${delivery.Order.vendorId}`).emit(
+          'order:status_updated',
+          statusPayload
+        );
       }
+
       if (delivery.deliveryPartnerId) {
-        io.to(`driver_${delivery.deliveryPartnerId}`).emit('order:status_updated', statusPayload);
+        io.to(`driver_${delivery.deliveryPartnerId}`).emit(
+          'order:status_updated',
+          statusPayload
+        );
       }
-     catch (e) {
+    } catch (e) {
       console.log('Socket emit warning:', e.message);
     }
 
@@ -636,15 +794,16 @@ const updateDeliveryStatus = async (req, res, next) => {
     next(err);
   }
 };
-
 // Accept an offer (POST /api/deliveries/offers/:offerId/accept)
 const acceptDeliveryOffer = async (req, res, next) => {
   try {
     const { offerId } = req.params;
     const result = await acceptOffer(offerId, req.user.id);
+
     if (!result.success) {
       return res.status(result.statusCode || 400).json(result);
     }
+
     res.json(result);
   } catch (err) {
     next(err);
@@ -656,10 +815,17 @@ const rejectDeliveryOffer = async (req, res, next) => {
   try {
     const { offerId } = req.params;
     const { reason } = req.body;
-    const result = await rejectOffer(offerId, req.user.id, reason);
+
+    const result = await rejectOffer(
+      offerId,
+      req.user.id,
+      reason
+    );
+
     if (!result.success) {
       return res.status(result.statusCode || 400).json(result);
     }
+
     res.json(result);
   } catch (err) {
     next(err);
@@ -671,29 +837,60 @@ const updateRiderLocation = async (req, res, next) => {
   try {
     const rawLat = req.body.lat ?? req.body.latitude;
     const rawLng = req.body.lng ?? req.body.longitude;
+
     const lat = Number(rawLat);
     const lng = Number(rawLng);
 
-    if (rawLat === undefined || rawLng === undefined || isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) {
-      return res.status(400).json({ success: false, message: 'lat and lng (or latitude and longitude) must be valid numeric coordinates' });
+    if (
+      rawLat === undefined ||
+      rawLng === undefined ||
+      isNaN(lat) ||
+      isNaN(lng) ||
+      (lat === 0 && lng === 0)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: 'lat and lng (or latitude and longitude) must be valid numeric coordinates'
+      });
     }
 
     await prisma.riderLocation.upsert({
       where: { riderId: req.user.id },
-      update: { latitude: lat, longitude: lng, updatedAt: new Date() },
-      create: { id: crypto.randomUUID(), riderId: req.user.id, latitude: lat, longitude: lng }
+      update: {
+        latitude: lat,
+        longitude: lng,
+        updatedAt: new Date()
+      },
+      create: {
+        id: crypto.randomUUID(),
+        riderId: req.user.id,
+        latitude: lat,
+        longitude: lng
+      }
     });
 
-    // Also update any active Delivery records for this driver so geofence has fresh coordinates
+    // Update active deliveries with the latest GPS coordinates
     await prisma.delivery.updateMany({
       where: {
         deliveryPartnerId: req.user.id,
-        status: { in: ['ASSIGNED', 'WAITING_PICKUP', 'ARRIVED_AT_PICKUP', 'PICKED_UP', 'OUT_FOR_DELIVERY'] }
+        status: {
+          in: [
+            'ASSIGNED',
+            'WAITING_PICKUP',
+            'ARRIVED_AT_PICKUP',
+            'PICKED_UP',
+            'OUT_FOR_DELIVERY'
+          ]
+        }
       },
-      data: { currentLat: lat, currentLng: lng }
+      data: {
+        currentLat: lat,
+        currentLng: lng
+      }
     }).catch(() => {});
 
     const { onlineDrivers } = require('../../socket/socketHandler');
+
     for (const [sockId, drv] of onlineDrivers.entries()) {
       if (drv.driverId === req.user.id) {
         drv.lat = lat;
@@ -702,15 +899,30 @@ const updateRiderLocation = async (req, res, next) => {
       }
     }
 
-    res.json({ success: true, message: 'Location updated successfully' });
+    res.json({
+      success: true,
+      message: 'Location updated successfully'
+    });
   } catch (err) {
     next(err);
   }
 };
-// Update rider profile, bank details, DL & Aadhar credentials (PUT /api/deliveries/profile)
+
+// Update rider profile, bank details, DL and Aadhar credentials
 const updateRiderProfile = async (req, res, next) => {
   try {
-    const { fullName, phone, email, address, vehicleType, vehicleNumber, dlNumber, bankDetails, documents, aadharNumber } = req.body;
+    const {
+      fullName,
+      phone,
+      email,
+      address,
+      vehicleType,
+      vehicleNumber,
+      dlNumber,
+      bankDetails,
+      documents,
+      aadharNumber
+    } = req.body;
 
     // Update User model
     await prisma.user.update({
@@ -728,13 +940,17 @@ const updateRiderProfile = async (req, res, next) => {
     });
 
     const docsMerged = {
-      ...(app?.documents && typeof app.documents === 'object' ? app.documents : {}),
+      ...(app?.documents && typeof app.documents === 'object'
+        ? app.documents
+        : {}),
       ...(documents || {}),
       ...(aadharNumber ? { aadharNumber } : {})
     };
 
     const bankMerged = {
-      ...(app?.bankDetails && typeof app.bankDetails === 'object' ? app.bankDetails : {}),
+      ...(app?.bankDetails && typeof app.bankDetails === 'object'
+        ? app.bankDetails
+        : {}),
       ...(bankDetails || {})
     };
 
@@ -767,7 +983,9 @@ const updateRiderProfile = async (req, res, next) => {
           dlNumber: dlNumber || 'DL-98203918239',
           bankDetails: bankMerged,
           documents: docsMerged,
-          status: req.user.role === 'DELIVERY_PARTNER' ? 'APPROVED' : 'PENDING'
+          status: req.user.role === 'DELIVERY_PARTNER'
+            ? 'APPROVED'
+            : 'PENDING'
         }
       });
     }
@@ -805,4 +1023,3 @@ module.exports = {
   updateRiderLocation,
   updateRiderProfile
 };
-
