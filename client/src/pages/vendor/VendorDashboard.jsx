@@ -13,6 +13,7 @@ import { requestNotificationPermission, showBrowserAlert } from '../../utils/bro
 
 import StoreStatusSlider from '../../components/StoreStatusSlider';
 import CameraCaptureModal from '../../components/CameraCaptureModal';
+import MasterMenuStickyBar from '../../components/MasterMenuStickyBar';
 
 const formatOrderTiming = (dateStr) => {
   if (!dateStr) return { time: 'Recently', elapsed: 'Just now' };
@@ -719,6 +720,20 @@ export default function VendorDashboard() {
         {/* PRODUCTS MANAGEMENT TAB */}
         {activeTab === 'products' && (
           <div className="bg-white p-6 rounded-3xl border border-slate-200/90 shadow-soft space-y-6">
+            {/* MASTER MENU STICKY BAR AT TOP OF STORE PRODUCTS */}
+            <MasterMenuStickyBar
+              restaurant={restaurant}
+              products={products}
+              onProductUpdated={() => {
+                if (restaurant) fetchMyProducts(restaurant.id || restaurant._id);
+              }}
+              onRestaurantUpdated={(updated) => {
+                setRestaurant(updated);
+                restaurantRef.current = updated;
+              }}
+              userRole="VENDOR"
+            />
+
             <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-4 gap-2">
               <div>
                 <h3 className="text-lg font-extrabold text-slate-900">Store Menu & Item Availability ({products.length})</h3>

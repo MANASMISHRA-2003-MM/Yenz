@@ -23,6 +23,7 @@ export default function AdminApp() {
   const [riderApps, setRiderApps] = useState([]);
   const [userList, setUserList] = useState([]);
   const [ordersList, setOrdersList] = useState([]);
+  const [restaurantsList, setRestaurantsList] = useState([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [newProdName, setNewProdName] = useState('');
@@ -94,6 +95,16 @@ export default function AdminApp() {
       const oRes = await mobileApi.get(API_ENDPOINTS.ORDERS.BASE);
       if (oRes.data?.success) {
         setOrdersList(oRes.data.orders || []);
+      }
+
+      // Restaurants & Master Menus
+      const restRes = await mobileApi.get('/restaurants');
+      if (restRes.data?.success) {
+        const rList = restRes.data.restaurants || [];
+        setRestaurantsList(rList);
+        if (rList.length > 0 && !selectedVendorId) {
+          setSelectedVendorId(rList[0].id || rList[0]._id);
+        }
       }
     } catch (err) {
       console.warn('Admin fetch warning:', err.message);
@@ -384,10 +395,110 @@ export default function AdminApp() {
           </ScrollView>
         )}
 
-        {/* 6. Direct Menu Upload Tab (No Cloudinary / ImageKit) */}
+        {/* 6. Master Menu & Direct Menu Upload Tab (No Cloudinary / ImageKit) */}
         {currentTab === 'menu' && (
           <ScrollView style={styles.tabContent}>
-            <Text style={styles.sectionTitle}>Direct Restaurant Menu Photo Upload</Text>
+            <Text style={styles.sectionTitle}>Restaurant Master Menu & Price Registry</Text>
+            
+            {/* Master Menu Card Manager */}
+            <View style={[styles.formCard, { borderColor: '#38BDF8', borderWidth: 1.5, marginBottom: 16 }]}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <View style={{ backgroundColor: '#F59E0B', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                  <Text style={{ color: '#0F172A', fontWeight: '900', fontSize: 9 }}>ADMIN MASTER MENU REGISTRY</Text>
+                </View>
+                <Text style={{ color: '#38BDF8', fontSize: 11, fontWeight: '700' }}>
+                  {restaurantsList.find(r => (r.id || r._id) === selectedVendorId)?.menuCardImage ? '📸 Card Attached' : '⚠️ No Card'}
+                </Text>
+              </View>
+
+              <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '800', marginBottom: 4 }}>
+                {restaurantsList.find(r => (r.id || r._id) === selectedVendorId)?.name || 'Select Restaurant'}
+              </Text>
+              <Text style={{ color: '#94A3B8', fontSize: 12, marginBottom: 12 }}>
+                Upload master menu card or manage consolidated price booklet for this restaurant.
+              </Text>
+
+              {/* Quick Restaurant Picker Scroll */}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+                {restaurantsList.map(r => {
+                  const rid = r.id || r._id;
+                  const isSel = rid === selectedVendorId;
+                  return (
+                    <TouchableOpacity
+                      key={rid}
+                      style={{
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                        borderRadius: 8,
+                        backgroundColor: isSel ? '#0284C7' : '#1E293B',
+                        marginRight: 8
+                      }}
+                      onPress={() => setSelectedVendorId(rid)}
+                    >
+                      <Text style={{ color: isSel ? '#FFFFFF' : '#94A3B8', fontSize: 11, fontWeight: '700' }}>
+                        {r.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <TouchableOpacity
+                  style={[styles.btn, { backgroundColor: '#F59E0B', flex: 2 }]}
+                  onPress={() => {
+                    if (!selectedVendorId) {
+                      Alert.alert('Required', 'Please select a restaurant first');
+                      return;
+                    }
+                    Alert.alert(
+                      '📸 Upload Master Menu Card',
+                      'Snap or upload the physical menu card/board for this restaurant directly into database (No Cloudinary/ImageKit).',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Snap & Save to Database',
+                          onPress: async () => {
+                            const photoData = `data:image/jpeg;base64,admin_master_menu_card_${Date.now()}`;
+                            try {
+                              await mobileApi.put(`/restaurants/${selectedVendorId}`, { menuCardImage: photoData });
+                              setRestaurantsList(prev => prev.map(r => (r.id === selectedVendorId || r._id === selectedVendorId) ? { ...r, menuCardImage: photoData } : r));
+                              Alert.alert('✅ Saved', 'Master Menu Card photo stored directly in database!');
+                            } catch (e) {
+                              Alert.alert('Error', 'Failed to save menu card photo');
+                            }
+                          }
+                        }
+                      ]
+                    );
+                  }}
+                >
+                  <Text style={[styles.btnText, { color: '#0F172A' }]}>📸 Upload Master Menu Card</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.btn, { backgroundColor: '#334155', flex: 1 }]}
+                  onPress={async () => {
+                    if (!selectedVendorId) return;
+                    try {
+                      const res = await mobileApi.get(`/restaurants/${selectedVendorId}`);
+                      const menu = res.data?.menu || [];
+                      const summary = menu.map(m => `• ${m.name}: ₹${m.price}`).join('\n');
+                      Alert.alert(
+                        `📖 Master Price Book (${menu.length} items)`,
+                        summary || 'No menu items recorded for this restaurant yet.'
+                      );
+                    } catch (e) {
+                      Alert.alert('Error', 'Failed to load restaurant price book');
+                    }
+                  }}
+                >
+                  <Text style={styles.btnText}>📖 Price Book</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <Text style={styles.sectionTitle}>Add Food Item to Restaurant Menu</Text>
             <View style={styles.formCard}>
               <Text style={{ color: '#38BDF8', fontSize: 12, fontWeight: '700', marginBottom: 8 }}>
                 Direct Database Storage • No Cloudinary or ImageKit

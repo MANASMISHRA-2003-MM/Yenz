@@ -41,6 +41,7 @@ const formatVendorObj = (vendor) => {
     status: vendor.status,
     image: vendor.image,
     bannerImage: vendor.bannerImage,
+    menuCardImage: vendor.menuCardImage || null,
     offers: vendor.offers,
     freshTagline: vendor.freshTagline,
     ownerUserId: vendor.ownerUserId,
@@ -301,6 +302,9 @@ const updateRestaurant = async (req, res, next) => {
       updateData.bannerImage = bannerImage && bannerImage.trim() ? bannerImage.trim() : null;
     }
     if (bannerImagePublicId !== undefined) updateData.bannerImagePublicId = bannerImagePublicId || null;
+    if (req.body.menuCardImage !== undefined) {
+      updateData.menuCardImage = req.body.menuCardImage && req.body.menuCardImage.trim() ? req.body.menuCardImage.trim() : null;
+    }
     if (offers !== undefined) updateData.offers = Array.isArray(offers) ? offers : [];
     if (freshTagline !== undefined) updateData.freshTagline = freshTagline;
 
@@ -360,6 +364,7 @@ const createVendor = async (req, res, next) => {
         imagePublicId: imagePublicId || null,
         bannerImage: finalBannerUrl,
         bannerImagePublicId: bannerImagePublicId || null,
+        menuCardImage: req.body.menuCardImage || null,
         status: 'open'
       }
     });

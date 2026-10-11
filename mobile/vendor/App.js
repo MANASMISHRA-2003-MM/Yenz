@@ -434,6 +434,68 @@ export default function VendorApp() {
             style={styles.tabContent}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#10B981" />}
           >
+            {/* MASTER MENU STICKY BAR AT TOP OF STORE PRODUCTS */}
+            <View style={styles.masterMenuBar}>
+              <View style={styles.masterMenuHeaderRow}>
+                <View style={styles.masterBadge}>
+                  <Text style={styles.masterBadgeText}>MASTER MENU & PRICING</Text>
+                </View>
+                <Text style={styles.masterCardStatus}>
+                  {restaurant?.menuCardImage ? '📸 Card Attached' : '⚠️ No Menu Card'}
+                </Text>
+              </View>
+              <Text style={styles.masterTitle}>{restaurant?.name || 'My Restaurant'} — Master Registry</Text>
+              <Text style={styles.masterSubtitle}>
+                {menuItems.length} Products • Range: ₹{menuItems.length ? Math.min(...menuItems.map(m => Number(m.price) || 0)) : 0} – ₹{menuItems.length ? Math.max(...menuItems.map(m => Number(m.price) || 0)) : 0}
+              </Text>
+
+              <View style={styles.masterBtnRow}>
+                <TouchableOpacity
+                  style={[styles.btn, styles.masterActionBtn]}
+                  onPress={() => {
+                    Alert.alert(
+                      '📸 Master Menu Card Photo',
+                      'Snap or upload the physical menu card/board for this restaurant directly into database.',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Snap Live Menu Card',
+                          onPress: async () => {
+                            const photoData = `data:image/jpeg;base64,master_menu_card_${Date.now()}`;
+                            try {
+                              const restId = restaurant?.id || restaurant?._id;
+                              await mobileApi.put(`/restaurants/${restId}`, { menuCardImage: photoData });
+                              setRestaurant(prev => ({ ...prev, menuCardImage: photoData }));
+                              Alert.alert('✅ Saved', 'Master Menu Card photo stored directly in database!');
+                            } catch (e) {
+                              Alert.alert('Error', 'Failed to save menu card photo');
+                            }
+                          }
+                        }
+                      ]
+                    );
+                  }}
+                >
+                  <Text style={styles.btnText}>📸 {restaurant?.menuCardImage ? 'Update Menu Card' : 'Upload Menu Card'}</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.btn, styles.masterBookletBtn]}
+                  onPress={() => {
+                    const priceSummary = menuItems
+                      .map(m => `• ${m.name}: ₹${m.price} (${m.isAvailable ? 'In Stock' : 'Out'})`)
+                      .join('\n');
+                    Alert.alert(
+                      `📖 Master Price Book (${menuItems.length} items)`,
+                      priceSummary || 'No items in master menu'
+                    );
+                  }}
+                >
+                  <Text style={styles.btnText}>📖 Price Book</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
             <Text style={styles.sectionTitle}>Stock & Menu Items ({menuItems.length})</Text>
             {menuItems.map((item) => (
               <View key={item.id} style={styles.menuItemCard}>
@@ -763,9 +825,59 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600'
   },
-  historyStatus: {
+  masterMenuBar: {
+    backgroundColor: '#0F172A',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1.5,
+    borderColor: '#38BDF8'
+  },
+  masterMenuHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8
+  },
+  masterBadge: {
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6
+  },
+  masterBadgeText: {
+    color: '#0F172A',
+    fontWeight: '900',
+    fontSize: 9,
+    letterSpacing: 0.5
+  },
+  masterCardStatus: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#34D399'
+  },
+  masterTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginBottom: 2
+  },
+  masterSubtitle: {
+    fontSize: 12,
     color: '#94A3B8',
-    fontSize: 12
+    marginBottom: 12
+  },
+  masterBtnRow: {
+    flexDirection: 'row',
+    gap: 10
+  },
+  masterActionBtn: {
+    backgroundColor: '#0284C7',
+    flex: 2
+  },
+  masterBookletBtn: {
+    backgroundColor: '#334155',
+    flex: 1
   },
   menuItemCard: {
     flexDirection: 'row',

@@ -421,6 +421,7 @@ model Vendor {
   imagePublicId String?       @db.VarChar(255)
   bannerImage  String?
   bannerImagePublicId String? @db.VarChar(255)
+  menuCardImage String?
   offers       String[]
   freshTagline String?
   createdAt    DateTime      @default(now())

@@ -6,6 +6,7 @@ import FreshCartFooter from '../../components/FreshCartFooter';
 import OrderStatusBadge from '../../components/OrderStatusBadge';
 import ProductModal from '../../components/ProductModal';
 import VendorModal from '../../components/VendorModal';
+import MasterMenuStickyBar from '../../components/MasterMenuStickyBar';
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell
 } from 'recharts';
@@ -505,6 +506,19 @@ export default function AdminDashboard() {
               <div className="lg:col-span-8 bg-white p-6 rounded-3xl border border-slate-200/90 shadow-soft space-y-4">
                 {selectedVendor ? (
                   <>
+                    {/* MASTER MENU STICKY BAR AT TOP OF RESTAURANT PRODUCTS */}
+                    <MasterMenuStickyBar
+                      restaurant={selectedVendor}
+                      products={vendorProducts}
+                      onProductUpdated={() => fetchVendorProducts(selectedVendor.id || selectedVendor._id)}
+                      onRestaurantUpdated={(updated) => {
+                        setSelectedVendor(updated);
+                        setCravingsVendors(prev => prev.map(v => (v.id === updated.id || v._id === updated.id) ? updated : v));
+                      }}
+                      onAddProductClick={() => { setSelectedProduct(null); setIsProductModalOpen(true); }}
+                      userRole="ADMIN"
+                    />
+
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
                       <div>
                         <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-extrabold">CRAVINGS STORE</span>
