@@ -1,0 +1,18 @@
+{
+  "name": "@yenz/mobile-customer",
+  "version": "1.0.0",
+  "description": "Yenz Customer Mobile Application (React Native / Expo)",
+  "main": "index.js",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios"
+  },
+  "dependencies": {
+    "expo": "~51.0.0",
+    "react": "18.2.0",
+    "react-native": "0.74.5",
+    "axios": "^1.6.8",
+    "socket.io-client": "^4.7.5"
+  }
+}

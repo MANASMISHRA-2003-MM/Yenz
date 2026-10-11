@@ -1,0 +1,44 @@
+name: CI Build & Test Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate-client:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./client
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'npm'
+          cache-dependency-path: client/package-lock.json
+      - name: Install Client Dependencies
+        run: npm ci
+      - name: Build Web Client
+        run: npm run build
+
+  validate-server:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./server
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'npm'
+          cache-dependency-path: server/package-lock.json
+      - name: Install Server Dependencies
+        run: npm ci
+      - name: Validate Prisma Schema
+        run: npx prisma validate
