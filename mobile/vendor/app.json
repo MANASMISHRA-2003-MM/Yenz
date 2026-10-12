@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "Yenz Partner",
+    "slug": "yenz-vendor",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#064E3B"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.yenz.vendor"
+    },
+    "android": {
+      "package": "com.yenz.vendor",
+      "adaptiveIcon": {
+        "backgroundColor": "#064E3B"
+      }
+    }
+  }
+}

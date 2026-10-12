@@ -286,8 +286,12 @@ const updateRestaurant = async (req, res, next) => {
     if (city !== undefined) updateData.city = city;
     if (state !== undefined) updateData.state = state;
     if (pincode !== undefined) updateData.pincode = pincode;
-    if (latitude !== undefined && latitude !== null && latitude !== '') updateData.latitude = Number(latitude);
-    if (longitude !== undefined && longitude !== null && longitude !== '') updateData.longitude = Number(longitude);
+    if (latitude !== undefined) {
+      updateData.latitude = (latitude !== null && latitude !== '' && !isNaN(Number(latitude))) ? Number(latitude) : null;
+    }
+    if (longitude !== undefined) {
+      updateData.longitude = (longitude !== null && longitude !== '' && !isNaN(Number(longitude))) ? Number(longitude) : null;
+    }
     if (rating !== undefined && rating !== null && rating !== '') updateData.rating = Number(rating);
     if (deliveryTime !== undefined) updateData.deliveryTime = deliveryTime;
     if (deliveryFee !== undefined && deliveryFee !== null && deliveryFee !== '') {
@@ -313,6 +317,20 @@ const updateRestaurant = async (req, res, next) => {
       data: updateData
     });
 
+    // Keep active/in-flight unpicked orders in sync with updated restaurant coordinates
+    if (updateData.latitude !== undefined && updateData.longitude !== undefined && updateData.latitude !== null && updateData.longitude !== null) {
+      await prisma.order.updateMany({
+        where: {
+          vendorId: req.params.id,
+          status: { in: ['PENDING', 'ACCEPTED', 'PREPARING', 'READY'] }
+        },
+        data: {
+          pickupLat: updateData.latitude,
+          pickupLng: updateData.longitude
+        }
+      }).catch(err => console.warn('Sync in-flight order pickup coordinates warning:', err.message));
+    }
+
     res.json({ success: true, restaurant: formatVendorObj(updated) });
   } catch (err) {
     console.error('updateRestaurant error:', err);
@@ -334,6 +352,8 @@ const createVendor = async (req, res, next) => {
       city,
       state,
       pincode,
+      latitude,
+      longitude,
       deliveryFee,
       deliveryTime,
       image,
@@ -345,6 +365,9 @@ const createVendor = async (req, res, next) => {
 
     let finalImageUrl = image && image.trim() ? image.trim() : 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=600';
     let finalBannerUrl = bannerImage && bannerImage.trim() ? bannerImage.trim() : null;
+
+    const parsedLat = (latitude !== undefined && latitude !== null && latitude !== '' && !isNaN(Number(latitude))) ? Number(latitude) : null;
+    const parsedLng = (longitude !== undefined && longitude !== null && longitude !== '' && !isNaN(Number(longitude))) ? Number(longitude) : null;
 
     const created = await prisma.vendor.create({
       data: {
@@ -358,6 +381,8 @@ const createVendor = async (req, res, next) => {
         city: city || 'Faridabad',
         state: state || 'Haryana',
         pincode: pincode || '121009',
+        latitude: parsedLat,
+        longitude: parsedLng,
         deliveryFee: deliveryFee !== undefined && deliveryFee !== null && deliveryFee !== '' ? Number(deliveryFee) : 30.00,
         deliveryTime: deliveryTime || '25-35 min',
         image: finalImageUrl,
