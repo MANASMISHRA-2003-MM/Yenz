@@ -1,0 +1,5 @@
+import React from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import { Home, Search, Clock3, User, ShoppingBag } from 'lucide-react';
+import { useCart } from '../context/CartContext';
+export default function MobileBottomNavigation(){const {pathname}=useLocation();const {itemCount}=useCart();const items=[['/home','Home',Home],['/search','Shop',Search],['/orders','Orders',Clock3],['/profile','Account',User],['/cart','Cart',ShoppingBag]];return <nav className="fc-mobile-dock fixed bottom-0 left-0 right-0 z-30 lg:hidden"><div className="grid grid-cols-5 max-w-xl mx-auto">{items.map(([path,label,Icon])=>{const active=pathname===path||(path!=='/home'&&pathname.startsWith(path));return <Link key={path} to={path} className={`relative flex flex-col items-center gap-1 py-2 text-[10px] font-semibold ${active?'text-green-600':'text-gray-500'}`}><Icon className="w-5 h-5"/>{label}{path==='/cart'&&itemCount>0&&<span className="absolute top-1 right-[25%] w-4 h-4 bg-green-600 text-white rounded-full text-[9px] font-bold flex items-center justify-center">{itemCount}</span>}</Link>})}</div></nav>}

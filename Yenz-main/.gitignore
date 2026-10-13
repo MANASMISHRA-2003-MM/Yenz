@@ -1,0 +1,82 @@
+# Dependencies
+node_modules/
+client/node_modules/
+server/node_modules/
+**/node_modules/
+
+# Production Builds
+dist/
+client/dist/
+client/build/
+**/dist/
+
+# Environment Variables & Secrets (CRITICAL FOR GITHUB)
+.env
+.env.*
+*.env
+.env.local
+client/.env*
+server/.env*
+customer-app/.env*
+delivery-app/.env*
+vendor-app/.env*
+**/.env
+**/.env.*
+
+# Always track example env files
+!*.env.example
+!.env.example
+!**/.env.example
+
+# Keystores & Certificates
+*.pem
+*.key
+*.cert
+*.crt
+*.pfx
+*.p12
+*.jks
+*.keystore
+
+# Database & SQLite files
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+server/prisma/*.db
+server/prisma/*.db-journal
+
+# Android & Capacitor files
+local.properties
+**/local.properties
+.gradle/
+**/.gradle/
+**/android/build/
+**/android/app/build/
+*.apk
+*.aab
+
+# Logs & Caches
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.eslintcache
+.cache/
+
+# IDE & System Files
+.DS_Store
+Thumbs.db
+[Dd]esktop.ini
+.vscode/
+.idea/
+**/.idea/
+*.iml
+
+# Temporary & Build artifacts
+*.tmp
+*.tmp*
+*.timestamp-*.mjs
+.agents/
+.gemini/

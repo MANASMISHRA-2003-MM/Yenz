@@ -1,42 +1,145 @@
-# Dependencies
-node_modules/
-client/node_modules/
-server/node_modules/
+# ========================================================
+# Root .gitignore for Yenz / Milega Project Monorepo
+# Protects sensitive secrets, build outputs, and binaries
+# ========================================================
 
-# Production Builds
-dist/
-client/dist/
-client/build/
-
-# Environment Variables & Secrets
+# --------------------------------------------------------
+# 1. Environment Variables & Secrets (CRITICAL FOR GITHUB)
+# --------------------------------------------------------
 .env
+.env.*
 *.env
 .env.local
-client/.env*
-server/.env*
+.env.development.local
+.env.test.local
+.env.production.local
+**/.env
+**/.env.*
+**/*.env
 
-# Logs & Caches
+# Preserve example environment templates so others can configure the app
+!*.env.example
+!.env.example
+!**/.env.example
+
+# Security Keys, Tokens & Certificates
+*.pem
+*.key
+*.cert
+*.crt
+*.pfx
+*.p12
+
+# Android Keystores & Signing Keys
+*.jks
+*.keystore
+release.keystore
+debug.keystore
+
+# --------------------------------------------------------
+# 2. Dependencies
+# --------------------------------------------------------
+node_modules/
+**/node_modules/
+.pnp
+.pnp.js
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+
+# --------------------------------------------------------
+# 3. Production Build Artifacts & Caches
+# --------------------------------------------------------
+dist/
+**/dist/
+build/
+**/build/
+out/
+**/out/
+.next/
+.nuxt/
+.cache/
+**/cache/
+.vite/
+**/temp/
+*.tmp
+*.tmp*
+*.timestamp-*.mjs
+
+# --------------------------------------------------------
+# 4. Android & Capacitor Build Files & Machine Configs
+# --------------------------------------------------------
+local.properties
+**/local.properties
+.gradle/
+**/.gradle/
+**/android/.gradle/
+**/android/build/
+**/android/app/build/
+**/android/captures/
+**/android/.externalNativeBuild/
+**/android/.cxx/
+**/android/lint/intermediates/
+**/android/lint/generated/
+**/android/lint/outputs/
+**/android/lint/tmp/
+**/android/app/src/main/assets/public/
+**/android/app/src/main/assets/capacitor.config.json
+**/android/app/src/main/assets/capacitor.plugins.json
+**/android/app/src/main/res/xml/config.xml
+capacitor-cordova-android-plugins/
+*.apk
+*.aab
+*.dex
+*.class
+*.hprof
+
+# --------------------------------------------------------
+# 5. Database & ORM Storage
+# --------------------------------------------------------
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+prisma/*.db
+prisma/*.db-journal
+
+# --------------------------------------------------------
+# 6. Logs & Debug Traces
+# --------------------------------------------------------
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 .eslintcache
-.cache/
 
-# IDE & System Files
-.DS_Store
-Thumbs.db
-.vscode/
+# --------------------------------------------------------
+# 7. IDE, Editor & OS System Files
+# --------------------------------------------------------
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
 .idea/
+**/.idea/
+*.iml
+*.iws
+*.ipr
 
-# Temporary & Build artifacts
-*.tmp
-*.tmp*
-*.timestamp-*.mjs
-mobile/**/node_modules/
-mobile/**/.expo/
+# OS metadata
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+[Dd]esktop.ini
+
+# Agent / AI local directories
 .agents/
 .gemini/
-
-
-
+scratch/

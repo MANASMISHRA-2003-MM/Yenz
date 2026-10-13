@@ -1,0 +1,127 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --fc-green: #0aad0a;
+  --fc-green-soft: #e8ffe6;
+  --fc-green-dark: #0d7e0f;
+  --fc-red: rgb(229, 27, 75);
+  --fc-red-soft: #fff0f3;
+  --fc-red-dark: #b90f38;
+  --fc-fresh: rgb(22, 138, 91);
+  --fc-fresh-soft: #ecf8f1;
+  --fc-fresh-dark: #0f6945;
+  --fc-gray-50: #f9f9f9;
+  --fc-gray-100: #f0f3f2;
+  --fc-gray-200: #ecf0ef;
+  --fc-gray-300: #dfe2e1;
+  --fc-gray-400: #c1c7c6;
+  --fc-gray-500: #889397;
+  --fc-gray-600: #5c6c75;
+  --fc-gray-700: #3d4f58;
+  --fc-gray-800: #21313c;
+  --fc-gray-900: #001e2b;
+  --fc-radius: .75rem;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  color: var(--fc-gray-800);
+  background: #F8FAFC;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Safe areas for Android notched & gesture bar displays */
+.safe-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* FreshCart & Milega Vendor Utility Classes */
+@layer components {
+  .fc-container {
+    @apply mx-auto w-full px-4;
+    max-width: 1280px;
+  }
+  .fc-card {
+    @apply relative min-w-0 bg-white border;
+    border-color: #E2E8F0;
+    border-radius: var(--fc-radius);
+  }
+  .fc-btn {
+    @apply inline-flex items-center justify-center gap-2 font-bold border;
+    border-radius: 0.75rem;
+    padding: 0.65rem 1.15rem;
+    transition: 0.15s ease;
+  }
+  .fc-btn-primary {
+    background: #0F172A;
+    border-color: #0F172A;
+    color: #fff;
+  }
+  .fc-btn-primary:hover {
+    background: #1E293B;
+  }
+  .fc-btn-vendor {
+    background: var(--fc-fresh);
+    border-color: var(--fc-fresh);
+    color: #fff;
+  }
+  .fc-btn-vendor:hover {
+    background: var(--fc-fresh-dark);
+  }
+  .fc-input {
+    @apply w-full border bg-white outline-none;
+    border-color: #CBD5E1;
+    border-radius: 0.75rem;
+    padding: 0.7rem 0.9rem;
+    color: #1E293B;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .fc-input:focus {
+    border-color: #10B981;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+  }
+  .fc-eyebrow {
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #64748B;
+  }
+  .fc-label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #334155;
+    margin-bottom: 0.35rem;
+  }
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-out forwards;
+}
