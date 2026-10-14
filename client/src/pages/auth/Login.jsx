@@ -96,7 +96,12 @@ export default function Login() {
                 required
               />
 
-              <label className="fc-eyebrow block mb-2">Password</label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="fc-eyebrow mb-0">Password</label>
+                <Link to="/forgot-password" className="text-xs text-green-600 font-semibold hover:underline">
+                  Forgot password?
+                </Link>
+              </div>
               <input
                 className="fc-input mb-5"
                 type="password"

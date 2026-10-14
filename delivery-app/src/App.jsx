@@ -15,6 +15,7 @@ import {
 // Auth Pages
 const Login = lazy(() => import('./pages/auth/Login'));
 const Register = lazy(() => import('./pages/auth/Register'));
+const ForgotPassword = lazy(() => import('./pages/auth/ForgotPassword'));
 
 const PageFallback = () => (
   <div className="flex items-center justify-center min-h-[60vh]">
@@ -90,6 +91,7 @@ export default function App() {
             {/* Public Auth Routes */}
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
 
             {/* Delivery Core Dashboard */}
             <Route

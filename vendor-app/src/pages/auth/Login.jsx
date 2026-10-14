@@ -92,7 +92,12 @@ export default function Login() {
                 required
               />
 
-              <label className="fc-label">Password</label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="fc-label mb-0">Password</label>
+                <Link to="/forgot-password" className="text-xs text-emerald-600 font-bold hover:underline">
+                  Forgot password?
+                </Link>
+              </div>
               <input
                 className="fc-input mb-5 text-sm"
                 type="password"

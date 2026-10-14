@@ -23,6 +23,7 @@
     "@capacitor/status-bar": "^6.0.2",
     "axios": "^1.6.8",
     "clsx": "^2.1.0",
+    "firebase": "^11.4.0",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.359.0",
     "react": "^18.2.0",

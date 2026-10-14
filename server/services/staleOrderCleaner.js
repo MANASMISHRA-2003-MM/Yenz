@@ -118,8 +118,26 @@ async function cleanStaleOrders(timeoutMinutes = 20) {
       unassignedOrders: unassignedList
     };
   } catch (err) {
-    console.error('Error cleaning stale orders:', err);
-    throw err;
+    const errMsg = err?.message || String(err);
+    const isDbReconnecting =
+      errMsg.includes("Can't reach database") ||
+      errMsg.includes('P1001') ||
+      errMsg.includes('P2024') ||
+      errMsg.includes('standby') ||
+      errMsg.includes('timed out') ||
+      errMsg.includes('Connection pool') ||
+      errMsg.includes('terminating connection') ||
+      errMsg.includes('connection closed') ||
+      errMsg.includes('ECONNRESET') ||
+      errMsg.includes('ETIMEDOUT');
+
+    if (isDbReconnecting) {
+      console.warn('[AutoCleaner] Database standby / reconnecting in progress. Skipping cycle gracefully.');
+      return { count: 0, unassignedOrders: [] };
+    }
+
+    console.error('Error cleaning stale orders:', errMsg);
+    return { count: 0, unassignedOrders: [] };
   }
 }
 
@@ -130,11 +148,11 @@ function startStaleOrderCron(intervalMs = 60000, timeoutMinutes = 20) {
   cleanerInterval = setInterval(async () => {
     try {
       const res = await cleanStaleOrders(timeoutMinutes);
-      if (res.count > 0) {
+      if (res && res.count > 0) {
         console.log(`[AutoCleaner] Released ${res.count} stale delivery jobs back to pool.`);
       }
     } catch (e) {
-      console.warn('[AutoCleaner] Interval error:', e.message);
+      console.warn('[AutoCleaner] Interval notice:', e.message);
     }
   }, intervalMs);
 }

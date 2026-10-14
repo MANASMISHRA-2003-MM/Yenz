@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const prisma = require('../../utils/prisma');
 const { formatWithId } = require('../../utils/formatters');
+const admin = require('../../config/firebaseAdmin');
 
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET || 'krawing_hyperlocal_secret_key_2026_jwt_token_auth', {
@@ -43,7 +44,7 @@ const formatUserResponse = (user) => {
   });
 };
 
-// @desc Register User
+// @desc Register User with optional Firebase ID Token verification
 // @route POST /api/auth/register
 const registerUser = async (req, res, next) => {
   try {
@@ -53,6 +54,7 @@ const registerUser = async (req, res, next) => {
       password,
       role,
       phone,
+      idToken,
       vehicleType,
       shopName,
       vendorType,
@@ -68,7 +70,23 @@ const registerUser = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Please provide name, email, and password' });
     }
 
-    const rawPhone = phone ? phone.toString().trim() : '';
+    let verifiedPhoneFromToken = null;
+
+    // Verify phone ownership via Firebase Admin SDK if idToken provided
+    if (idToken) {
+      try {
+        const decodedToken = await admin.auth().verifyIdToken(idToken);
+        verifiedPhoneFromToken = decodedToken.phone_number;
+      } catch (fbErr) {
+        console.error('[Register] Firebase idToken verification failed:', fbErr.message);
+        return res.status(401).json({
+          success: false,
+          message: 'Phone verification token is invalid or expired. Please re-verify via SMS OTP.'
+        });
+      }
+    }
+
+    const rawPhone = (verifiedPhoneFromToken || phone || '').toString().trim();
     const digitsOnly = rawPhone.replace(/\D/g, '');
     if (!rawPhone || digitsOnly.length < 10) {
       return res.status(400).json({
@@ -80,13 +98,24 @@ const registerUser = async (req, res, next) => {
     const cleanEmail = email.toLowerCase().trim();
     const existingUser = await prisma.user.findUnique({ where: { email: cleanEmail } });
     if (existingUser) {
-      return res.status(400).json({ success: false, message: 'An account with this email address already exists. Please login instead.' });
+      return res.status(400).json({
+        success: false,
+        message: 'An account with this email address already exists. Please login instead.'
+      });
     }
 
-    const formattedPhone = rawPhone.startsWith('+') ? rawPhone : (digitsOnly.length === 10 ? `+91${digitsOnly}` : `+${digitsOnly}`);
+    const formattedPhone = verifiedPhoneFromToken
+      ? verifiedPhoneFromToken
+      : rawPhone.startsWith('+')
+      ? rawPhone
+      : (digitsOnly.length === 10 ? `+91${digitsOnly}` : `+${digitsOnly}`);
+
     const existingPhone = await prisma.user.findFirst({ where: { phone: formattedPhone } });
     if (existingPhone) {
-      return res.status(400).json({ success: false, message: 'This mobile phone number is already registered. Please login or use another number.' });
+      return res.status(400).json({
+        success: false,
+        message: 'This mobile phone number is already registered. Please login or use another number.'
+      });
     }
 
     const salt = await bcrypt.genSalt(10);
@@ -96,7 +125,7 @@ const registerUser = async (req, res, next) => {
     const user = await prisma.user.create({
       data: {
         id: crypto.randomUUID(),
-        fullName: name,
+        fullName: name.trim(),
         email: cleanEmail,
         phone: formattedPhone,
         passwordHash: hashedPassword,
@@ -106,15 +135,39 @@ const registerUser = async (req, res, next) => {
       }
     });
 
-    // If registering as VENDOR or DELIVERY_PARTNER, automatically log into Applications Hub for admin review
+    // If registering as VENDOR, create Vendor and VendorApplication records
     if (prismaRole === 'VENDOR') {
+      const storeName = (shopName && shopName.trim()) || `${name.trim()}'s Store`;
+      const isFresh = (vendorType && vendorType.toUpperCase().includes('FRESH'));
+
+      // Create Vendor Store Record
+      await prisma.vendor.create({
+        data: {
+          id: crypto.randomUUID(),
+          ownerUserId: user.id,
+          name: storeName,
+          phone: formattedPhone,
+          email: cleanEmail,
+          address: (address && address.trim()) || 'Pending Onboarding',
+          city: (city && city.trim()) || 'Noida',
+          state: state || 'UP',
+          pincode: pincode || '201301',
+          vendorType: isFresh ? 'FRESH' : 'CRAVINGS',
+          status: 'pending_verification',
+          image: isFresh
+            ? 'https://images.unsplash.com/photo-1610348725531-843dff563e2c?w=500&auto=format&fit=crop&q=60'
+            : 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=500&auto=format&fit=crop&q=60'
+        }
+      }).catch(e => console.warn('[Auto Application] Vendor store create notice:', e.message));
+
+      // Create Vendor Application for Admin Hub review
       await prisma.vendorApplication.create({
         data: {
           id: crypto.randomUUID(),
           userId: user.id,
-          fullName: name,
-          businessName: (shopName && shopName.trim()) || `${name}'s Store`,
-          vendorType: (vendorType && vendorType.toUpperCase().includes('FRESH')) ? 'FRESH' : 'CRAVINGS',
+          fullName: name.trim(),
+          businessName: storeName,
+          vendorType: isFresh ? 'FRESH' : 'CRAVINGS',
           phone: formattedPhone,
           email: cleanEmail,
           address: (address && address.trim()) || 'Pending Onboarding',
@@ -129,7 +182,7 @@ const registerUser = async (req, res, next) => {
         data: {
           id: crypto.randomUUID(),
           userId: user.id,
-          fullName: name,
+          fullName: name.trim(),
           phone: formattedPhone,
           email: cleanEmail,
           address: (address && address.trim()) || 'Pending Onboarding',
@@ -148,6 +201,90 @@ const registerUser = async (req, res, next) => {
       success: true,
       token,
       user: formattedUser
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc Reset Password using verified Firebase idToken
+// @route POST /api/auth/reset-password
+const resetPassword = async (req, res, next) => {
+  try {
+    const { idToken, role, newPassword } = req.body;
+
+    if (!idToken) {
+      return res.status(400).json({
+        success: false,
+        message: 'Phone verification token (idToken) is required.'
+      });
+    }
+
+    if (!newPassword || newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'New password must be at least 6 characters long.'
+      });
+    }
+
+    let decodedToken;
+    try {
+      decodedToken = await admin.auth().verifyIdToken(idToken);
+    } catch (fbErr) {
+      console.error('[Reset Password] Firebase token verification error:', fbErr.message);
+      return res.status(401).json({
+        success: false,
+        message: 'Phone verification token is invalid or expired. Please re-verify via OTP.'
+      });
+    }
+
+    const verifiedPhone = decodedToken.phone_number;
+    if (!verifiedPhone) {
+      return res.status(400).json({
+        success: false,
+        message: 'No verified phone number found in authentication token.'
+      });
+    }
+
+    const prismaRole = role ? mapToPrismaRole(role) : null;
+    let user = null;
+
+    if (prismaRole) {
+      user = await prisma.user.findFirst({
+        where: {
+          phone: verifiedPhone,
+          role: prismaRole
+        }
+      });
+    }
+
+    // Fallback: locate account by verified phone number if role was generic or unspecified
+    if (!user) {
+      user = await prisma.user.findFirst({
+        where: { phone: verifiedPhone }
+      });
+    }
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: `No registered account found with verified number ${verifiedPhone}. Please create an account.`
+      });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash: hashedPassword
+      }
+    });
+
+    return res.json({
+      success: true,
+      message: 'Password reset successfully. Please sign in with your new password.'
     });
   } catch (err) {
     next(err);
@@ -230,4 +367,4 @@ const getMe = async (req, res, next) => {
   }
 };
 
-module.exports = { registerUser, loginUser, demoLogin, getMe };
+module.exports = { registerUser, resetPassword, loginUser, demoLogin, getMe };

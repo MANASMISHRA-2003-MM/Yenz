@@ -18,6 +18,7 @@ const Profile = lazy(() => import('./modules/customer').then(m => ({ default: m.
 // Customer Auth Pages
 const Login = lazy(() => import('./pages/auth/Login'));
 const Register = lazy(() => import('./pages/auth/Register'));
+const ForgotPassword = lazy(() => import('./pages/auth/ForgotPassword'));
 
 const PageFallback = () => (
   <div className="fc-page flex items-center justify-center min-h-[60vh]">
@@ -52,6 +53,7 @@ export default function App() {
                 {/* Public / Auth */}
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
+                <Route path="/forgot-password" element={<ForgotPassword />} />
 
                 {/* Customer App Core Routes */}
                 <Route path="/" element={<Home />} />

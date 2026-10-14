@@ -31,6 +31,7 @@ const AdminApplications = lazy(() => import('./modules/admin').then(m => ({ defa
 // Common Auth
 const Login = lazy(() => import('./pages/auth/Login'));
 const Register = lazy(() => import('./pages/auth/Register'));
+const ForgotPassword = lazy(() => import('./pages/auth/ForgotPassword'));
 
 const PageFallback = () => (
   <div className="fc-page flex items-center justify-center">
@@ -93,6 +94,7 @@ export default function App() {
                 {/* Public / Auth */}
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
+                <Route path="/forgot-password" element={<ForgotPassword />} />
 
                 {/* Consumer Routes */}
                 <Route path="/" element={<ConsumerRoute><Home /></ConsumerRoute>} />
