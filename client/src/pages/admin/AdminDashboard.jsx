@@ -197,49 +197,38 @@ export default function AdminDashboard() {
 
         setRiderSelfies(combinedSelfies);
 
-        // Synthesize direct registrations from users into vendorApps & driverApps so admin sees everyone who registered
-        const existingVendors = resVendorApps.data?.applications || [];
-        const existingDrivers = resDriverApps.data?.applications || [];
-        const combinedVendors = [...existingVendors];
-        const combinedDrivers = [...existingDrivers];
+        // Only show new upcoming applications, excluding pre-existing permanent shops and permanent drivers
+        const permanentStoreNames = new Set([
+          ...resCravings.data?.restaurants || [],
+          ...resFresh.data?.restaurants || []
+        ].map(r => (r.name || '').toLowerCase().trim()));
+        const permanentOwnerIds = new Set([
+          ...resCravings.data?.restaurants || [],
+          ...resFresh.data?.restaurants || []
+        ].map(r => r.ownerUserId || r.ownerId).filter(Boolean));
+        const permanentDriverIds = new Set(['usr-driver-01', 'usr-driver-02']);
+        const permanentDriverEmails = new Set(['driver.arjun@krawing.com', 'driver.deepak@krawing.com']);
 
-        resUsers.data.users.forEach(u => {
-          const roleUpper = (u.role || '').toUpperCase();
-          if (roleUpper === 'VENDOR') {
-            if (!combinedVendors.some(v => v.userId === u.id || v.email === u.email)) {
-              combinedVendors.push({
-                id: 'user-' + u.id,
-                userId: u.id,
-                businessName: `${u.fullName || 'Partner Store'} (Direct Signup)`,
-                fullName: u.fullName,
-                phone: u.phone,
-                email: u.email,
-                address: u.address || 'Registered via Web/App',
-                city: 'Noida',
-                vendorType: 'CRAVINGS',
-                status: 'PENDING',
-                createdAt: u.createdAt || new Date().toISOString()
-              });
-            }
-          } else if (roleUpper === 'DELIVERY_PARTNER') {
-            if (!combinedDrivers.some(d => d.userId === u.id || d.email === u.email)) {
-              combinedDrivers.push({
-                id: 'user-' + u.id,
-                userId: u.id,
-                fullName: u.fullName,
-                phone: u.phone,
-                email: u.email,
-                vehicleType: u.vehicleType || 'Bike',
-                vehicleNumber: 'Direct Signup',
-                status: 'PENDING',
-                createdAt: u.createdAt || new Date().toISOString()
-              });
-            }
-          }
+        const rawVendors = resVendorApps.data?.applications || [];
+        const rawDrivers = resDriverApps.data?.applications || [];
+
+        const filteredVendors = rawVendors.filter(v => {
+          if (v.status === 'APPROVED') return false;
+          if (v.userId && permanentOwnerIds.has(v.userId)) return false;
+          const bName = (v.businessName || '').toLowerCase().trim();
+          if (permanentStoreNames.has(bName)) return false;
+          return true;
         });
 
-        setVendorApps(combinedVendors);
-        setDriverApps(combinedDrivers);
+        const filteredDrivers = rawDrivers.filter(d => {
+          if (d.status === 'APPROVED') return false;
+          if (permanentDriverIds.has(d.userId)) return false;
+          if (d.email && permanentDriverEmails.has(d.email.toLowerCase().trim())) return false;
+          return true;
+        });
+
+        setVendorApps(filteredVendors);
+        setDriverApps(filteredDrivers);
       } else {
         if (resVendorApps.data?.success) setVendorApps(resVendorApps.data.applications || []);
         if (resDriverApps.data?.success) setDriverApps(resDriverApps.data.applications || []);

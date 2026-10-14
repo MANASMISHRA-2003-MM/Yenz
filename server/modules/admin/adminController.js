@@ -239,16 +239,33 @@ const createProductVariant = async (req, res, next) => {
   }
 };
 
-// @desc Get all Vendor Applications
+// @desc Get all Vendor Applications (New upcoming requests only)
 // @route GET /api/admin/vendors/applications
 const getVendorApplications = async (req, res, next) => {
   try {
+    const existingStores = await prisma.vendor.findMany({
+      select: { ownerUserId: true, name: true, phone: true }
+    }).catch(() => []);
+    const existingOwnerIds = new Set(existingStores.map(s => s.ownerUserId).filter(Boolean));
+    const existingStoreNames = new Set(existingStores.map(s => (s.name || '').toLowerCase().trim()));
+
     const applications = await prisma.vendorApplication.findMany({
+      where: {
+        status: { not: 'APPROVED' }
+      },
       orderBy: { createdAt: 'desc' },
       include: { User: { select: { id: true, fullName: true, email: true, phone: true } } }
     });
 
-    const maskedApps = applications.map(app => ({
+    // Exclude pre-existing shops whose account or store already exists
+    const filteredApps = applications.filter(app => {
+      if (app.userId && existingOwnerIds.has(app.userId)) return false;
+      const bName = (app.businessName || '').toLowerCase().trim();
+      if (existingStoreNames.has(bName)) return false;
+      return true;
+    });
+
+    const maskedApps = filteredApps.map(app => ({
       ...app,
       documents: maskDocumentData(app.documents)
     }));
@@ -342,16 +359,29 @@ const updateVendorApplicationStatus = async (req, res, next) => {
   }
 };
 
-// @desc Get all Delivery Partner Applications
+// @desc Get all Delivery Partner Applications (New upcoming requests only)
 // @route GET /api/admin/delivery-partners/applications
 const getDeliveryPartnerApplications = async (req, res, next) => {
   try {
+    const permanentDriverIds = new Set(['usr-driver-01', 'usr-driver-02']);
+    const permanentDriverEmails = new Set(['driver.arjun@krawing.com', 'driver.deepak@krawing.com']);
+
     const applications = await prisma.deliveryPartnerApplication.findMany({
+      where: {
+        status: { not: 'APPROVED' }
+      },
       orderBy: { createdAt: 'desc' },
       include: { User: { select: { id: true, fullName: true, email: true, phone: true } } }
     });
 
-    const maskedApps = applications.map(app => ({
+    // Exclude permanent fleet drivers
+    const filteredApps = applications.filter(app => {
+      if (permanentDriverIds.has(app.userId)) return false;
+      if (app.email && permanentDriverEmails.has(app.email.toLowerCase().trim())) return false;
+      return true;
+    });
+
+    const maskedApps = filteredApps.map(app => ({
       ...app,
       bankDetails: maskDocumentData(app.bankDetails),
       documents: maskDocumentData(app.documents)

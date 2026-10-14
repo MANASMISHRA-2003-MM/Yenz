@@ -36,96 +36,38 @@ export default function AdminApplications() {
   const fetchApplications = async () => {
     try {
       setLoading(true);
-      const [resVendor, resDriver, resUsers] = await Promise.all([
+      const [resVendor, resDriver, resRestaurants] = await Promise.all([
         API.get('/admin/vendors/applications').catch(() => ({ data: { success: false } })),
         API.get('/admin/delivery-partners/applications').catch(() => ({ data: { success: false } })),
-        API.get('/admin/users').catch(() => ({ data: { success: false } }))
+        API.get('/restaurants').catch(() => ({ data: { success: false } }))
       ]);
 
-      let vendors = resVendor.data?.applications || [];
-      let drivers = resDriver.data?.applications || [];
+      const permanentRestaurants = resRestaurants.data?.restaurants || [];
+      const permanentStoreNames = new Set(
+        permanentRestaurants.map(r => (r.name || '').toLowerCase().trim())
+      );
+      const permanentOwnerIds = new Set(
+        permanentRestaurants.map(r => r.ownerUserId || r.ownerId).filter(Boolean)
+      );
+      const permanentDriverIds = new Set(['usr-driver-01', 'usr-driver-02']);
+      const permanentDriverEmails = new Set(['driver.arjun@krawing.com', 'driver.deepak@krawing.com']);
 
-      // Automatically include any registered user with VENDOR or DELIVERY_PARTNER role
-      if (resUsers.data?.success && Array.isArray(resUsers.data.users)) {
-        resUsers.data.users.forEach(u => {
-          const roleUpper = (u.role || '').toUpperCase();
-          if (roleUpper === 'VENDOR') {
-            const alreadyHasApp = vendors.some(v => v.userId === u.id || v.email === u.email);
-            if (!alreadyHasApp) {
-              vendors.push({
-                id: 'reg-vendor-' + u.id,
-                userId: u.id,
-                businessName: `${u.fullName || 'Partner Store'} (Direct Signup)`,
-                fullName: u.fullName,
-                phone: u.phone,
-                email: u.email,
-                address: u.address || 'Registered via App / Website',
-                city: 'Noida',
-                state: 'UP',
-                pincode: '201301',
-                vendorType: 'CRAVINGS',
-                status: 'PENDING',
-                createdAt: u.createdAt || u.updatedAt || new Date().toISOString(),
-                details: { fssaiNumber: 'Direct Signup', gstNumber: 'Direct Signup' },
-                isDirectRegistration: true
-              });
-            }
-          } else if (roleUpper === 'DELIVERY_PARTNER') {
-            const alreadyHasApp = drivers.some(d => d.userId === u.id || d.email === u.email);
-            if (!alreadyHasApp) {
-              drivers.push({
-                id: 'reg-driver-' + u.id,
-                userId: u.id,
-                fullName: u.fullName,
-                phone: u.phone,
-                email: u.email,
-                address: u.address || 'Registered via App / Website',
-                vehicleType: u.vehicleType || 'Bike',
-                status: 'PENDING',
-                createdAt: u.createdAt || u.updatedAt || new Date().toISOString(),
-                details: { vehicleNumber: 'Direct Signup', dlNumber: 'Direct Signup' },
-                isDirectRegistration: true
-              });
-            }
-          }
-        });
-      }
+      // Only show new upcoming vendor requests whose accounts and shops do not already exist
+      let vendors = (resVendor.data?.applications || []).filter(v => {
+        if (v.status === 'APPROVED') return false;
+        if (v.userId && permanentOwnerIds.has(v.userId)) return false;
+        const bName = (v.businessName || '').toLowerCase().trim();
+        if (permanentStoreNames.has(bName)) return false;
+        return true;
+      });
 
-      // If current user is a vendor or driver, make sure their profile is included if not already present
-      if (authUser) {
-        const myRole = (authUser.role || '').toUpperCase();
-        if (myRole === 'VENDOR' && !vendors.some(v => v.userId === authUser.id || v.email === authUser.email)) {
-          vendors.unshift({
-            id: 'reg-vendor-' + authUser.id,
-            userId: authUser.id,
-            businessName: `${authUser.fullName || 'Partner Store'} (Your Application)`,
-            fullName: authUser.fullName,
-            phone: authUser.phone,
-            email: authUser.email,
-            address: authUser.address || 'Registered via App / Website',
-            city: 'Noida',
-            vendorType: 'CRAVINGS',
-            status: 'PENDING',
-            createdAt: authUser.createdAt || new Date().toISOString(),
-            details: { fssaiNumber: 'Pending Verification', gstNumber: 'Pending Verification' },
-            isDirectRegistration: true
-          });
-        } else if (myRole === 'DELIVERY_PARTNER' && !drivers.some(d => d.userId === authUser.id || d.email === authUser.email)) {
-          drivers.unshift({
-            id: 'reg-driver-' + authUser.id,
-            userId: authUser.id,
-            fullName: authUser.fullName,
-            phone: authUser.phone,
-            email: authUser.email,
-            address: authUser.address || 'Registered via App / Website',
-            vehicleType: authUser.vehicleType || 'Bike',
-            status: 'PENDING',
-            createdAt: authUser.createdAt || new Date().toISOString(),
-            details: { vehicleNumber: 'Pending Verification', dlNumber: 'Pending Verification' },
-            isDirectRegistration: true
-          });
-        }
-      }
+      // Only show new upcoming delivery partner requests, excluding permanent drivers
+      let drivers = (resDriver.data?.applications || []).filter(d => {
+        if (d.status === 'APPROVED') return false;
+        if (permanentDriverIds.has(d.userId)) return false;
+        if (d.email && permanentDriverEmails.has(d.email.toLowerCase().trim())) return false;
+        return true;
+      });
 
       setVendorApps(vendors);
       setDriverApps(drivers);
