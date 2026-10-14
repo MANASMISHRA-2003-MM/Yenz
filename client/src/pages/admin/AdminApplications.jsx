@@ -6,7 +6,7 @@ import Navbar from '../../components/Navbar';
 import FreshCartFooter from '../../components/FreshCartFooter';
 import {
   ShieldCheck, Store, Bike, CheckCircle2, XCircle, Clock, Search, Filter,
-  Phone, Mail, MapPin, FileCheck2, User, ExternalLink, ArrowRight, X, MessageSquare, Trash2
+  Phone, Mail, MapPin, FileCheck2, User, ExternalLink, ArrowRight, X, MessageSquare, Trash2, AlertCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -79,53 +79,91 @@ export default function AdminApplications() {
     }
   };
 
-  const handleDeleteApplication = async (app) => {
+  // In-app Sonner Confirmation Card (Zero Browser Popups)
+  const confirmWithSonner = (title, message, onConfirm) => {
+    toast.custom((t) => (
+      <div className="bg-white border-2 border-rose-200 shadow-2xl rounded-2xl p-4 flex flex-col gap-3 min-w-[320px] max-w-sm pointer-events-auto animate-fade-in">
+        <div className="flex items-start gap-2.5">
+          <div className="p-2 bg-rose-100 text-rose-600 rounded-xl shrink-0 mt-0.5">
+            <AlertCircle className="w-4 h-4" />
+          </div>
+          <div className="flex-1">
+            <h4 className="text-xs font-black text-slate-900">{title}</h4>
+            <p className="text-[11px] text-slate-500 font-medium mt-0.5">{message}</p>
+          </div>
+        </div>
+        <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100">
+          <button
+            type="button"
+            onClick={() => toast.dismiss(t)}
+            className="px-3 py-1.5 text-xs font-bold text-slate-600 hover:text-slate-800 rounded-lg hover:bg-slate-100 transition cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              toast.dismiss(t);
+              onConfirm();
+            }}
+            className="px-3.5 py-1.5 text-xs font-black bg-rose-600 hover:bg-rose-700 text-white rounded-lg shadow-sm transition cursor-pointer"
+          >
+            Confirm Delete
+          </button>
+        </div>
+      </div>
+    ), { duration: 10000 });
+  };
+
+  const handleDeleteApplication = (app) => {
     if (!app) return;
     const name = app.businessName || app.applicantName || 'this application';
-    if (!window.confirm(`Are you sure you want to permanently delete the application for "${name}" from the database? This cannot be undone.`)) {
-      return;
-    }
+    confirmWithSonner(
+      `Permanently Delete Application?`,
+      `Are you sure you want to permanently delete the onboarding request for "${name}" from the database?`,
+      async () => {
+        try {
+          setProcessing(true);
+          const isVendor = app.appType === 'VENDOR';
+          const userId = app.userId || (app.id.startsWith('reg-vendor-') ? app.id.replace('reg-vendor-', '') : (app.id.startsWith('reg-driver-') ? app.id.replace('reg-driver-', '') : null));
 
-    try {
-      setProcessing(true);
-      const isVendor = app.appType === 'VENDOR';
-      const userId = app.userId || (app.id.startsWith('reg-vendor-') ? app.id.replace('reg-vendor-', '') : (app.id.startsWith('reg-driver-') ? app.id.replace('reg-driver-', '') : null));
+          // 1. Delete application record if not synthesized
+          if (!app.id.startsWith('reg-')) {
+            if (isVendor) {
+              await API.delete(`/admin/vendors/applications/${app.id}`).catch(() => {});
+            } else {
+              await API.delete(`/admin/delivery-partners/applications/${app.id}`).catch(() => {});
+            }
+          }
 
-      // 1. Delete application record if not synthesized
-      if (!app.id.startsWith('reg-')) {
-        if (isVendor) {
-          await API.delete(`/admin/vendors/applications/${app.id}`).catch(() => {});
-        } else {
-          await API.delete(`/admin/delivery-partners/applications/${app.id}`).catch(() => {});
+          // 2. Delete user account from database
+          if (userId) {
+            await API.delete(`/admin/users/${userId}`).catch(async () => {
+              await API.put(`/admin/users/${userId}`, { status: 'DELETED', isActive: false }).catch(() => {});
+            });
+          }
+
+          // 3. Immediately update UI state
+          if (isVendor) {
+            setVendorApps(prev => prev.filter(v => v.id !== app.id && v.userId !== userId));
+          } else {
+            setDriverApps(prev => prev.filter(d => d.id !== app.id && d.userId !== userId));
+          }
+
+          if (selectedApp && (selectedApp.id === app.id || selectedApp.userId === userId)) {
+            setSelectedApp(null);
+            setAdminNoteInput('');
+          }
+
+          toast.success(`Application for "${name}" permanently deleted from database.`);
+        } catch (err) {
+          console.error('Delete application error:', err);
+          toast.error(err.response?.data?.message || 'Failed to delete application from database');
+        } finally {
+          setProcessing(false);
         }
       }
-
-      // 2. Delete user account or deactivate from database
-      if (userId) {
-        await API.delete(`/admin/users/${userId}`).catch(async () => {
-          await API.put(`/admin/users/${userId}`, { status: 'DELETED', isActive: false }).catch(() => {});
-        });
-      }
-
-      // 3. Immediately update UI state
-      if (isVendor) {
-        setVendorApps(prev => prev.filter(v => v.id !== app.id && v.userId !== userId));
-      } else {
-        setDriverApps(prev => prev.filter(d => d.id !== app.id && d.userId !== userId));
-      }
-
-      if (selectedApp && (selectedApp.id === app.id || selectedApp.userId === userId)) {
-        setSelectedApp(null);
-        setAdminNoteInput('');
-      }
-
-      toast.success(`Application for "${name}" permanently deleted from database.`);
-    } catch (err) {
-      console.error('Delete application error:', err);
-      toast.error(err.response?.data?.message || 'Failed to delete application from database');
-    } finally {
-      setProcessing(false);
-    }
+    );
   };
 
   const handleUpdateVendorStatus = async (appId, status, note = '', targetCategory = 'CRAVINGS') => {

@@ -518,11 +518,17 @@ const deleteFoodItem = async (req, res, next) => {
       });
     }
 
+    const productId = req.params.id;
+    await prisma.cartItem.deleteMany({ where: { productId } }).catch(() => {});
+    await prisma.productPriceHistory.deleteMany({ where: { productId } }).catch(() => {});
+    await prisma.productVariant.deleteMany({ where: { productId } }).catch(() => {});
+    await prisma.orderItem.deleteMany({ where: { productId } }).catch(() => {});
+
     await prisma.product.delete({
-      where: { id: req.params.id }
+      where: { id: productId }
     });
 
-    res.json({ success: true, message: 'Product deleted successfully' });
+    res.json({ success: true, message: 'Product permanently deleted from database' });
   } catch (err) {
     next(err);
   }

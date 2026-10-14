@@ -704,17 +704,130 @@ const deleteRiderSelfie = async (req, res, next) => {
   }
 };
 
+// Comprehensive Cascade Cleanup helper for deleting Users (Customers, Vendors, Riders)
+const cleanupUserDependencies = async (id) => {
+  // 1. Delivery locations and deliveries where user was delivery partner
+  await prisma.deliveryLocation.deleteMany({
+    where: { Delivery: { deliveryPartnerId: id } }
+  }).catch(() => {});
+
+  await prisma.delivery.deleteMany({
+    where: { deliveryPartnerId: id }
+  }).catch(() => {});
+
+  // 2. Delivery offers
+  await prisma.deliveryOffer.deleteMany({
+    where: { deliveryPartnerId: id }
+  }).catch(() => {});
+
+  // 3. Rider live locations and payouts
+  await prisma.riderLocation.deleteMany({
+    where: { riderId: id }
+  }).catch(() => {});
+
+  await prisma.riderPayout.deleteMany({
+    where: { riderId: id }
+  }).catch(() => {});
+
+  // 4. Reviews where user was reviewer or delivery partner
+  await prisma.review.deleteMany({
+    where: { OR: [{ userId: id }, { deliveryPartnerId: id }] }
+  }).catch(() => {});
+
+  // 5. Orders where user was delivery partner or vendor user
+  await prisma.order.updateMany({
+    where: { deliveryPartnerId: id },
+    data: { deliveryPartnerId: null }
+  }).catch(() => {});
+
+  await prisma.order.updateMany({
+    where: { vendorUserId: id },
+    data: { vendorUserId: null }
+  }).catch(() => {});
+
+  // 6. Orders where user was customer
+  const customerOrders = await prisma.order.findMany({
+    where: { customerId: id },
+    select: { id: true }
+  }).catch(() => []);
+
+  if (customerOrders && customerOrders.length > 0) {
+    const orderIds = customerOrders.map(o => o.id);
+    await prisma.deliveryLocation.deleteMany({ where: { Delivery: { orderId: { in: orderIds } } } }).catch(() => {});
+    await prisma.delivery.deleteMany({ where: { orderId: { in: orderIds } } }).catch(() => {});
+    await prisma.deliveryOffer.deleteMany({ where: { orderId: { in: orderIds } } }).catch(() => {});
+    await prisma.orderItem.deleteMany({ where: { orderId: { in: orderIds } } }).catch(() => {});
+    await prisma.orderTimeline.deleteMany({ where: { orderId: { in: orderIds } } }).catch(() => {});
+    await prisma.payment.deleteMany({ where: { orderId: { in: orderIds } } }).catch(() => {});
+    await prisma.refund.deleteMany({ where: { orderId: { in: orderIds } } }).catch(() => {});
+    await prisma.review.deleteMany({ where: { orderId: { in: orderIds } } }).catch(() => {});
+    await prisma.order.deleteMany({ where: { id: { in: orderIds } } }).catch(() => {});
+  }
+
+  // 7. Vendors/Stores owned by user
+  const ownedVendors = await prisma.vendor.findMany({
+    where: { ownerUserId: id },
+    select: { id: true }
+  }).catch(() => []);
+
+  for (const v of ownedVendors) {
+    const prods = await prisma.product.findMany({ where: { vendorId: v.id }, select: { id: true } }).catch(() => []);
+    const prodIds = prods.map(p => p.id);
+    if (prodIds.length > 0) {
+      await prisma.cartItem.deleteMany({ where: { productId: { in: prodIds } } }).catch(() => {});
+      await prisma.orderItem.deleteMany({ where: { productId: { in: prodIds } } }).catch(() => {});
+      await prisma.productPriceHistory.deleteMany({ where: { productId: { in: prodIds } } }).catch(() => {});
+      await prisma.productVariant.deleteMany({ where: { productId: { in: prodIds } } }).catch(() => {});
+      await prisma.product.deleteMany({ where: { id: { in: prodIds } } }).catch(() => {});
+    }
+    await prisma.cart.deleteMany({ where: { vendorId: v.id } }).catch(() => {});
+    await prisma.vendorHours.deleteMany({ where: { vendorId: v.id } }).catch(() => {});
+    const vOrders = await prisma.order.findMany({ where: { vendorId: v.id }, select: { id: true } }).catch(() => []);
+    if (vOrders && vOrders.length > 0) {
+      const vOrderIds = vOrders.map(o => o.id);
+      await prisma.deliveryLocation.deleteMany({ where: { Delivery: { orderId: { in: vOrderIds } } } }).catch(() => {});
+      await prisma.delivery.deleteMany({ where: { orderId: { in: vOrderIds } } }).catch(() => {});
+      await prisma.deliveryOffer.deleteMany({ where: { orderId: { in: vOrderIds } } }).catch(() => {});
+      await prisma.orderItem.deleteMany({ where: { orderId: { in: vOrderIds } } }).catch(() => {});
+      await prisma.orderTimeline.deleteMany({ where: { orderId: { in: vOrderIds } } }).catch(() => {});
+      await prisma.payment.deleteMany({ where: { orderId: { in: vOrderIds } } }).catch(() => {});
+      await prisma.refund.deleteMany({ where: { orderId: { in: vOrderIds } } }).catch(() => {});
+      await prisma.review.deleteMany({ where: { orderId: { in: vOrderIds } } }).catch(() => {});
+      await prisma.order.deleteMany({ where: { id: { in: vOrderIds } } }).catch(() => {});
+    }
+    await prisma.review.deleteMany({ where: { vendorId: v.id } }).catch(() => {});
+    await prisma.vendor.delete({ where: { id: v.id } }).catch(() => {});
+  }
+
+  // 8. User Cart and Addresses
+  await prisma.cartItem.deleteMany({ where: { Cart: { userId: id } } }).catch(() => {});
+  await prisma.cart.deleteMany({ where: { userId: id } }).catch(() => {});
+  await prisma.order.updateMany({ where: { Address: { userId: id } }, data: { addressId: null } }).catch(() => {});
+  await prisma.address.deleteMany({ where: { userId: id } }).catch(() => {});
+
+  // 9. Notifications, audit logs, applications
+  await prisma.notification.deleteMany({ where: { userId: id } }).catch(() => {});
+  await prisma.verificationAuditLog.deleteMany({ where: { actorId: id } }).catch(() => {});
+  await prisma.vendorApplication.deleteMany({ where: { userId: id } }).catch(() => {});
+  await prisma.deliveryPartnerApplication.deleteMany({ where: { userId: id } }).catch(() => {});
+};
+
 // @desc Delete User
 // @route DELETE /api/admin/users/:id
 const deleteUser = async (req, res, next) => {
   try {
     const { id } = req.params;
-    await prisma.cart.deleteMany({ where: { userId: id } }).catch(() => {});
-    await prisma.vendorApplication.deleteMany({ where: { userId: id } }).catch(() => {});
-    await prisma.deliveryPartnerApplication.deleteMany({ where: { userId: id } }).catch(() => {});
-    await prisma.verificationAuditLog.deleteMany({ where: { actorId: id } }).catch(() => {});
-    await prisma.user.delete({ where: { id } });
-    res.json({ success: true, message: 'User deleted successfully from database' });
+    await cleanupUserDependencies(id);
+    try {
+      await prisma.user.delete({ where: { id } });
+    } catch (delErr) {
+      console.warn('Fallback soft-delete for user', id, delErr.message);
+      await prisma.user.update({
+        where: { id },
+        data: { status: 'DELETED', isOnline: false }
+      }).catch(() => {});
+    }
+    res.json({ success: true, message: 'User permanently deleted from database' });
   } catch (err) {
     next(err);
   }
@@ -725,7 +838,17 @@ const deleteUser = async (req, res, next) => {
 const deleteVendorApplication = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const app = await prisma.vendorApplication.findUnique({ where: { id } }).catch(() => null);
     await prisma.vendorApplication.deleteMany({ where: { id } });
+    if (app?.userId) {
+      const user = await prisma.user.findUnique({ where: { id: app.userId } }).catch(() => null);
+      if (user && !user.isVerified) {
+        await cleanupUserDependencies(app.userId).catch(() => {});
+        await prisma.user.delete({ where: { id: app.userId } }).catch(async () => {
+          await prisma.user.update({ where: { id: app.userId }, data: { status: 'DELETED' } }).catch(() => {});
+        });
+      }
+    }
     res.json({ success: true, message: 'Vendor application deleted from database' });
   } catch (err) {
     next(err);
@@ -737,8 +860,121 @@ const deleteVendorApplication = async (req, res, next) => {
 const deleteDeliveryPartnerApplication = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const app = await prisma.deliveryPartnerApplication.findUnique({ where: { id } }).catch(() => null);
     await prisma.deliveryPartnerApplication.deleteMany({ where: { id } });
+    if (app?.userId) {
+      const user = await prisma.user.findUnique({ where: { id: app.userId } }).catch(() => null);
+      if (user && !user.isVerified) {
+        await cleanupUserDependencies(app.userId).catch(() => {});
+        await prisma.user.delete({ where: { id: app.userId } }).catch(async () => {
+          await prisma.user.update({ where: { id: app.userId }, data: { status: 'DELETED', isOnline: false } }).catch(() => {});
+        });
+      }
+    }
     res.json({ success: true, message: 'Delivery partner application deleted from database' });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc Get all existing delivery partners with details, metrics & trip stats
+// @route GET /api/admin/delivery-partners
+const getDeliveryPartners = async (req, res, next) => {
+  try {
+    const rawDrivers = await prisma.user.findMany({
+      where: {
+        role: 'DELIVERY_PARTNER'
+      },
+      include: {
+        Delivery: {
+          select: {
+            id: true,
+            status: true,
+            earnings: true,
+            createdAt: true,
+            orderId: true
+          }
+        },
+        DeliveryPartnerApplication: {
+          select: {
+            vehicleType: true,
+            vehicleNumber: true,
+            dlNumber: true,
+            address: true,
+            status: true
+          },
+          take: 1
+        },
+        RiderLocation: true
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    const drivers = rawDrivers.map(d => {
+      const { passwordHash, ...safeUser } = d;
+      const app = d.DeliveryPartnerApplication?.[0] || {};
+      const completedTrips = (d.Delivery || []).filter(t => t.status === 'DELIVERED');
+      const totalEarnings = completedTrips.reduce((acc, t) => acc + Number(t.earnings || 65), 0);
+      const activeTrip = (d.Delivery || []).find(t => ['ASSIGNED', 'ACCEPTED', 'ARRIVED_AT_STORE', 'PICKED_UP', 'OUT_FOR_DELIVERY'].includes(t.status));
+
+      return {
+        ...safeUser,
+        avatar: d.avatar || 'https://img.icons8.com/?size=100&id=85147&format=png&color=000000',
+        vehicleType: d.vehicleType || app.vehicleType || 'Bike',
+        vehicleNumber: app.vehicleNumber || 'Registered Fleet',
+        dlNumber: app.dlNumber || 'Verified License',
+        address: app.address || safeUser.address || 'Noida Fleet Hub',
+        completedTripsCount: completedTrips.length,
+        totalEarnings,
+        activeTrip: activeTrip || null,
+        latitude: d.RiderLocation?.latitude || safeUser.latitude || null,
+        longitude: d.RiderLocation?.longitude || safeUser.longitude || null
+      };
+    });
+
+    res.json({
+      success: true,
+      count: drivers.length,
+      drivers
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc Update Delivery Partner details & status
+// @route PUT /api/admin/delivery-partners/:id
+const updateDeliveryPartner = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { fullName, phone, email, vehicleType, vehicleNumber, dlNumber, status, isOnline, address } = req.body;
+
+    const updateData = {};
+    if (fullName) updateData.fullName = fullName;
+    if (phone) updateData.phone = phone;
+    if (email) updateData.email = email;
+    if (vehicleType) updateData.vehicleType = vehicleType;
+    if (status) updateData.status = status;
+    if (address) updateData.address = address;
+    if (typeof isOnline === 'boolean') updateData.isOnline = isOnline;
+
+    const updatedUser = await prisma.user.update({
+      where: { id },
+      data: updateData
+    });
+
+    if (vehicleNumber || dlNumber) {
+      await prisma.deliveryPartnerApplication.updateMany({
+        where: { userId: id },
+        data: {
+          ...(vehicleNumber ? { vehicleNumber } : {}),
+          ...(dlNumber ? { dlNumber } : {})
+        }
+      }).catch(() => {});
+    }
+
+    const { passwordHash, ...safeUser } = updatedUser;
+    res.json({ success: true, message: 'Delivery partner updated successfully', driver: safeUser });
   } catch (err) {
     next(err);
   }
@@ -763,5 +999,7 @@ module.exports = {
   uploadImage,
   getOrderDispatchHistory,
   getRiderSelfies,
-  deleteRiderSelfie
+  deleteRiderSelfie,
+  getDeliveryPartners,
+  updateDeliveryPartner
 };

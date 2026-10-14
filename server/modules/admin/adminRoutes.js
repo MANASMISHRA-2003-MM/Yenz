@@ -19,7 +19,9 @@ const {
   deleteRiderSelfie,
   deleteUser,
   deleteVendorApplication,
-  deleteDeliveryPartnerApplication
+  deleteDeliveryPartnerApplication,
+  getDeliveryPartners,
+  updateDeliveryPartner
 } = require('./adminController');
 const { protect, authorize } = require('../../middlewares/authMiddleware');
 const { adminRateLimiter } = require('../../middlewares/rateLimiter');
@@ -45,6 +47,9 @@ router.get('/delivery-partners/applications', getDeliveryPartnerApplications);
 router.put('/delivery-partners/applications/:id/status', updateDeliveryPartnerApplicationStatus);
 router.delete('/delivery-partners/applications/:id', deleteDeliveryPartnerApplication);
 
+router.get('/delivery-partners', getDeliveryPartners);
+router.put('/delivery-partners/:id', updateDeliveryPartner);
+router.delete('/delivery-partners/:id', deleteUser);
 router.get('/delivery-partners/selfies', getRiderSelfies);
 router.delete('/delivery-partners/selfies/:id', deleteRiderSelfie);
 

@@ -146,25 +146,55 @@ export default function MasterMenuStickyBar({
   };
 
   // Delete menu card photo
-  const handleDeleteMenuCardImage = async () => {
-    if (!window.confirm('Are you sure you want to remove the Master Menu Card photo for this restaurant?')) return;
-    try {
-      setUploadingPhoto(true);
-      const res = await API.put(`/restaurants/${vendorId}`, {
-        menuCardImage: ''
-      });
-      if (res.data.success) {
-        toast.success('Master Menu Card photo removed');
-        setIsLightboxOpen(false);
-        if (onRestaurantUpdated) {
-          onRestaurantUpdated(res.data.restaurant || { ...restaurant, menuCardImage: null });
-        }
-      }
-    } catch (err) {
-      toast.error('Failed to remove menu card photo');
-    } finally {
-      setUploadingPhoto(false);
-    }
+  const handleDeleteMenuCardImage = () => {
+    toast.custom((t) => (
+      <div className="bg-white border-2 border-rose-200 shadow-2xl rounded-2xl p-4 flex flex-col gap-3 min-w-[320px] max-w-sm pointer-events-auto animate-fade-in">
+        <div className="flex items-start gap-2.5">
+          <div className="p-2 bg-rose-100 text-rose-600 rounded-xl shrink-0 mt-0.5">
+            <AlertCircle className="w-4 h-4" />
+          </div>
+          <div className="flex-1">
+            <h4 className="text-xs font-black text-slate-900">Remove Master Menu Card?</h4>
+            <p className="text-[11px] text-slate-500 font-medium mt-0.5">Are you sure you want to remove the Master Menu Card photo for this restaurant?</p>
+          </div>
+        </div>
+        <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100">
+          <button
+            type="button"
+            onClick={() => toast.dismiss(t)}
+            className="px-3 py-1.5 text-xs font-bold text-slate-600 hover:text-slate-800 rounded-lg hover:bg-slate-100 transition cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={async () => {
+              toast.dismiss(t);
+              try {
+                setUploadingPhoto(true);
+                const res = await API.put(`/restaurants/${vendorId}`, {
+                  menuCardImage: ''
+                });
+                if (res.data.success) {
+                  toast.success('Master Menu Card photo removed');
+                  setIsLightboxOpen(false);
+                  if (onRestaurantUpdated) {
+                    onRestaurantUpdated(res.data.restaurant || { ...restaurant, menuCardImage: null });
+                  }
+                }
+              } catch (err) {
+                toast.error('Failed to remove menu card photo');
+              } finally {
+                setUploadingPhoto(false);
+              }
+            }}
+            className="px-3.5 py-1.5 text-xs font-black bg-rose-600 hover:bg-rose-700 text-white rounded-lg shadow-sm transition cursor-pointer"
+          >
+            Confirm Remove
+          </button>
+        </div>
+      </div>
+    ), { duration: 10000 });
   };
 
   // Save quick price in Master Price Booklet

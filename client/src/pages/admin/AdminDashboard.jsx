@@ -13,7 +13,7 @@ import {
 import {
   ShieldCheck, CheckCircle2, XCircle, FileText, Store, Bike, Plus, Edit2,
   Trash2, History, Utensils, ShoppingBag, Eye, Tag, AlertCircle, Search, X, FileCheck2,
-  Camera, MapPin, Clock
+  Camera, MapPin, Clock, Phone, Navigation, RefreshCw
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getUniversalProfileIcon } from '../../utils/imageUtils';
@@ -29,6 +29,25 @@ export default function AdminDashboard() {
   const [categories, setCategories] = useState([]);
   const [riderSelfies, setRiderSelfies] = useState([]);
   const [loadingSelfies, setLoadingSelfies] = useState(false);
+
+  // deliveryP (Delivery Partners Hub) State
+  const [selectedDriver, setSelectedDriver] = useState(null);
+  const [driverSearch, setDriverSearch] = useState('');
+  const [driverStatusFilter, setDriverStatusFilter] = useState('ALL'); // 'ALL' | 'ONLINE' | 'OFFLINE'
+  const [isDriverModalOpen, setIsDriverModalOpen] = useState(false);
+  const [editingDriverForm, setEditingDriverForm] = useState({
+    id: '',
+    fullName: '',
+    phone: '',
+    email: '',
+    vehicleType: 'Bike',
+    vehicleNumber: '',
+    dlNumber: '',
+    address: '',
+    status: 'active',
+    isOnline: true
+  });
+  const [savingDriver, setSavingDriver] = useState(false);
 
   // Cravings & Fresh Mandi state
   const [cravingsVendors, setCravingsVendors] = useState([]);
@@ -125,7 +144,8 @@ export default function AdminDashboard() {
         resDriverApps,
         resCategories,
         resCravings,
-        resFresh
+        resFresh,
+        resDeliveryPartners
       ] = await Promise.all([
         API.get('/admin/metrics'),
         API.get('/analytics'),
@@ -135,7 +155,8 @@ export default function AdminDashboard() {
         API.get('/admin/delivery-partners/applications'),
         API.get('/categories'),
         API.get('/restaurants?vendorType=CRAVINGS'),
-        API.get('/restaurants?vendorType=FRESH')
+        API.get('/restaurants?vendorType=FRESH'),
+        API.get('/admin/delivery-partners').catch(() => null)
       ]);
 
       if (resMetrics.data.success) setMetrics(resMetrics.data.metrics);
@@ -162,8 +183,19 @@ export default function AdminDashboard() {
 
       if (resUsers?.data?.success && Array.isArray(resUsers.data.users)) {
         setUsers(resUsers.data.users);
-        const driverList = resUsers.data.users.filter(u => (u.role || '').toUpperCase() === 'DELIVERY_PARTNER');
+        let driverList = [];
+        if (resDeliveryPartners?.data?.success && Array.isArray(resDeliveryPartners.data.drivers) && resDeliveryPartners.data.drivers.length > 0) {
+          driverList = resDeliveryPartners.data.drivers;
+        } else {
+          driverList = resUsers.data.users.filter(u => (u.role || '').toUpperCase() === 'DELIVERY_PARTNER');
+        }
         setDrivers(driverList);
+        if (driverList.length > 0) {
+          setSelectedDriver(prev => {
+            if (!prev) return driverList[0];
+            return driverList.find(d => d.id === prev.id) || driverList[0];
+          });
+        }
 
         let combinedSelfies = [...auditSelfies];
         driverList
@@ -310,39 +342,168 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleDeleteDriverSelfie = async (selfie) => {
+  // In-app Sonner Confirmation Card (Zero Browser Popups)
+  const confirmWithSonner = (title, message, onConfirm) => {
+    toast.custom((t) => (
+      <div className="bg-white border-2 border-rose-200 shadow-2xl rounded-2xl p-4 flex flex-col gap-3 min-w-[320px] max-w-sm pointer-events-auto animate-fade-in">
+        <div className="flex items-start gap-2.5">
+          <div className="p-2 bg-rose-100 text-rose-600 rounded-xl shrink-0 mt-0.5">
+            <AlertCircle className="w-4 h-4" />
+          </div>
+          <div className="flex-1">
+            <h4 className="text-xs font-black text-slate-900">{title}</h4>
+            <p className="text-[11px] text-slate-500 font-medium mt-0.5">{message}</p>
+          </div>
+        </div>
+        <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100">
+          <button
+            type="button"
+            onClick={() => toast.dismiss(t)}
+            className="px-3 py-1.5 text-xs font-bold text-slate-600 hover:text-slate-800 rounded-lg hover:bg-slate-100 transition cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              toast.dismiss(t);
+              onConfirm();
+            }}
+            className="px-3.5 py-1.5 text-xs font-black bg-rose-600 hover:bg-rose-700 text-white rounded-lg shadow-sm transition cursor-pointer"
+          >
+            Confirm Delete
+          </button>
+        </div>
+      </div>
+    ), { duration: 10000 });
+  };
+
+  const handleDeleteDriverSelfie = (selfie) => {
     const riderName = selfie.riderName || 'this driver';
-    if (!window.confirm(`Are you sure you want to delete the shift selfie for ${riderName}?`)) {
-      return;
-    }
-    const driverId = selfie.actorId || (selfie.id ? selfie.id.replace('driver-', '') : null);
-    if (!driverId) {
-      toast.error('Driver ID not found');
-      return;
-    }
+    confirmWithSonner(
+      `Delete Selfie for ${riderName}?`,
+      'This will remove the verification selfie photo from the database and reset the avatar.',
+      async () => {
+        const driverId = selfie.actorId || (selfie.id ? selfie.id.replace('driver-', '') : null);
+        if (!driverId) {
+          toast.error('Driver ID not found');
+          return;
+        }
+        try {
+          // 1. Reset avatar in User database record
+          await API.put(`/admin/users/${driverId}`, {
+            avatar: 'https://img.icons8.com/?size=100&id=85147&format=png&color=000000'
+          });
+
+          // 2. Clear selfie from audit logs in database
+          await API.delete(`/admin/delivery-partners/selfies/${selfie.id || driverId}`, {
+            data: { actorId: driverId }
+          }).catch(e => console.warn('Selfie audit delete warning:', e.message));
+
+          try {
+            localStorage.removeItem('milega_latest_rider_selfie');
+          } catch (e) {}
+
+          setRiderSelfies(prev => prev.filter(s => s.id !== selfie.id && s.actorId !== driverId));
+          setDrivers(prev => prev.map(d => d.id === driverId ? { ...d, avatar: 'https://img.icons8.com/?size=100&id=85147&format=png&color=000000' } : d));
+          setUsers(prev => prev.map(u => u.id === driverId ? { ...u, avatar: 'https://img.icons8.com/?size=100&id=85147&format=png&color=000000' } : u));
+          toast.success(`Deleted verification selfie for ${riderName} from database`);
+        } catch (err) {
+          console.error('Failed to delete selfie:', err);
+          toast.error('Failed to delete driver selfie from database');
+        }
+      }
+    );
+  };
+
+  const handleToggleDriverOnline = async (driver) => {
+    const nextStatus = !driver.isOnline;
     try {
-      // 1. Reset avatar in User database record
-      await API.put(`/admin/users/${driverId}`, {
-        avatar: 'https://img.icons8.com/?size=100&id=85147&format=png&color=000000'
-      });
+      await API.put(`/admin/delivery-partners/${driver.id}`, { isOnline: nextStatus })
+        .catch(() => API.put(`/admin/users/${driver.id}`, { isOnline: nextStatus }));
 
-      // 2. Clear selfie from audit logs in database
-      await API.delete(`/admin/delivery-partners/selfies/${selfie.id || driverId}`, {
-        data: { actorId: driverId }
-      }).catch(e => console.warn('Selfie audit delete warning:', e.message));
-
-      try {
-        localStorage.removeItem('milega_latest_rider_selfie');
-      } catch (e) {}
-
-      setRiderSelfies(prev => prev.filter(s => s.id !== selfie.id && s.actorId !== driverId));
-      setDrivers(prev => prev.map(d => d.id === driverId ? { ...d, avatar: 'https://img.icons8.com/?size=100&id=85147&format=png&color=000000' } : d));
-      setUsers(prev => prev.map(u => u.id === driverId ? { ...u, avatar: 'https://img.icons8.com/?size=100&id=85147&format=png&color=000000' } : u));
-      toast.success(`Deleted verification selfie for ${riderName} from database`);
+      setDrivers(prev => prev.map(d => d.id === driver.id ? { ...d, isOnline: nextStatus } : d));
+      if (selectedDriver?.id === driver.id) {
+        setSelectedDriver(prev => ({ ...prev, isOnline: nextStatus }));
+      }
+      toast.success(`${driver.fullName || 'Driver'} is now ${nextStatus ? 'ONLINE (Accepting trips)' : 'OFFLINE (Shift paused)'}`);
     } catch (err) {
-      console.error('Failed to delete selfie:', err);
-      toast.error('Failed to delete driver selfie from database');
+      toast.error('Failed to update driver shift status');
     }
+  };
+
+  const handleUpdateDriverStatus = async (driverId, newStatus) => {
+    try {
+      await API.put(`/admin/delivery-partners/${driverId}`, { status: newStatus })
+        .catch(() => API.put(`/admin/users/${driverId}`, { status: newStatus }));
+
+      setDrivers(prev => prev.map(d => d.id === driverId ? { ...d, status: newStatus } : d));
+      if (selectedDriver?.id === driverId) {
+        setSelectedDriver(prev => ({ ...prev, status: newStatus }));
+      }
+      toast.success(`Account status updated to ${newStatus.toUpperCase()}`);
+    } catch (err) {
+      toast.error('Failed to update account status');
+    }
+  };
+
+  const handleOpenEditDriver = (driver) => {
+    setEditingDriverForm({
+      id: driver.id,
+      fullName: driver.fullName || driver.name || '',
+      phone: driver.phone || '',
+      email: driver.email || '',
+      vehicleType: driver.vehicleType || 'Bike',
+      vehicleNumber: driver.vehicleNumber || '',
+      dlNumber: driver.dlNumber || '',
+      address: driver.address || '',
+      status: driver.status || 'active',
+      isOnline: Boolean(driver.isOnline)
+    });
+    setIsDriverModalOpen(true);
+  };
+
+  const handleSaveDriverForm = async (e) => {
+    e.preventDefault();
+    if (!editingDriverForm.id) return;
+    try {
+      setSavingDriver(true);
+      await API.put(`/admin/delivery-partners/${editingDriverForm.id}`, editingDriverForm)
+        .catch(() => API.put(`/admin/users/${editingDriverForm.id}`, editingDriverForm));
+
+      setDrivers(prev => prev.map(d => d.id === editingDriverForm.id ? { ...d, ...editingDriverForm } : d));
+      if (selectedDriver?.id === editingDriverForm.id) {
+        setSelectedDriver(prev => ({ ...prev, ...editingDriverForm }));
+      }
+      setIsDriverModalOpen(false);
+      toast.success('Delivery partner details saved to database');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to save delivery partner');
+    } finally {
+      setSavingDriver(false);
+    }
+  };
+
+  const handleDeleteDriverPartner = (driver) => {
+    const name = driver.fullName || driver.name || 'this delivery partner';
+    confirmWithSonner(
+      `Permanently Delete ${name}?`,
+      'This will permanently delete the delivery partner, trips, and vehicle credentials from the database.',
+      async () => {
+        try {
+          await API.delete(`/admin/delivery-partners/${driver.id}`).catch(() => API.delete(`/admin/users/${driver.id}`));
+          setDrivers(prev => prev.filter(d => d.id !== driver.id));
+          setUsers(prev => prev.filter(u => u.id !== driver.id));
+          if (selectedDriver?.id === driver.id) {
+            const remaining = drivers.filter(d => d.id !== driver.id);
+            setSelectedDriver(remaining[0] || null);
+          }
+          toast.success(`Deleted delivery partner ${name} permanently from database`);
+        } catch (err) {
+          toast.error(err.response?.data?.message || 'Failed to delete delivery partner from database');
+        }
+      }
+    );
   };
 
   const handleAssignDriver = async (orderId, deliveryPartnerId) => {
@@ -445,44 +606,50 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleDeleteVendorApp = async (app) => {
+  const handleDeleteVendorApp = (app) => {
     const name = app.businessName || app.fullName || 'this store application';
-    if (!window.confirm(`Permanently delete vendor application for "${name}" from database?`)) return;
-    try {
-      const userId = app.userId || (app.id.startsWith('user-') ? app.id.replace('user-', '') : null);
-      if (!app.id.startsWith('user-')) {
-        await API.delete(`/admin/vendors/applications/${app.id}`).catch(() => {});
+    confirmWithSonner(
+      `Delete Vendor Application?`,
+      `Permanently delete the registration request for "${name}" from the database?`,
+      async () => {
+        try {
+          const userId = app.userId || (app.id.startsWith('user-') ? app.id.replace('user-', '') : null);
+          if (!app.id.startsWith('user-')) {
+            await API.delete(`/admin/vendors/applications/${app.id}`).catch(() => {});
+          }
+          if (userId) {
+            await API.delete(`/admin/users/${userId}`).catch(() => {});
+          }
+          setVendorApps(prev => prev.filter(v => v.id !== app.id && v.userId !== userId));
+          toast.success(`Application for "${name}" permanently deleted from database`);
+        } catch (err) {
+          toast.error('Failed to delete vendor application');
+        }
       }
-      if (userId) {
-        await API.delete(`/admin/users/${userId}`).catch(async () => {
-          await API.put(`/admin/users/${userId}`, { status: 'DELETED', isActive: false }).catch(() => {});
-        });
-      }
-      setVendorApps(prev => prev.filter(v => v.id !== app.id && v.userId !== userId));
-      toast.success(`Application for "${name}" deleted from database`);
-    } catch (err) {
-      toast.error('Failed to delete vendor application');
-    }
+    );
   };
 
-  const handleDeleteDriverApp = async (app) => {
+  const handleDeleteDriverApp = (app) => {
     const name = app.fullName || 'this driver application';
-    if (!window.confirm(`Permanently delete driver application for "${name}" from database?`)) return;
-    try {
-      const userId = app.userId || (app.id.startsWith('user-') ? app.id.replace('user-', '') : null);
-      if (!app.id.startsWith('user-')) {
-        await API.delete(`/admin/delivery-partners/applications/${app.id}`).catch(() => {});
+    confirmWithSonner(
+      `Delete Driver Application?`,
+      `Permanently delete the registration request for "${name}" from the database?`,
+      async () => {
+        try {
+          const userId = app.userId || (app.id.startsWith('user-') ? app.id.replace('user-', '') : null);
+          if (!app.id.startsWith('user-')) {
+            await API.delete(`/admin/delivery-partners/applications/${app.id}`).catch(() => {});
+          }
+          if (userId) {
+            await API.delete(`/admin/users/${userId}`).catch(() => {});
+          }
+          setDriverApps(prev => prev.filter(d => d.id !== app.id && d.userId !== userId));
+          toast.success(`Application for "${name}" permanently deleted from database`);
+        } catch (err) {
+          toast.error('Failed to delete driver application');
+        }
       }
-      if (userId) {
-        await API.delete(`/admin/users/${userId}`).catch(async () => {
-          await API.put(`/admin/users/${userId}`, { status: 'DELETED', isActive: false }).catch(() => {});
-        });
-      }
-      setDriverApps(prev => prev.filter(d => d.id !== app.id && d.userId !== userId));
-      toast.success(`Application for "${name}" deleted from database`);
-    } catch (err) {
-      toast.error('Failed to delete driver application');
-    }
+    );
   };
 
   // Quick Price Edit with Audit Logging
@@ -518,17 +685,41 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleDeleteProduct = async (productId) => {
-    if (!window.confirm('Are you sure you want to delete this product?')) return;
-    try {
-      const res = await API.delete(`/foods/${productId}`);
-      if (res.data.success) {
-        toast.success('Product deleted');
-        if (selectedVendor) fetchVendorProducts(selectedVendor.id || selectedVendor._id);
+  const handleDeleteProduct = (productId, productName = 'this product') => {
+    confirmWithSonner(
+      `Delete Product?`,
+      `Permanently delete "${productName}" from the catalog and database?`,
+      async () => {
+        try {
+          const res = await API.delete(`/foods/${productId}`);
+          if (res.data.success) {
+            toast.success(`"${productName}" permanently deleted from database`);
+            if (selectedVendor) fetchVendorProducts(selectedVendor.id || selectedVendor._id);
+          }
+        } catch (err) {
+          toast.error(err.response?.data?.message || 'Failed to delete product');
+        }
       }
-    } catch (err) {
-      toast.error('Failed to delete product');
-    }
+    );
+  };
+
+  const handleDeleteUser = (user) => {
+    const name = user.name || user.fullName || user.email || 'this user';
+    confirmWithSonner(
+      `Delete User Account?`,
+      `Permanently delete "${name}" (${user.role}) and associated records from the database?`,
+      async () => {
+        const uId = user.id || user._id;
+        try {
+          await API.delete(`/admin/users/${uId}`);
+          setUsers(prev => prev.filter(u => (u.id || u._id) !== uId));
+          setDrivers(prev => prev.filter(d => d.id !== uId));
+          toast.success(`User "${name}" permanently deleted from database`);
+        } catch (err) {
+          toast.error(err.response?.data?.message || 'Failed to delete user');
+        }
+      }
+    );
   };
 
   const handleFetchPriceHistory = async (productId, productName) => {
@@ -560,6 +751,32 @@ export default function AdminDashboard() {
       toast.error('Failed to add category');
     }
   };
+
+  const filteredDeliveryPartners = useMemo(() => {
+    return drivers.filter(d => {
+      const matchSearch = !driverSearch.trim() ||
+        (d.fullName || '').toLowerCase().includes(driverSearch.toLowerCase()) ||
+        (d.phone || '').includes(driverSearch) ||
+        (d.email || '').toLowerCase().includes(driverSearch.toLowerCase()) ||
+        (d.vehicleType || '').toLowerCase().includes(driverSearch.toLowerCase()) ||
+        (d.vehicleNumber || '').toLowerCase().includes(driverSearch.toLowerCase());
+
+      if (!matchSearch) return false;
+      if (driverStatusFilter === 'ONLINE') return Boolean(d.isOnline);
+      if (driverStatusFilter === 'OFFLINE') return !d.isOnline;
+      return true;
+    });
+  }, [drivers, driverSearch, driverStatusFilter]);
+
+  const selectedDriverOrders = useMemo(() => {
+    if (!selectedDriver) return [];
+    const dId = selectedDriver.id;
+    return orders.filter(o =>
+      o.deliveryPartnerId === dId ||
+      o.Delivery?.deliveryPartnerId === dId ||
+      o.delivery?.deliveryPartnerId === dId
+    );
+  }, [orders, selectedDriver]);
 
   if (loading) {
     return (
@@ -597,6 +814,7 @@ export default function AdminDashboard() {
               { id: 'overview', label: 'Overview' },
               { id: 'cravings', label: 'CRAVINGS (Food)' },
               { id: 'fresh', label: 'FRESH MANDI' },
+              { id: 'deliveryP', label: `deliveryP (${drivers.length})` },
               { id: 'categories', label: 'Categories' },
               { id: 'vendor_apps', label: `Vendor Apps (${vendorApps.filter(a => a.status === 'PENDING').length})` },
               { id: 'driver_apps', label: `Driver Apps (${driverApps.filter(a => a.status === 'PENDING').length})` },
@@ -610,6 +828,9 @@ export default function AdminDashboard() {
                   setActiveTab(tab.id);
                   if (tab.id === 'cravings') setSelectedVendor(cravingsVendors[0] || null);
                   if (tab.id === 'fresh') setSelectedVendor(freshVendors[0] || null);
+                  if (tab.id === 'deliveryP') {
+                    if (drivers.length > 0 && !selectedDriver) setSelectedDriver(drivers[0]);
+                  }
                   if (tab.id === 'rider_selfies') fetchRiderSelfies();
                 }}
                 className={`px-3 py-2 rounded-xl text-xs font-extrabold transition ${activeTab === tab.id
@@ -919,7 +1140,7 @@ export default function AdminDashboard() {
                                     <Edit2 className="w-4 h-4" />
                                   </button>
                                   <button
-                                    onClick={() => handleDeleteProduct(p._id || p.id)}
+                                    onClick={() => handleDeleteProduct(p._id || p.id, p.name)}
                                     className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition"
                                     title="Delete Product"
                                   >
@@ -1128,7 +1349,7 @@ export default function AdminDashboard() {
                                   <Edit2 className="w-3.5 h-3.5" />
                                 </button>
                                 <button
-                                  onClick={() => handleDeleteProduct(p._id || p.id)}
+                                  onClick={() => handleDeleteProduct(p._id || p.id, p.name)}
                                   className="p-1.5 bg-white border border-slate-200 text-slate-600 hover:text-rose-600 rounded-xl text-xs font-bold transition"
                                   title="Delete Product"
                                 >
@@ -1169,6 +1390,358 @@ export default function AdminDashboard() {
                 ) : (
                   <div className="text-center py-16 text-slate-400 text-xs font-extrabold">
                     Select a Mandi Store from the left column to manage fresh produce variants.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* DELIVERY PARTNERS (deliveryP) MANAGEMENT TAB */}
+        {activeTab === 'deliveryP' && (
+          <div className="space-y-6">
+            {/* Header Banner */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-purple-500/10 border border-purple-200 p-5 rounded-3xl">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-purple-600 text-white rounded-2xl shadow-sm">
+                  <Bike className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-extrabold text-slate-900">deliveryP — Fleet Delivery Partners</h3>
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-purple-600 text-white">
+                      {drivers.length} Active Partners
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 font-medium mt-0.5">
+                    Server-synced delivery partner profiles, vehicle credentials, live shift status, GPS coordinates, and assigned delivery trips.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={fetchAdminData}
+                  className="px-4 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-extrabold text-xs rounded-xl shadow-sm flex items-center gap-1.5 transition"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" /> Refresh Fleet
+                </button>
+              </div>
+            </div>
+
+            {/* 2-Column Master-Detail Layout */}
+            <div className="grid lg:grid-cols-12 gap-6">
+              {/* Left Column: Driver Partners List (4 cols) */}
+              <div className="lg:col-span-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider">
+                    Fleet Partners ({filteredDeliveryPartners.length})
+                  </h4>
+                  <div className="flex items-center gap-1 text-[11px] font-bold">
+                    <span className="text-emerald-600">● {drivers.filter(d => d.isOnline).length} Online</span>
+                    <span className="text-slate-300">|</span>
+                    <span className="text-slate-400">{drivers.filter(d => !d.isOnline).length} Offline</span>
+                  </div>
+                </div>
+
+                {/* Search Bar */}
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Search by rider name, phone, vehicle..."
+                    value={driverSearch}
+                    onChange={(e) => setDriverSearch(e.target.value)}
+                    className="w-full pl-8 pr-7 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-purple-500 font-medium"
+                  />
+                  {driverSearch && (
+                    <button
+                      onClick={() => setDriverSearch('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Filter Pills */}
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                  {['ALL', 'ONLINE', 'OFFLINE'].map(filter => (
+                    <button
+                      key={filter}
+                      onClick={() => setDriverStatusFilter(filter)}
+                      className={`px-3 py-1 rounded-lg text-[10px] font-extrabold uppercase transition ${
+                        driverStatusFilter === filter
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      {filter}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Drivers Scroll List */}
+                <div className="space-y-2 max-h-[620px] overflow-y-auto pr-1">
+                  {filteredDeliveryPartners.length === 0 ? (
+                    <div className="p-8 text-center bg-white rounded-2xl border border-dashed border-slate-200 space-y-2">
+                      <Bike className="w-8 h-8 text-slate-300 mx-auto" />
+                      <p className="text-xs font-bold text-slate-600">No delivery partners found</p>
+                    </div>
+                  ) : (
+                    filteredDeliveryPartners.map(d => {
+                      const isSelected = selectedDriver?.id === d.id;
+                      return (
+                        <div
+                          key={d.id}
+                          onClick={() => setSelectedDriver(d)}
+                          className={`p-3.5 rounded-2xl border transition cursor-pointer flex items-center gap-3 ${
+                            isSelected
+                              ? 'bg-purple-50/80 border-purple-400 shadow-sm'
+                              : 'bg-white border-slate-200/90 hover:border-slate-300 hover:shadow-xs'
+                          }`}
+                        >
+                          {/* Driver Avatar with Online Indicator */}
+                          <div className="relative">
+                            <img
+                              src={d.avatar || 'https://img.icons8.com/?size=100&id=85147&format=png&color=000000'}
+                              alt={d.fullName}
+                              className="w-12 h-12 rounded-2xl object-cover bg-slate-100 border border-slate-200"
+                            />
+                            <span
+                              className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-white ${
+                                d.isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'
+                              }`}
+                              title={d.isOnline ? 'Online (Accepting Trips)' : 'Offline'}
+                            />
+                          </div>
+
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between">
+                              <h5 className="font-extrabold text-slate-900 text-xs truncate">{d.fullName || 'Fleet Rider'}</h5>
+                              <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase ${
+                                d.isOnline ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
+                              }`}>
+                                {d.isOnline ? 'Online' : 'Offline'}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-500 font-bold truncate">📞 {d.phone || 'No phone'}</p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="px-1.5 py-0.5 bg-slate-100 text-slate-700 rounded text-[9px] font-extrabold flex items-center gap-1">
+                                <Bike className="w-2.5 h-2.5 text-purple-600" /> {d.vehicleType || 'Bike'}
+                              </span>
+                              <span className="text-[10px] text-amber-600 font-bold">★ {d.ratings || '4.8'}</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              {/* Right Column: Selected Driver Detail & Orders (8 cols) */}
+              <div className="lg:col-span-8 space-y-4">
+                {selectedDriver ? (
+                  <>
+                    {/* Selected Driver Profile Card */}
+                    <div className="bg-white rounded-3xl border border-slate-200/90 shadow-soft p-5 space-y-5">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+                        <div className="flex items-center gap-4">
+                          <img
+                            src={selectedDriver.avatar || 'https://img.icons8.com/?size=100&id=85147&format=png&color=000000'}
+                            alt={selectedDriver.fullName}
+                            onClick={() => setProofPhotoModal({ isOpen: true, url: selectedDriver.avatar, title: selectedDriver.fullName })}
+                            className="w-16 h-16 rounded-2xl object-cover bg-slate-100 border border-slate-200 cursor-pointer shadow-sm hover:opacity-90"
+                          />
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-lg font-black text-slate-900">{selectedDriver.fullName}</h3>
+                              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                                selectedDriver.status === 'active' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                              }`}>
+                                {selectedDriver.status || 'Active'}
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-500 font-medium mt-0.5">
+                              ✉️ {selectedDriver.email} • 📞 {selectedDriver.phone}
+                            </p>
+                            <span className="text-[10px] text-slate-400 font-mono">ID: {selectedDriver.id}</span>
+                          </div>
+                        </div>
+
+                        {/* Shift Online / Offline Toggle & Actions */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleDriverOnline(selectedDriver)}
+                            className={`px-3.5 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 transition shadow-sm ${
+                              selectedDriver.isOnline
+                                ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                                : 'bg-slate-200 hover:bg-slate-300 text-slate-700'
+                            }`}
+                          >
+                            <span className={`w-2 h-2 rounded-full ${selectedDriver.isOnline ? 'bg-white animate-ping' : 'bg-slate-500'}`} />
+                            {selectedDriver.isOnline ? 'Shift: ONLINE' : 'Shift: OFFLINE'}
+                          </button>
+
+                          <button
+                            onClick={() => handleOpenEditDriver(selectedDriver)}
+                            className="p-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 transition"
+                            title="Edit Partner Details"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+
+                          <button
+                            onClick={() => handleDeleteDriverPartner(selectedDriver)}
+                            className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition"
+                            title="Delete Partner from Database"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Info & Metrics Cards Grid */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100">
+                          <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Vehicle Type</span>
+                          <p className="text-sm font-extrabold text-slate-800 mt-1 flex items-center gap-1">
+                            🛵 {selectedDriver.vehicleType || 'Bike'}
+                          </p>
+                        </div>
+
+                        <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100">
+                          <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Vehicle Plate</span>
+                          <p className="text-sm font-mono font-extrabold text-slate-800 mt-1 truncate">
+                            {selectedDriver.vehicleNumber || 'Registered'}
+                          </p>
+                        </div>
+
+                        <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100">
+                          <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">License (DL)</span>
+                          <p className="text-sm font-mono font-extrabold text-slate-800 mt-1 truncate">
+                            {selectedDriver.dlNumber || 'Verified DL'}
+                          </p>
+                        </div>
+
+                        <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100">
+                          <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Driver Rating</span>
+                          <p className="text-sm font-extrabold text-amber-600 mt-1">
+                            ★ {selectedDriver.ratings || 4.8} / 5.0
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Location & Shift Attendance Box */}
+                      <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1.5 text-xs font-extrabold text-slate-700">
+                            <MapPin className="w-4 h-4 text-purple-600" />
+                            <span>Live GPS / Registered Fleet Base</span>
+                          </div>
+                          <p className="text-xs text-slate-500 font-medium pl-5.5">
+                            {selectedDriver.address || 'Sector 62, Knowledge Park, Greater Noida'}
+                            {selectedDriver.latitude && selectedDriver.longitude && (
+                              <span className="font-mono text-slate-400 ml-2">
+                                ({Number(selectedDriver.latitude).toFixed(4)}°, {Number(selectedDriver.longitude).toFixed(4)}°)
+                              </span>
+                            )}
+                          </p>
+                        </div>
+
+                        {selectedDriver.latitude && selectedDriver.longitude && (
+                          <a
+                            href={`https://maps.google.com/?q=${selectedDriver.latitude},${selectedDriver.longitude}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-100 text-purple-700 font-extrabold text-xs rounded-xl shadow-xs flex items-center gap-1 transition shrink-0"
+                          >
+                            <Navigation className="w-3.5 h-3.5" /> View on Maps
+                          </a>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Assigned Deliveries & Trips Table */}
+                    <div className="bg-white rounded-3xl border border-slate-200/90 shadow-soft p-5 space-y-4">
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                        <div>
+                          <h4 className="text-sm font-black text-slate-900">
+                            Assigned Orders & Deliveries ({selectedDriverOrders.length})
+                          </h4>
+                          <p className="text-xs text-slate-400 font-medium">
+                            Orders and customer dispatches assigned to {selectedDriver.fullName}
+                          </p>
+                        </div>
+                      </div>
+
+                      {selectedDriverOrders.length === 0 ? (
+                        <div className="text-center py-10 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 space-y-1.5">
+                          <ShoppingBag className="w-7 h-7 text-slate-300 mx-auto" />
+                          <p className="text-xs font-bold text-slate-600">No active or historical trips assigned to this rider</p>
+                          <p className="text-[11px] text-slate-400">When an order is assigned to this partner, it will appear here in real time.</p>
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-xs text-slate-600">
+                            <thead className="bg-slate-50 uppercase text-[10px] text-slate-400 font-extrabold">
+                              <tr>
+                                <th className="p-3">Order ID</th>
+                                <th className="p-3">Customer</th>
+                                <th className="p-3">Pickup Store</th>
+                                <th className="p-3">Total Amount</th>
+                                <th className="p-3">Status</th>
+                                <th className="p-3">Action</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 font-medium">
+                              {selectedDriverOrders.map(ord => (
+                                <tr key={ord.id} className="hover:bg-slate-50">
+                                  <td className="p-3 font-mono font-extrabold text-slate-900">
+                                    #{ord.orderNumber || ord.id.slice(-6)}
+                                  </td>
+                                  <td className="p-3">
+                                    <div className="font-extrabold text-slate-800">{ord.Address?.addressLine || 'Customer Address'}</div>
+                                    <div className="text-[10px] text-slate-400">{ord.Address?.city || 'Noida'}</div>
+                                  </td>
+                                  <td className="p-3 font-bold text-slate-700">
+                                    {ord.Vendor?.name || 'Partner Store'}
+                                  </td>
+                                  <td className="p-3 font-extrabold text-emerald-600 font-mono">
+                                    ₹{ord.totalAmount}
+                                  </td>
+                                  <td className="p-3">
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                                      ord.status === 'DELIVERED' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
+                                    }`}>
+                                      {ord.status.replace(/_/g, ' ')}
+                                    </span>
+                                  </td>
+                                  <td className="p-3">
+                                    <button
+                                      onClick={() => {
+                                        setActiveTab('orders');
+                                      }}
+                                      className="px-2.5 py-1 text-[11px] bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold rounded-lg transition"
+                                    >
+                                      View Order
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-center py-24 bg-white rounded-3xl border border-slate-200/90 shadow-soft p-8 space-y-2">
+                    <Bike className="w-12 h-12 text-slate-300 mx-auto" />
+                    <h4 className="text-sm font-extrabold text-slate-700">No Delivery Partner Selected</h4>
+                    <p className="text-xs text-slate-400">Select a delivery partner from the left column to view full server details & deliveries.</p>
                   </div>
                 )}
               </div>
@@ -1393,6 +1966,7 @@ export default function AdminDashboard() {
                     <th className="p-3">Role</th>
                     <th className="p-3">Phone</th>
                     <th className="p-3">Created</th>
+                    <th className="p-3 text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium">
@@ -1410,6 +1984,16 @@ export default function AdminDashboard() {
                       </td>
                       <td className="p-3">{u.phone || 'N/A'}</td>
                       <td className="p-3 text-slate-400">{new Date(u.createdAt).toLocaleDateString()}</td>
+                      <td className="p-3 text-right">
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteUser(u)}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition cursor-pointer"
+                          title="Permanently Delete User"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -1767,6 +2351,172 @@ export default function AdminDashboard() {
                 Close Viewer
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Delivery Partner Modal */}
+      {isDriverModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-purple-100 text-purple-700 rounded-xl">
+                  <Bike className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900">Edit Delivery Partner</h3>
+                  <p className="text-xs text-slate-400 font-medium">Update driver profile & vehicle credentials on server</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsDriverModalOpen(false)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveDriverForm} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">Full Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={editingDriverForm.fullName}
+                    onChange={(e) => setEditingDriverForm(prev => ({ ...prev, fullName: e.target.value }))}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-purple-500 font-bold text-slate-800"
+                    placeholder="e.g. Arjun Sharma"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">Phone Number</label>
+                  <input
+                    type="tel"
+                    required
+                    value={editingDriverForm.phone}
+                    onChange={(e) => setEditingDriverForm(prev => ({ ...prev, phone: e.target.value }))}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-purple-500 font-bold text-slate-800"
+                    placeholder="e.g. 9876543210"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">Email Address</label>
+                <input
+                  type="email"
+                  value={editingDriverForm.email}
+                  onChange={(e) => setEditingDriverForm(prev => ({ ...prev, email: e.target.value }))}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-purple-500 font-bold text-slate-800"
+                  placeholder="e.g. driver@milega.com"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">Vehicle Type</label>
+                  <select
+                    value={editingDriverForm.vehicleType}
+                    onChange={(e) => setEditingDriverForm(prev => ({ ...prev, vehicleType: e.target.value }))}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-purple-500 font-bold text-slate-800"
+                  >
+                    <option value="Bike">🛵 Motorbike</option>
+                    <option value="Scooter">🛵 Scooter</option>
+                    <option value="EV Bike">⚡ EV Bike</option>
+                    <option value="Bicycle">🚲 Bicycle</option>
+                    <option value="Car">🚗 Mini Van / Car</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">Plate Number</label>
+                  <input
+                    type="text"
+                    value={editingDriverForm.vehicleNumber}
+                    onChange={(e) => setEditingDriverForm(prev => ({ ...prev, vehicleNumber: e.target.value }))}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-purple-500 font-bold font-mono text-slate-800"
+                    placeholder="UP16-AB-1234"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">License (DL)</label>
+                  <input
+                    type="text"
+                    value={editingDriverForm.dlNumber}
+                    onChange={(e) => setEditingDriverForm(prev => ({ ...prev, dlNumber: e.target.value }))}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-purple-500 font-bold font-mono text-slate-800"
+                    placeholder="DL-04-2023-..."
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">Fleet Station / Base Address</label>
+                <input
+                  type="text"
+                  value={editingDriverForm.address}
+                  onChange={(e) => setEditingDriverForm(prev => ({ ...prev, address: e.target.value }))}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-purple-500 font-medium text-slate-800"
+                  placeholder="e.g. Sector 62, Greater Noida"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">Account Status</label>
+                  <select
+                    value={editingDriverForm.status}
+                    onChange={(e) => setEditingDriverForm(prev => ({ ...prev, status: e.target.value }))}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-purple-500 font-bold text-slate-800"
+                  >
+                    <option value="active">Active (Verified)</option>
+                    <option value="pending">Pending Review</option>
+                    <option value="suspended">Suspended</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">Shift Online</label>
+                  <select
+                    value={editingDriverForm.isOnline ? 'true' : 'false'}
+                    onChange={(e) => setEditingDriverForm(prev => ({ ...prev, isOnline: e.target.value === 'true' }))}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-purple-500 font-bold text-slate-800"
+                  >
+                    <option value="true">🟢 Shift Online (Accepting)</option>
+                    <option value="false">⚪ Shift Offline</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsDriverModalOpen(false)}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-800 rounded-xl hover:bg-slate-100 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingDriver}
+                  className="px-5 py-2 text-xs font-black bg-purple-600 hover:bg-purple-700 text-white rounded-xl shadow-md transition disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {savingDriver ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    'Save Changes'
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
