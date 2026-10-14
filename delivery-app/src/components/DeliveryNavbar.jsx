@@ -78,9 +78,9 @@ export default function DeliveryNavbar({ isOnline, hasActiveTrip }) {
 
             {/* History Shortcut */}
             <Link
-              to="/orders"
+              to="/delivery/history"
               className={`p-2 sm:px-3 sm:py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
-                location.pathname === '/orders'
+                location.pathname.includes('/history') || location.pathname === '/orders' || location.pathname === '/trips'
                   ? 'bg-slate-900 text-white'
                   : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
               }`}

@@ -1013,8 +1013,49 @@ const updateRiderProfile = async (req, res, next) => {
   }
 };
 
+const getDeliveryById = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const rawDelivery = await prisma.delivery.findFirst({
+      where: {
+        OR: [{ id }, { orderId: id }]
+      },
+      include: {
+        User: true,
+        Order: {
+          include: {
+            Vendor: true,
+            Address: true,
+            OrderItem: true,
+            User_Order_customerIdToUser: {
+              select: { id: true, fullName: true, phone: true, avatar: true }
+            }
+          }
+        }
+      }
+    });
+
+    if (!rawDelivery) {
+      return res.status(404).json({
+        success: false,
+        message: 'Delivery not found'
+      });
+    }
+
+    const delivery = formatDeliveryObj(rawDelivery);
+    res.json({
+      success: true,
+      delivery,
+      activeDelivery: delivery
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getDeliveryDashboard,
+  getDeliveryById,
   toggleOnlineStatus,
   submitDeliveryApplication,
   getMyDeliveryApplication,

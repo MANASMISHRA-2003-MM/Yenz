@@ -79,8 +79,10 @@ export default function Navbar({ onVegToggle }) {
     e.preventDefault();
     if (searchQuery.trim()) {
       navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
-      setMobileOpen(false);
+    } else {
+      navigate('/search');
     }
+    setMobileOpen(false);
   };
 
   const goTo = (path) => {
@@ -94,32 +96,32 @@ export default function Navbar({ onVegToggle }) {
       <AddressModal isOpen={showAddressModal} onClose={() => setShowAddressModal(false)} />
 
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100 shadow-sm safe-top">
-        <div className="max-w-7xl mx-auto px-4 py-3">
-          <div className="flex items-center gap-3">
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2.5 sm:py-3">
+          <div className="flex items-center gap-2 sm:gap-3 justify-between">
             {/* Logo */}
             <Link to="/" className="flex items-center gap-2 shrink-0">
-              <MilegaLogo size="medium" />
+              <MilegaLogo size="medium" showTagline={false} />
             </Link>
 
             {/* Location selector (Desktop) */}
-            <div className="hidden lg:block ml-2">
-              <LocationSelector />
+            <div className="hidden xl:block min-w-[190px] max-w-[240px]">
+              <LocationSelector variant="desktop" />
             </div>
 
-            {/* Search bar */}
-            <form onSubmit={handleSearchSubmit} className="flex-1 max-w-2xl mx-auto relative hidden sm:block">
+            {/* Search bar - Visible across screen sizes */}
+            <form onSubmit={handleSearchSubmit} className="flex-1 min-w-0 max-w-2xl mx-1.5 sm:mx-4 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
               <input
                 aria-label="Search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={isFresh ? 'Search fresh vegetables, fruits & groceries' : 'Search for dishes, restaurants & cravings'}
-                className="fc-input pl-10 pr-4 py-2 text-sm bg-gray-50 border-gray-200 focus:bg-white rounded-xl"
+                className="fc-input pl-9 sm:pl-10 pr-3 sm:pr-4 py-2 sm:py-2.5 text-xs sm:text-sm bg-gray-50 border-gray-200 focus:bg-white rounded-lg sm:rounded-xl truncate placeholder:text-gray-400 placeholder:text-xs sm:placeholder:text-sm"
               />
             </form>
 
             {/* Right action icons */}
-            <div className="ml-auto flex items-center gap-2">
+            <div className="ml-auto flex items-center gap-1.5 sm:gap-2 shrink-0">
               {/* Veg toggle */}
               <button
                 onClick={toggleVegMode}
@@ -132,10 +134,10 @@ export default function Navbar({ onVegToggle }) {
                 {isVegOnly ? '🥬 Veg Only' : '🥬 Pure Veg'}
               </button>
 
-              {/* Cart button */}
+              {/* Cart button - Hidden on mobile screens (< sm) */}
               <button
                 onClick={() => navigate('/cart')}
-                className="relative flex items-center gap-2 p-2 rounded-xl border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition"
+                className="hidden sm:flex relative items-center gap-2 p-2 sm:p-2.5 rounded-lg sm:rounded-xl border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition"
                 aria-label="Cart"
               >
                 <ShoppingBag className="w-5 h-5 text-gray-700" />
@@ -147,12 +149,12 @@ export default function Navbar({ onVegToggle }) {
                 )}
               </button>
 
-              {/* Profile dropdown */}
+              {/* Profile dropdown - Hidden on mobile screens (< md) */}
               {user ? (
-                <div className="relative">
+                <div className="relative hidden md:block">
                   <button
                     onClick={() => setProfileOpen(!profileOpen)}
-                    className="flex items-center gap-2 p-1.5 rounded-xl hover:bg-gray-50 transition"
+                    className="flex items-center gap-2 p-1.5 rounded-lg sm:rounded-xl hover:bg-gray-50 transition"
                     aria-expanded={profileOpen}
                   >
                     <img
@@ -213,9 +215,9 @@ export default function Navbar({ onVegToggle }) {
                 </Link>
               )}
 
-              {/* Mobile Hamburger Menu Button */}
+              {/* Mobile Hamburger Menu Button on the Right End */}
               <button
-                className="lg:hidden p-2 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition"
+                className="lg:hidden p-2 rounded-lg sm:rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition shrink-0"
                 onClick={() => setMobileOpen(true)}
                 aria-label="Open menu"
               >

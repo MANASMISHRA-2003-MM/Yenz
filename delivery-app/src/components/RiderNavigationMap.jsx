@@ -76,7 +76,17 @@ function NavigationCameraController({ riderPos, followMode, heading, headingUpMo
   }, [map, isFullScreen]);
 
   useEffect(() => {
-    if (!riderPos || !followMode) return;
+    if (
+      !riderPos ||
+      !followMode ||
+      !Array.isArray(riderPos) ||
+      typeof riderPos[0] !== 'number' ||
+      isNaN(riderPos[0]) ||
+      typeof riderPos[1] !== 'number' ||
+      isNaN(riderPos[1])
+    ) {
+      return;
+    }
 
     try {
       // Pan smoothly to rider position
@@ -151,20 +161,31 @@ export default function RiderNavigationMap({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isFullScreen]);
-  const vendorLat = vendor?.latitude ? Number(vendor.latitude) : (vendor?.lat ? Number(vendor.lat) : null);
-  const vendorLng = vendor?.longitude ? Number(vendor.longitude) : (vendor?.lng ? Number(vendor.lng) : null);
+  const isValidCoord = (c) => typeof c === 'number' && !isNaN(c) && c !== null;
 
-  const customerLat = customerAddress?.latitude ? Number(customerAddress.latitude) : (customerAddress?.lat ? Number(customerAddress.lat) : null);
-  const customerLng = customerAddress?.longitude ? Number(customerAddress.longitude) : (customerAddress?.lng ? Number(customerAddress.lng) : null);
+  const vendorLat = isValidCoord(Number(vendor?.latitude)) ? Number(vendor.latitude) : (isValidCoord(Number(vendor?.lat)) ? Number(vendor.lat) : null);
+  const vendorLng = isValidCoord(Number(vendor?.longitude)) ? Number(vendor.longitude) : (isValidCoord(Number(vendor?.lng)) ? Number(vendor.lng) : null);
+
+  const customerLat = isValidCoord(Number(customerAddress?.latitude)) ? Number(customerAddress.latitude) : (isValidCoord(Number(customerAddress?.lat)) ? Number(customerAddress.lat) : null);
+  const customerLng = isValidCoord(Number(customerAddress?.longitude)) ? Number(customerAddress.longitude) : (isValidCoord(Number(customerAddress?.lng)) ? Number(customerAddress.lng) : null);
 
   const targetLat = stage === 'TO_PICKUP' ? vendorLat : customerLat;
   const targetLng = stage === 'TO_PICKUP' ? vendorLng : customerLng;
   const targetName = stage === 'TO_PICKUP' ? (vendor?.name || 'Pickup Store') : (customerAddress?.street || 'Customer Address');
 
-  // Rider position & orientation
-  const [currentRiderPos, setCurrentRiderPos] = useState(
-    riderCoords ? [riderCoords.lat, riderCoords.lng] : [vendorLat || 28.57, vendorLng || 77.32]
-  );
+  // Compute safe fallback center
+  const defaultCenter = [
+    isValidCoord(vendorLat) ? vendorLat : (isValidCoord(customerLat) ? customerLat : 28.4866),
+    isValidCoord(vendorLng) ? vendorLng : (isValidCoord(customerLng) ? customerLng : 77.2918)
+  ];
+
+  // Rider position & orientation with guaranteed valid numbers
+  const [currentRiderPos, setCurrentRiderPos] = useState(() => {
+    if (isValidCoord(Number(riderCoords?.lat)) && isValidCoord(Number(riderCoords?.lng))) {
+      return [Number(riderCoords.lat), Number(riderCoords.lng)];
+    }
+    return defaultCenter;
+  });
   const [heading, setHeading] = useState(riderCoords?.heading || 0);
 
   // Road geometry & turn steps
@@ -183,10 +204,10 @@ export default function RiderNavigationMap({
   const [followMode, setFollowMode] = useState(true);
   const [headingUpMode, setHeadingUpMode] = useState(false);
 
-  // Sync rider position from props
+  // Sync rider position from props safely
   useEffect(() => {
-    if (riderCoords?.lat && riderCoords?.lng) {
-      setCurrentRiderPos([riderCoords.lat, riderCoords.lng]);
+    if (isValidCoord(Number(riderCoords?.lat)) && isValidCoord(Number(riderCoords?.lng))) {
+      setCurrentRiderPos([Number(riderCoords.lat), Number(riderCoords.lng)]);
       if (riderCoords.heading) setHeading(riderCoords.heading);
     }
   }, [riderCoords?.lat, riderCoords?.lng, riderCoords?.heading]);

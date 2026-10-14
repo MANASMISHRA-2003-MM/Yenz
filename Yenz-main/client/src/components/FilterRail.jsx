@@ -1,8 +1,0 @@
-import React from 'react';
-import { SlidersHorizontal, Zap, Star, Leaf, IndianRupee } from 'lucide-react';
-import { useMode } from '../context/ModeContext';
-export default function FilterRail({ fastDelivery=false, ratingFourPlus=false, pureVeg=false, under250=false, onToggleFilter, onResetFilters }) {
-  const {isFresh}=useMode(); const active=[fastDelivery,ratingFourPlus,pureVeg,under250].filter(Boolean).length;
-  const chip=(activeState,color='green')=>`inline-flex items-center gap-1.5 px-3 py-2 rounded-md border text-xs font-semibold whitespace-nowrap ${activeState?`text-white border-transparent ${color==='red'?'bg-[rgb(229,27,75)]':'bg-[rgb(22,138,91)]'}`:'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`;
-  return <div className="flex items-center gap-2 overflow-x-auto scrollbar-none pb-1"><button onClick={onResetFilters} className={chip(active)}><SlidersHorizontal className="w-3.5 h-3.5"/>Filters{active>0&&<span className="bg-white text-gray-800 rounded-full w-4 h-4 text-[10px] flex items-center justify-center">{active}</span>}</button><button onClick={()=>onToggleFilter('fastDelivery')} className={chip(fastDelivery,isFresh?'green':'red')}><Zap className="w-3.5 h-3.5 text-amber-500"/>Near & Fast</button><button onClick={()=>onToggleFilter('ratingFourPlus')} className={chip(ratingFourPlus,isFresh?'green':'red')}><Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400"/>4.0+ Rating</button><button onClick={()=>onToggleFilter('pureVeg')} className={chip(pureVeg,'green')}><Leaf className="w-3.5 h-3.5"/>Pure Veg</button><button onClick={()=>onToggleFilter('under250')} className={chip(under250,isFresh?'green':'red')}><IndianRupee className="w-3.5 h-3.5"/>Under ₹250</button></div>;
-}

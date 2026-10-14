@@ -9,10 +9,10 @@ export default function MobileBottomNavigation() {
 
   const items = [
     ['/home', 'Home', Home],
-    ['/search', 'Explore', Search],
+    ['/search', 'Shop', Search],
     ['/orders', 'Orders', Clock3],
-    ['/cart', 'Cart', ShoppingBag],
-    ['/profile', 'Account', User]
+    ['/profile', 'Account', User],
+    ['/cart', 'Cart', ShoppingBag]
   ];
 
   return (
@@ -21,7 +21,7 @@ export default function MobileBottomNavigation() {
         {items.map(([path, label, Icon]) => {
           const active =
             pathname === path ||
-            (path === '/home' && pathname === '/') ||
+            (path === '/home' && (pathname === '/' || pathname === '/home')) ||
             (path !== '/home' && pathname.startsWith(path));
 
           return (

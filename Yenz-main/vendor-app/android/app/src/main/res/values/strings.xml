@@ -1,7 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<resources>
-    <string name="app_name">Milega Vendor</string>
-    <string name="title_activity_main">Milega Vendor</string>
-    <string name="package_name">com.milega.vendor</string>
-    <string name="custom_url_scheme">com.milega.vendor</string>
-</resources>

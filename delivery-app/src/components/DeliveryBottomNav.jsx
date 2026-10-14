@@ -20,10 +20,10 @@ export default function DeliveryBottomNav({ hasActiveTrip = false }) {
       isActive: location.pathname.includes('/active-trip')
     },
     {
-      to: '/orders',
+      to: '/delivery/history',
       label: 'Trips',
       icon: History,
-      isActive: location.pathname === '/orders'
+      isActive: location.pathname.includes('/history') || location.pathname === '/orders' || location.pathname === '/trips'
     },
     {
       to: '/settings',

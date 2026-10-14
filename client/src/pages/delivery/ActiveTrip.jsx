@@ -93,21 +93,30 @@ export default function ActiveTrip() {
   const fetchDelivery = useCallback(async () => {
     try {
       setLoading(true);
+      if (deliveryId) {
+        try {
+          const res = await API.get(`/deliveries/${deliveryId}`);
+          if (res.data?.success && (res.data.activeDelivery || res.data.delivery)) {
+            setDelivery(res.data.activeDelivery || res.data.delivery);
+            return;
+          }
+        } catch (err) {
+          console.warn('Direct delivery ID lookup failed, falling back to dashboard:', err);
+        }
+      }
       const res = await API.get('/deliveries/dashboard');
-      if (res.data.success && res.data.activeDelivery) {
+      if (res.data?.success && res.data.activeDelivery) {
         setDelivery(res.data.activeDelivery);
       } else {
-        // No active delivery — go back to dashboard
-        toast.info('No active delivery found.');
-        navigate('/delivery/dashboard', { replace: true });
+        setDelivery(null);
       }
     } catch (err) {
-      console.error('Error fetching active trip:', err);
-      toast.error('Error loading trip details');
+      console.error('Failed to load active delivery:', err);
+      setDelivery(null);
     } finally {
       setLoading(false);
     }
-  }, [navigate]);
+  }, [deliveryId]);
 
   useEffect(() => {
     fetchDelivery();

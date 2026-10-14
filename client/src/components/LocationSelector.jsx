@@ -4,8 +4,26 @@ import AddressModal, { getSavedAddresses, saveAddresses } from './AddressModal';
 import { reverseGeocode } from '../utils/reverseGeocode';
 
 export default function LocationSelector({ variant = 'desktop', onLocationUpdate }) {
-  const [addressTitle, setAddressTitle] = useState('Detecting Location... 📍');
-  const [addressSubtext, setAddressSubtext] = useState('Tap to use live GPS or select address');
+  const [addressTitle, setAddressTitle] = useState(() => {
+    try {
+      const savedRaw = localStorage.getItem('krawing_user_address') || localStorage.getItem('krawing_selected_address');
+      if (savedRaw) {
+        const parsed = JSON.parse(savedRaw);
+        return parsed.street || parsed.title || parsed.area || 'Select Delivery Location 📍';
+      }
+    } catch {}
+    return 'Select Delivery Location 📍';
+  });
+  const [addressSubtext, setAddressSubtext] = useState(() => {
+    try {
+      const savedRaw = localStorage.getItem('krawing_user_address') || localStorage.getItem('krawing_selected_address');
+      if (savedRaw) {
+        const parsed = JSON.parse(savedRaw);
+        return [parsed.city, parsed.pincode].filter(Boolean).join(' - ') || parsed.state || 'Tap to enable GPS or choose address';
+      }
+    } catch {}
+    return 'Tap to enable GPS or choose address';
+  });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [gettingLocation, setGettingLocation] = useState(false);
 
@@ -14,6 +32,19 @@ export default function LocationSelector({ variant = 'desktop', onLocationUpdate
     const handleLocationEvent = () => loadSavedAddress();
     window.addEventListener('krawing_location_changed', handleLocationEvent);
     window.addEventListener('krawing_addresses_updated', handleLocationEvent);
+
+    // If no address is set yet, check if browser geolocation is already permitted and auto-resolve
+    const savedRaw = localStorage.getItem('krawing_user_address') || localStorage.getItem('krawing_selected_address');
+    if (!savedRaw && typeof navigator !== 'undefined' && navigator.geolocation) {
+      if (navigator.permissions && navigator.permissions.query) {
+        navigator.permissions.query({ name: 'geolocation' }).then((status) => {
+          if (status.state === 'granted') {
+            handleUseLiveGPS();
+          }
+        }).catch(() => {});
+      }
+    }
+
     return () => {
       window.removeEventListener('krawing_location_changed', handleLocationEvent);
       window.removeEventListener('krawing_addresses_updated', handleLocationEvent);
@@ -46,7 +77,7 @@ export default function LocationSelector({ variant = 'desktop', onLocationUpdate
         return;
       }
 
-      // 4. Default state if no location is selected yet
+      // 4. Default dynamic placeholder if no location is selected yet
       setAddressTitle('Select Delivery Location 📍');
       setAddressSubtext('Tap to enable GPS or choose address');
     } catch (e) {

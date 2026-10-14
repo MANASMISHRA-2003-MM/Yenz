@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import API from '../../services/api';
+import { socket } from '../../services/socket';
 import DeliveryNavbar from '../../components/DeliveryNavbar';
 import DeliveryBottomNav from '../../components/DeliveryBottomNav';
 import RiderNavigationMap from '../../components/RiderNavigationMap';
@@ -92,21 +93,30 @@ export default function ActiveTrip() {
   const fetchDelivery = useCallback(async () => {
     try {
       setLoading(true);
+      if (deliveryId) {
+        try {
+          const res = await API.get(`/deliveries/${deliveryId}`);
+          if (res.data?.success && (res.data.activeDelivery || res.data.delivery)) {
+            setDelivery(res.data.activeDelivery || res.data.delivery);
+            return;
+          }
+        } catch (err) {
+          console.warn('Direct delivery ID lookup failed, falling back to dashboard:', err);
+        }
+      }
       const res = await API.get('/deliveries/dashboard');
-      if (res.data.success && res.data.activeDelivery) {
+      if (res.data?.success && res.data.activeDelivery) {
         setDelivery(res.data.activeDelivery);
       } else {
-        // No active delivery — go back to dashboard
-        toast.info('No active delivery found.');
-        navigate('/delivery/dashboard', { replace: true });
+        setDelivery(null);
       }
     } catch (err) {
-      console.error('Error fetching active trip:', err);
-      toast.error('Error loading trip details');
+      console.error('Failed to load active delivery:', err);
+      setDelivery(null);
     } finally {
       setLoading(false);
     }
-  }, [navigate]);
+  }, [deliveryId]);
 
   useEffect(() => {
     fetchDelivery();
@@ -332,9 +342,10 @@ export default function ActiveTrip() {
   if (loading && !delivery) {
     return (
       <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center">
-        <Navbar />
+        <DeliveryNavbar isOnline={true} hasActiveTrip={false} />
         <div className="w-10 h-10 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin my-auto" />
         <p className="text-xs text-slate-500 font-bold mt-3">Loading active trip...</p>
+        <DeliveryBottomNav hasActiveTrip={false} />
       </div>
     );
   }
@@ -342,7 +353,7 @@ export default function ActiveTrip() {
   if (!delivery) {
     return (
       <div className="min-h-screen bg-[#F8FAFC] flex flex-col">
-        <DeliveryNavbar />
+        <DeliveryNavbar isOnline={true} hasActiveTrip={false} />
         <div className="flex-1 flex flex-col items-center justify-center text-center px-4">
           <Bike className="w-16 h-16 text-slate-300 mb-4" />
           <h2 className="text-xl font-black text-slate-800">No Active Trip</h2>
@@ -354,6 +365,7 @@ export default function ActiveTrip() {
             ← Back to Dashboard
           </Link>
         </div>
+        <DeliveryBottomNav hasActiveTrip={false} />
       </div>
     );
   }
@@ -373,7 +385,7 @@ export default function ActiveTrip() {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-900 pb-16">
-      <DeliveryNavbar />
+      <DeliveryNavbar isOnline={true} hasActiveTrip={Boolean(delivery)} />
 
       {/* Top Bar — Order Info + Back Button */}
       <div className="bg-white border-b border-slate-200/90 px-4 py-4 shadow-xs">
@@ -970,7 +982,7 @@ export default function ActiveTrip() {
           </div>
         )}
 
-      <DeliveryBottomNav />
+      <DeliveryBottomNav hasActiveTrip={Boolean(delivery)} />
       </main>
 
       {/* Live Camera Modal for Rider Dropoff Verification */}
