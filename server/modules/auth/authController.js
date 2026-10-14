@@ -81,7 +81,7 @@ const registerUser = async (req, res, next) => {
         console.error('[Register] Firebase idToken verification failed:', fbErr.message);
         return res.status(401).json({
           success: false,
-          message: 'Phone verification token is invalid or expired. Please re-verify via SMS OTP.'
+          message: `Phone verification token invalid (${fbErr.message}). Please re-verify via SMS OTP.`
         });
       }
     }
@@ -234,7 +234,7 @@ const resetPassword = async (req, res, next) => {
       console.error('[Reset Password] Firebase token verification error:', fbErr.message);
       return res.status(401).json({
         success: false,
-        message: 'Phone verification token is invalid or expired. Please re-verify via OTP.'
+        message: `Phone verification token invalid (${fbErr.message}). Please re-verify via OTP.`
       });
     }
 

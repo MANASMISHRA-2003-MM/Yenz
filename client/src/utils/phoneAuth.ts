@@ -108,6 +108,19 @@ export interface SendOtpResult {
   isTestNumber: boolean;
 }
 
+export function isTestPhoneNumber(phone: string): boolean {
+  if (!phone) return false;
+  const digits = phone.toString().replace(/\D/g, '');
+  return (
+    digits.startsWith('9199999999') ||
+    digits.startsWith('99999999') ||
+    digits === '9876543210' ||
+    digits === '919876543210' ||
+    digits.startsWith('1650555') ||
+    DEV_TEST_NUMBERS.includes(phone)
+  );
+}
+
 /**
  * Sends Firebase phone OTP with 120s timeout, test number auto-detection,
  * and graceful fallback flags for invisible reCAPTCHA blockers.
@@ -122,9 +135,9 @@ export async function sendPhoneOtp(
     throw new Error('Please enter a valid mobile phone number (at least 10 digits).');
   }
 
-  const isTestNumber = DEV_TEST_NUMBERS.includes(formattedPhone) || formattedPhone.endsWith('9999999999');
+  const isTestNumber = isTestPhoneNumber(formattedPhone);
 
-  // Trigger Firebase's mock loader automatically for test numbers
+  // Trigger Firebase's mock loader automatically for test numbers (bypasses reCAPTCHA)
   if (isTestNumber) {
     try {
       auth.settings.appVerificationDisabledForTesting = true;
