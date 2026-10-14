@@ -5,20 +5,14 @@ import FreshCartFooter from '../../components/FreshCartFooter';
 import MobileBottomNavigation from '../../components/MobileBottomNavigation';
 import AddressModal, { getSavedAddresses, saveAddresses } from '../../components/AddressModal';
 import { useAuth } from '../../context/AuthContext';
-import { User, Mail, Phone, Receipt, Shield, LogOut, ArrowRight, MapPin, Plus, Trash2, Home, Briefcase, Navigation, Server, Wifi, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react';
+import { User, Mail, Phone, Receipt, Shield, LogOut, ArrowRight, MapPin, Plus, Trash2, Home, Briefcase, Navigation } from 'lucide-react';
 import { toast } from 'sonner';
 import { getUniversalProfileIcon } from '../../utils/imageUtils';
 import { reverseGeocode } from '../../utils/reverseGeocode';
-import API, { getBackendBaseUrl } from '../../services/api';
-import { reconnectSocketWithAuth } from '../../services/socket';
 
 export default function Profile() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [serverUrl, setServerUrl] = useState(() => getBackendBaseUrl() || 'http://192.168.1.7:5000');
-  const [serverStatus, setServerStatus] = useState('checking'); // 'connected', 'offline', 'checking'
-  const [editingServer, setEditingServer] = useState(false);
-  const [customInputUrl, setCustomInputUrl] = useState('');
 
   const [addresses, setAddresses] = useState(getSavedAddresses());
   const [showAddressModal, setShowAddressModal] = useState(false);
@@ -28,10 +22,10 @@ export default function Profile() {
   const [newAddr, setNewAddr] = useState({
     title: 'Home',
     street: '',
-    city: 'Faridabad',
-    state: 'Haryana',
-    pincode: '121009',
-    phone: user?.phone || '+91 98765 43210'
+    city: '',
+    state: '',
+    pincode: '',
+    phone: user?.phone || ''
   });
 
   useEffect(() => {
@@ -43,47 +37,6 @@ export default function Profile() {
       window.removeEventListener('krawing_location_changed', handleUpdate);
     };
   }, []);
-
-  const checkConnection = async (targetUrl = serverUrl) => {
-    setServerStatus('checking');
-    try {
-      const cleanUrl = (targetUrl || '').replace(/\/$/, '');
-      const testEndpoint = cleanUrl ? `${cleanUrl}/` : '/';
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000);
-      const res = await fetch(testEndpoint, { signal: controller.signal });
-      clearTimeout(timeoutId);
-      if (res.ok || res.status < 500) {
-        setServerStatus('connected');
-      } else {
-        setServerStatus('offline');
-      }
-    } catch {
-      setServerStatus('offline');
-    }
-  };
-
-  useEffect(() => {
-    checkConnection();
-  }, [serverUrl]);
-
-  const handleSaveServer = (newUrl) => {
-    const trimmed = (newUrl || '').trim();
-    if (trimmed) {
-      localStorage.setItem('krawing_custom_backend_url', trimmed);
-      setServerUrl(trimmed);
-      reconnectSocketWithAuth();
-      toast.success('Backend server updated to ' + trimmed);
-      checkConnection(trimmed);
-    } else {
-      localStorage.removeItem('krawing_custom_backend_url');
-      setServerUrl(getBackendBaseUrl() || 'http://192.168.1.7:5000');
-      reconnectSocketWithAuth();
-      toast.success('Reset to default backend');
-      checkConnection();
-    }
-    setEditingServer(false);
-  };
 
   if (!user) {
     navigate('/login');
@@ -428,95 +381,6 @@ export default function Profile() {
                 </span>
                 <ArrowRight className="w-4 h-4 text-gray-400" />
               </Link>
-            </div>
-          </section>
-
-          {/* Backend Connection Status (Mobile / Capacitor Config) */}
-          <section className="fc-card p-6 bg-slate-50/80 border border-slate-200 rounded-2xl">
-            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-              <div className="flex items-center gap-2">
-                <Server className="w-5 h-5 text-slate-700" />
-                <h2 className="text-base font-semibold text-slate-900">Backend Server Connection</h2>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span
-                  className={`inline-block w-2.5 h-2.5 rounded-full ${
-                    serverStatus === 'connected'
-                      ? 'bg-emerald-500 shadow-sm shadow-emerald-400 animate-pulse'
-                      : serverStatus === 'checking'
-                      ? 'bg-amber-400 animate-ping'
-                      : 'bg-rose-500'
-                  }`}
-                />
-                <span className="text-xs font-bold text-slate-600 capitalize">
-                  {serverStatus === 'connected' ? 'Connected' : serverStatus === 'checking' ? 'Testing...' : 'Offline / Unreachable'}
-                </span>
-              </div>
-            </div>
-
-            <div className="mt-4 space-y-3">
-              <div className="flex items-center justify-between text-xs text-slate-600 bg-white p-3 rounded-xl border border-slate-200">
-                <div className="truncate mr-2">
-                  <span className="font-semibold text-slate-500 block mb-0.5">Active Backend URL:</span>
-                  <span className="font-mono text-slate-800 font-bold truncate">{serverUrl || '(Relative proxy)'}</span>
-                </div>
-                <button
-                  onClick={() => checkConnection()}
-                  className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg shrink-0 transition"
-                  title="Test Connection Ping"
-                >
-                  <RefreshCw className={`w-4 h-4 ${serverStatus === 'checking' ? 'animate-spin' : ''}`} />
-                </button>
-              </div>
-
-              {editingServer ? (
-                <div className="p-3 bg-white rounded-xl border border-emerald-300 space-y-2">
-                  <label className="text-xs font-semibold text-slate-700 block">
-                    Change Backend URL (e.g. PC IP or Production URL):
-                  </label>
-                  <input
-                    type="text"
-                    value={customInputUrl}
-                    onChange={(e) => setCustomInputUrl(e.target.value)}
-                    placeholder="http://192.168.1.7:5000 or https://your-backend.onrender.com"
-                    className="fc-input text-xs py-2 w-full font-mono"
-                  />
-                  <div className="flex items-center gap-2 justify-end pt-1">
-                    <button
-                      onClick={() => setEditingServer(false)}
-                      className="px-3 py-1.5 text-xs text-slate-600 font-medium hover:bg-slate-100 rounded-lg"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => handleSaveServer(customInputUrl)}
-                      className="px-3 py-1.5 text-xs bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700"
-                    >
-                      Save & Reconnect
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-center justify-between pt-1">
-                  <button
-                    onClick={() => {
-                      setCustomInputUrl(serverUrl);
-                      setEditingServer(true);
-                    }}
-                    className="text-xs font-semibold text-emerald-700 hover:underline"
-                  >
-                    Edit Server URL / IP
-                  </button>
-                  {localStorage.getItem('krawing_custom_backend_url') && (
-                    <button
-                      onClick={() => handleSaveServer('')}
-                      className="text-xs text-slate-500 hover:text-rose-600"
-                    >
-                      Reset to Default
-                    </button>
-                  )}
-                </div>
-              )}
             </div>
           </section>
         </div>

@@ -22,10 +22,10 @@ export default function Profile() {
   const [newAddr, setNewAddr] = useState({
     title: 'Home',
     street: '',
-    city: 'Faridabad',
-    state: 'Haryana',
-    pincode: '121009',
-    phone: user?.phone || '+91 98765 43210'
+    city: '',
+    state: '',
+    pincode: '',
+    phone: user?.phone || ''
   });
 
   useEffect(() => {

@@ -8,22 +8,32 @@ export default function LocationSelector({ variant = 'desktop', onLocationUpdate
     try {
       const savedRaw = localStorage.getItem('krawing_user_address') || localStorage.getItem('krawing_selected_address');
       if (savedRaw) {
+        if (savedRaw.toLowerCase().includes('ansal')) {
+          localStorage.removeItem('krawing_user_address');
+          localStorage.removeItem('krawing_selected_address');
+          return 'Choose location 📍';
+        }
         const parsed = JSON.parse(savedRaw);
-        return parsed.street || parsed.title || parsed.area || 'Select Delivery Location 📍';
+        return parsed.street || parsed.title || parsed.area || 'Choose location 📍';
       }
     } catch {}
-    return 'Select Delivery Location 📍';
+    return 'Choose location 📍';
   });
+
   const [addressSubtext, setAddressSubtext] = useState(() => {
     try {
       const savedRaw = localStorage.getItem('krawing_user_address') || localStorage.getItem('krawing_selected_address');
       if (savedRaw) {
+        if (savedRaw.toLowerCase().includes('ansal')) {
+          return 'Choose location & enter mobile number';
+        }
         const parsed = JSON.parse(savedRaw);
-        return [parsed.city, parsed.pincode].filter(Boolean).join(' - ') || parsed.state || 'Tap to enable GPS or choose address';
+        return [parsed.city, parsed.pincode].filter(Boolean).join(' - ') || parsed.state || 'Choose location & enter mobile number';
       }
     } catch {}
-    return 'Tap to enable GPS or choose address';
+    return 'Choose location & enter mobile number';
   });
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [gettingLocation, setGettingLocation] = useState(false);
 
@@ -32,18 +42,6 @@ export default function LocationSelector({ variant = 'desktop', onLocationUpdate
     const handleLocationEvent = () => loadSavedAddress();
     window.addEventListener('krawing_location_changed', handleLocationEvent);
     window.addEventListener('krawing_addresses_updated', handleLocationEvent);
-
-    // If no address is set yet, check if browser geolocation is already permitted and auto-resolve
-    const savedRaw = localStorage.getItem('krawing_user_address') || localStorage.getItem('krawing_selected_address');
-    if (!savedRaw && typeof navigator !== 'undefined' && navigator.geolocation) {
-      if (navigator.permissions && navigator.permissions.query) {
-        navigator.permissions.query({ name: 'geolocation' }).then((status) => {
-          if (status.state === 'granted') {
-            handleUseLiveGPS();
-          }
-        }).catch(() => {});
-      }
-    }
 
     return () => {
       window.removeEventListener('krawing_location_changed', handleLocationEvent);
@@ -57,33 +55,38 @@ export default function LocationSelector({ variant = 'desktop', onLocationUpdate
       const savedRaw = localStorage.getItem('krawing_user_address') || localStorage.getItem('krawing_selected_address');
       let targetAddr = null;
       if (savedRaw) {
-        targetAddr = JSON.parse(savedRaw);
+        if (savedRaw.toLowerCase().includes('ansal')) {
+          localStorage.removeItem('krawing_user_address');
+          localStorage.removeItem('krawing_selected_address');
+        } else {
+          targetAddr = JSON.parse(savedRaw);
+        }
       }
 
       // 2. If no active selection, check saved addresses list for default or first address
       if (!targetAddr || (!targetAddr.street && !targetAddr.title && !targetAddr.area && !targetAddr.city)) {
-        const savedList = getSavedAddresses();
+        const savedList = getSavedAddresses().filter(a => !JSON.stringify(a).toLowerCase().includes('ansal'));
         if (savedList && savedList.length > 0) {
           targetAddr = savedList.find(a => a.isDefault) || savedList[0];
         }
       }
 
-      // 3. Format address display if targetAddr exists
+      // 3. Format address display if valid targetAddr exists
       if (targetAddr && (targetAddr.street || targetAddr.title || targetAddr.area || targetAddr.city)) {
-        const titleStr = targetAddr.street || targetAddr.title || targetAddr.area || 'Selected Address';
-        const subtextStr = [targetAddr.city, targetAddr.pincode].filter(Boolean).join(' - ') || targetAddr.state || 'Saved Location';
+        const titleStr = targetAddr.street || targetAddr.title || targetAddr.area || 'Choose location 📍';
+        const subtextStr = [targetAddr.city, targetAddr.pincode].filter(Boolean).join(' - ') || targetAddr.state || 'Choose location & enter mobile number';
         setAddressTitle(titleStr);
         setAddressSubtext(subtextStr);
         return;
       }
 
-      // 4. Default dynamic placeholder if no location is selected yet
-      setAddressTitle('Select Delivery Location 📍');
-      setAddressSubtext('Tap to enable GPS or choose address');
+      // 4. Default state when no location has been selected
+      setAddressTitle('Choose location 📍');
+      setAddressSubtext('Choose location & enter mobile number');
     } catch (e) {
       console.error('Error loading address:', e);
-      setAddressTitle('Select Delivery Location 📍');
-      setAddressSubtext('Tap to enable GPS or choose address');
+      setAddressTitle('Choose location 📍');
+      setAddressSubtext('Choose location & enter mobile number');
     }
   };
 
@@ -126,7 +129,7 @@ export default function LocationSelector({ variant = 'desktop', onLocationUpdate
           longitude,
           lat: latitude,
           lng: longitude,
-          phone: '+91 98765 43210',
+          phone: '',
           isDefault: true
         };
 

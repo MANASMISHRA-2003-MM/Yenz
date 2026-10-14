@@ -463,18 +463,6 @@ export default function CustomerApp() {
               <Text style={styles.brandLogo}>
                 Yenz<Text style={{ color: activeColor }}>.</Text>
               </Text>
-              <TouchableOpacity
-                style={[
-                  styles.statusBadge,
-                  { backgroundColor: serverOnline ? '#ECFDF5' : '#FEF2F2', borderColor: serverOnline ? '#A7F3D0' : '#FECACA' }
-                ]}
-                onPress={() => setIsIpModalOpen(true)}
-              >
-                <View style={[styles.statusDot, { backgroundColor: serverOnline ? '#10B981' : '#EF4444' }]} />
-                <Text style={[styles.statusText, { color: serverOnline ? '#065F46' : '#991B1B' }]}>
-                  {serverOnline ? 'Connected' : 'Offline • Set IP'}
-                </Text>
-              </TouchableOpacity>
             </View>
 
             <View style={styles.brandRight}>
@@ -657,35 +645,6 @@ export default function CustomerApp() {
         {/* Address Selection Modal */}
         <MobileAddressModal visible={isAddressModalOpen} onClose={() => setIsAddressModalOpen(false)} />
 
-        {/* Backend IP Settings Modal */}
-        <Modal visible={isIpModalOpen} transparent animationType="fade" onRequestClose={() => setIsIpModalOpen(false)}>
-          <View style={styles.modalBackdrop}>
-            <View style={styles.ipModalCard}>
-              <Text style={styles.ipModalTitle}>⚙️ Backend Host Settings</Text>
-              <Text style={styles.ipModalDesc}>
-                Set the Wi-Fi IP address of your computer running the Yenz backend server:
-              </Text>
-
-              <TextInput
-                style={styles.ipInputField}
-                value={customIpInput}
-                onChangeText={setCustomIpInput}
-                placeholder="192.168.29.220"
-                placeholderTextColor="#94A3B8"
-                autoCapitalize="none"
-              />
-
-              <View style={styles.ipActionsRow}>
-                <TouchableOpacity style={styles.ipCancelBtn} onPress={() => setIsIpModalOpen(false)}>
-                  <Text style={styles.ipCancelText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.ipSaveBtn, { backgroundColor: activeColor }]} onPress={handleUpdateBackendHost}>
-                  <Text style={styles.ipSaveText}>Connect & Sync</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
 
       </SafeAreaView>
     </CustomerContext.Provider>
@@ -1359,16 +1318,6 @@ function ProfileScreen({ onOpenIpModal }) {
           <Text style={styles.profileMenuChevron}>›</Text>
         </TouchableOpacity>
 
-        <View style={styles.menuDivider} />
-
-        <TouchableOpacity style={styles.profileMenuRow} onPress={onOpenIpModal}>
-          <Text style={styles.profileMenuIcon}>⚙️</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.profileMenuTitle}>Backend Server Configuration</Text>
-            <Text style={styles.profileMenuSub}>IP: {CONFIG.activeHost}:{CONFIG.PORT}</Text>
-          </View>
-          <Text style={styles.profileMenuChevron}>›</Text>
-        </TouchableOpacity>
       </View>
     </ScrollView>
   );

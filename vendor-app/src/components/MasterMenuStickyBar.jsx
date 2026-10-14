@@ -131,7 +131,7 @@ export default function MasterMenuStickyBar({
         menuCardImage: previewPhoto
       });
       if (res.data.success) {
-        toast.success('📸 Master Menu Card updated successfully in database!');
+        toast.success('📸 Master Menu Card updated successfully!');
         setIsPhotoModalOpen(false);
         setPreviewPhoto(null);
         if (onRestaurantUpdated) {
@@ -544,7 +544,7 @@ export default function MasterMenuStickyBar({
             <div className="bg-slate-900 text-white p-5 flex items-center justify-between">
               <div>
                 <h3 className="font-black text-base">Confirm Master Menu Card Photo</h3>
-                <p className="text-xs text-slate-400 mt-0.5">Saving direct photo to {restaurant?.name} (Database storage)</p>
+                <p className="text-xs text-slate-400 mt-0.5">Saving menu card photo to {restaurant?.name}</p>
               </div>
               <button
                 onClick={() => { setIsPhotoModalOpen(false); setPreviewPhoto(null); }}
@@ -563,7 +563,7 @@ export default function MasterMenuStickyBar({
                 />
               </div>
               <p className="text-[11px] text-slate-500 mt-2 text-center">
-                This image will be stored directly in the database for instant menu reference by Admin and {restaurant?.name}.
+                This image will be available for instant menu reference by Admin and {restaurant?.name}.
               </p>
             </div>
 

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Store, ArrowRight, Lock, Sparkles, Wifi } from 'lucide-react';
+import { Store, ArrowRight, Lock, Sparkles } from 'lucide-react';
 import MilegaLogo from '../../components/MilegaLogo';
 import { toast } from 'sonner';
 
@@ -139,15 +139,6 @@ export default function Login() {
               </Link>
             </p>
 
-            <div className="mt-4 text-center">
-              <Link
-                to="/settings"
-                className="text-[11px] text-slate-400 hover:text-slate-600 inline-flex items-center gap-1 font-semibold"
-              >
-                <Wifi className="w-3 h-3" />
-                <span>Configure Server LAN IP Address</span>
-              </Link>
-            </div>
           </div>
         </div>
       </div>

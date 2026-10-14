@@ -109,7 +109,7 @@ export default function DeliveryOnboarding() {
             <label><span className="fc-label">Bank account number</span><input className="fc-input" value={form.bankAccount} onChange={e=>setForm({...form,bankAccount:e.target.value})} placeholder="Account number" /></label>
             <label><span className="fc-label">IFSC code</span><input className="fc-input" value={form.ifscCode} onChange={e=>setForm({...form,ifscCode:e.target.value})} placeholder="SBIN0001234" /></label>
           </div></div>
-          <div className="mt-7 rounded-md border border-gray-200 bg-gray-50 p-4 text-xs text-gray-500 flex gap-2"><Wallet className="w-4 h-4 shrink-0" /> Payout information continues to be sent in the same backend payload as the existing Yenz application.</div>
+          <div className="mt-7 rounded-md border border-gray-200 bg-gray-50 p-4 text-xs text-gray-500 flex gap-2"><Wallet className="w-4 h-4 shrink-0" /> Payouts are securely processed directly to your registered bank account every delivery cycle.</div>
           <button type="submit" disabled={submitting} className="mt-5 w-full fc-btn text-white disabled:opacity-50" style={{background:'var(--fc-fresh)',borderColor:'var(--fc-fresh)'}}>{submitting ? 'Submitting application…' : 'Submit driver verification'} <ArrowRight className="w-4 h-4" /></button>
         </form>}
       </main>

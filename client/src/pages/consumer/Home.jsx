@@ -28,8 +28,9 @@ export default function Home() {
   const [pureVeg, setPureVeg] = useState(() => localStorage.getItem('krawing_veg_only') === 'true');
 
   useEffect(() => {
-    fetchHomeData();
-    const loc = () => fetchHomeData();
+    setSelectedCategory('ALL');
+    fetchHomeData(mode);
+    const loc = () => fetchHomeData(mode);
     const veg = e => {
       if (typeof e.detail?.isVegOnly === 'boolean') setPureVeg(e.detail.isVegOnly);
     };
@@ -41,12 +42,13 @@ export default function Home() {
     };
   }, [mode]);
 
-  const fetchHomeData = async () => {
+  const fetchHomeData = async (targetMode = mode) => {
     try {
       setLoading(true);
-      const vendorTypeParam = isFresh ? 'FRESH' : 'CRAVINGS';
-      const vendorStoreType = isFresh ? 'FRESH_MARKET' : 'FOOD_RESTAURANT';
-      const productType = isFresh ? 'VEGETABLE,FRUIT,GROCERY' : 'FOOD';
+      const targetIsFresh = targetMode === 'fresh';
+      const vendorTypeParam = targetIsFresh ? 'FRESH' : 'CRAVINGS';
+      const vendorStoreType = targetIsFresh ? 'FRESH_MARKET' : 'FOOD_RESTAURANT';
+      const productType = targetIsFresh ? 'VEGETABLE,FRUIT,GROCERY' : 'FOOD';
 
       // Set radius=50 to fetch all shops/restaurants from database
       let locationParams = '&radius=50';
@@ -172,10 +174,10 @@ export default function Home() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => switchMode('cravings')} className={`fc-btn py-2 text-xs ${!isFresh ? 'fc-btn-cravings' : 'fc-btn-soft'}`}>
+            <button onClick={() => { switchMode('cravings'); setSelectedCategory('ALL'); }} className={`fc-btn py-2 text-xs ${!isFresh ? 'fc-btn-cravings' : 'fc-btn-soft'}`}>
               Cravings
             </button>
-            <button onClick={() => switchMode('fresh')} className={`fc-btn py-2 text-xs ${isFresh ? 'fc-btn-fresh' : 'fc-btn-soft'}`}>
+            <button onClick={() => { switchMode('fresh'); setSelectedCategory('ALL'); }} className={`fc-btn py-2 text-xs ${isFresh ? 'fc-btn-fresh' : 'fc-btn-soft'}`}>
               Fresh Mandi
             </button>
           </div>
@@ -188,7 +190,7 @@ export default function Home() {
           <div className="flex items-end justify-between mb-3">
             <div>
               <h2 className="text-xl font-semibold text-gray-800">Refine your selection</h2>
-              <p className="text-xs text-gray-500 mt-1">Filter stores and products from the database.</p>
+              <p className="text-xs text-gray-500 mt-1">Filter stores and products to suit your taste.</p>
             </div>
           </div>
           <FilterRail
@@ -226,7 +228,7 @@ export default function Home() {
           <div className="flex items-end justify-between mb-3">
             <div>
               <h2 className="text-xl font-semibold text-gray-800">{isFresh ? 'Top fresh stores near you' : 'Top picks near you'}</h2>
-              <p className="text-xs text-gray-500 mt-1">All verified database stores and mandi vendors.</p>
+              <p className="text-xs text-gray-500 mt-1">All verified partner stores and local mandi vendors.</p>
             </div>
             <Link to="/search" className="text-xs font-semibold text-green-600">
               View all →
@@ -258,7 +260,7 @@ export default function Home() {
         <section>
           <div className="mb-3">
             <h2 className="text-xl font-semibold text-gray-800">{isFresh ? 'Fresh produce & everyday essentials' : 'Popular dishes & meals'}</h2>
-            <p className="text-xs text-gray-500 mt-1">Products fetched directly from the Yenz database.</p>
+            <p className="text-xs text-gray-500 mt-1">Fresh items handpicked for quality and taste.</p>
           </div>
           {loading ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

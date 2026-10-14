@@ -23,8 +23,6 @@ export default function DeliverySettings() {
 
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState(null);
-  const [apiStatus, setApiStatus] = useState('UNTESTED'); // 'UNTESTED' | 'CHECKING' | 'ONLINE' | 'ERROR'
-  const [customApiUrl, setCustomApiUrl] = useState(() => localStorage.getItem('milega_custom_api_url') || '');
   const [isAlertPlaying, setIsAlertPlaying] = useState(false);
 
   useEffect(() => {
@@ -43,34 +41,6 @@ export default function DeliverySettings() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const testConnection = async () => {
-    setApiStatus('CHECKING');
-    try {
-      const res = await API.get('/deliveries/dashboard');
-      if (res.data.success) {
-        setApiStatus('ONLINE');
-        toast.success('Backend connection verified successfully!');
-      } else {
-        setApiStatus('ERROR');
-        toast.error('Unexpected response from backend');
-      }
-    } catch (err) {
-      setApiStatus('ERROR');
-      toast.error('Could not connect to backend: ' + (err.response?.data?.message || err.message));
-    }
-  };
-
-  const saveCustomApiUrl = () => {
-    if (!customApiUrl.trim()) {
-      localStorage.removeItem('milega_custom_api_url');
-      toast.success('Reset to default backend URL');
-    } else {
-      localStorage.setItem('milega_custom_api_url', customApiUrl.trim());
-      toast.success('Custom API URL saved! Reloading...');
-    }
-    window.location.reload();
   };
 
   const handleTestAlertSound = () => {
@@ -103,7 +73,7 @@ export default function DeliverySettings() {
           </div>
           <div>
             <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">Rider Settings</h1>
-            <p className="text-xs text-slate-500 font-medium">Profile, hardware, sound & backend diagnostics</p>
+            <p className="text-xs text-slate-500 font-medium">Profile, hardware & sound preferences</p>
           </div>
         </div>
 
@@ -184,73 +154,6 @@ export default function DeliverySettings() {
               className="px-4 py-2.5 rounded-xl text-xs font-bold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition"
             >
               Test Cash Sound
-            </button>
-          </div>
-        </div>
-
-        {/* Backend & Network Diagnostics */}
-        <div className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-xs space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-              <Wifi className="w-4 h-4 text-emerald-600" />
-              Network & Backend Connection
-            </h3>
-            <span
-              className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                apiStatus === 'ONLINE'
-                  ? 'bg-emerald-100 text-emerald-800'
-                  : apiStatus === 'ERROR'
-                  ? 'bg-rose-100 text-rose-800'
-                  : apiStatus === 'CHECKING'
-                  ? 'bg-amber-100 text-amber-800 animate-pulse'
-                  : 'bg-slate-100 text-slate-600'
-              }`}
-            >
-              {apiStatus}
-            </span>
-          </div>
-
-          <div className="text-xs space-y-2 bg-slate-50 p-3.5 rounded-2xl">
-            <div className="flex justify-between items-center text-slate-600">
-              <span className="font-bold">Active Backend Target:</span>
-              <span className="font-mono text-[11px] text-slate-800 break-all">
-                {import.meta.env.VITE_API_URL || 'http://localhost:5000'}
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-400">
-              Configured for production Render server and local fallback automatically.
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-xs font-bold text-slate-700">
-              Custom Backend Override (Optional for local APK testing)
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="e.g. http://192.168.1.100:5000"
-                value={customApiUrl}
-                onChange={(e) => setCustomApiUrl(e.target.value)}
-                className="flex-1 px-3.5 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500 font-mono"
-              />
-              <button
-                onClick={saveCustomApiUrl}
-                className="px-4 py-2 bg-slate-900 text-white font-bold text-xs rounded-xl hover:bg-slate-800 transition"
-              >
-                Apply
-              </button>
-            </div>
-          </div>
-
-          <div className="pt-2">
-            <button
-              onClick={testConnection}
-              disabled={apiStatus === 'CHECKING'}
-              className="w-full py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs transition flex items-center justify-center gap-2"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${apiStatus === 'CHECKING' ? 'animate-spin' : ''}`} />
-              Test Connection Ping Now
             </button>
           </div>
         </div>

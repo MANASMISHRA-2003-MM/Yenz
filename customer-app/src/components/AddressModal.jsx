@@ -102,7 +102,8 @@ export function getSavedAddresses() {
     const data = localStorage.getItem('krawing_user_saved_addresses');
     if (data) {
       const parsed = JSON.parse(data);
-      return deduplicateLiveAddresses(parsed);
+      const filtered = parsed.filter(a => !JSON.stringify(a).toLowerCase().includes('ansal'));
+      return deduplicateLiveAddresses(filtered);
     }
   } catch (e) {
     console.error('Error reading saved addresses:', e);
@@ -112,7 +113,7 @@ export function getSavedAddresses() {
 
 export function saveAddresses(addresses) {
   try {
-    const cleaned = deduplicateLiveAddresses(addresses);
+    const cleaned = deduplicateLiveAddresses(addresses.filter(a => !JSON.stringify(a).toLowerCase().includes('ansal')));
     localStorage.setItem('krawing_user_saved_addresses', JSON.stringify(cleaned));
     window.dispatchEvent(new Event('krawing_addresses_updated'));
   } catch (e) {
@@ -143,10 +144,10 @@ export default function AddressModal({ isOpen, onClose, onSelectAddress }) {
   const [newAddr, setNewAddr] = useState({
     title: 'Home',
     street: '',
-    city: 'Noida',
-    state: 'Uttar Pradesh',
-    pincode: '201301',
-    phone: '+91 98765 43210',
+    city: '',
+    state: '',
+    pincode: '',
+    phone: '',
     latitude: initialCoords.lat,
     longitude: initialCoords.lng
   });
@@ -219,10 +220,10 @@ export default function AddressModal({ isOpen, onClose, onSelectAddress }) {
     setNewAddr({
       title: 'Home',
       street: '',
-      city: 'Noida',
-      state: 'Uttar Pradesh',
-      pincode: '201301',
-      phone: '+91 98765 43210',
+      city: '',
+      state: '',
+      pincode: '',
+      phone: '',
       latitude: initialCoords.lat,
       longitude: initialCoords.lng
     });
@@ -256,7 +257,7 @@ export default function AddressModal({ isOpen, onClose, onSelectAddress }) {
             longitude,
             lat: latitude,
             lng: longitude,
-            phone: '+91 98765 43210',
+            phone: '',
             isDefault: true
           };
 
@@ -403,7 +404,7 @@ export default function AddressModal({ isOpen, onClose, onSelectAddress }) {
                   required
                   value={newAddr.street}
                   onChange={e => setNewAddr({ ...newAddr, street: e.target.value })}
-                  placeholder="Flat 101, Sunshine Heights, Sector 62"
+                  placeholder="Choose location & enter address"
                 />
               </label>
 
@@ -416,6 +417,7 @@ export default function AddressModal({ isOpen, onClose, onSelectAddress }) {
                     required
                     value={newAddr.city}
                     onChange={e => setNewAddr({ ...newAddr, city: e.target.value })}
+                    placeholder="City"
                   />
                 </label>
                 <label className="block">
@@ -425,18 +427,21 @@ export default function AddressModal({ isOpen, onClose, onSelectAddress }) {
                     required
                     value={newAddr.pincode}
                     onChange={e => setNewAddr({ ...newAddr, pincode: e.target.value })}
+                    placeholder="Pincode"
                   />
                 </label>
               </div>
 
               {/* PHONE */}
               <label className="block">
-                <span className="fc-label">Phone *</span>
+                <span className="fc-label">Mobile Number *</span>
                 <input
                   className="fc-input"
                   required
+                  type="tel"
                   value={newAddr.phone}
                   onChange={e => setNewAddr({ ...newAddr, phone: e.target.value })}
+                  placeholder="Enter mobile number"
                 />
               </label>
 

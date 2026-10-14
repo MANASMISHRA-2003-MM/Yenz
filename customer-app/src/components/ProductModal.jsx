@@ -99,7 +99,7 @@ export default function ProductModal({ isOpen, onClose, product, vendorId, vendo
         const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
 
         setFormData(prev => ({ ...prev, image: compressedDataUrl, imagePublicId: null }));
-        toast.success('📸 Product photo loaded! Will be saved directly in database.');
+        toast.success('📸 Product photo uploaded successfully!');
         setUploading(false);
       };
       img.onerror = () => {
@@ -168,7 +168,7 @@ export default function ProductModal({ isOpen, onClose, product, vendorId, vendo
             <h3 className="text-xl font-extrabold text-slate-900">
               {product ? 'Edit Product' : (vendorType === 'FRESH' ? 'Create Fresh Produce Product' : 'Create Food Item')}
             </h3>
-            <p className="text-xs text-slate-500 font-medium mt-0.5">Database-backed product details with Cloudinary media</p>
+            <p className="text-xs text-slate-500 font-medium mt-0.5">Item details and product media configuration</p>
           </div>
           <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition">
             <X className="w-5 h-5" />
@@ -295,10 +295,10 @@ export default function ProductModal({ isOpen, onClose, product, vendorId, vendo
             <label className="block font-extrabold text-slate-900 flex items-center justify-between text-xs">
               <span className="flex items-center gap-1.5">
                 <ImageIcon className="w-4 h-4 text-purple-600" />
-                Restaurant Menu Item Photo (Saved Directly in Database)
+                Restaurant Menu Item Photo
               </span>
               <span className="text-emerald-700 font-bold text-[10px] bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                Direct DB Storage • No Cloudinary
+                Instant Upload
               </span>
             </label>
 
@@ -331,7 +331,7 @@ export default function ProductModal({ isOpen, onClose, product, vendorId, vendo
 
                 <input
                   type="text"
-                  value={formData.image?.startsWith('data:') ? '📸 Direct photo stored in database' : formData.image}
+                  value={formData.image?.startsWith('data:') ? '📸 Direct photo uploaded' : formData.image}
                   onChange={e => setFormData({ ...formData, image: e.target.value })}
                   placeholder="Or enter image URL..."
                   disabled={formData.image?.startsWith('data:')}

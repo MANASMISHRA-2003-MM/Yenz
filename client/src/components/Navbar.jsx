@@ -45,13 +45,19 @@ export default function Navbar({ onVegToggle }) {
     try {
       const savedRaw = localStorage.getItem('krawing_user_address') || localStorage.getItem('krawing_selected_address');
       if (savedRaw) {
+        if (savedRaw.toLowerCase().includes('ansal')) {
+          localStorage.removeItem('krawing_user_address');
+          localStorage.removeItem('krawing_selected_address');
+          setActiveSavedAddress(null);
+          return;
+        }
         const parsed = JSON.parse(savedRaw);
         if (parsed && (parsed.street || parsed.title || parsed.area || parsed.city)) {
           setActiveSavedAddress(parsed);
           return;
         }
       }
-      const list = getSavedAddresses();
+      const list = getSavedAddresses().filter(a => !JSON.stringify(a).toLowerCase().includes('ansal'));
       if (list && list.length > 0) {
         setActiveSavedAddress(list.find(a => a.isDefault) || list[0]);
       } else {

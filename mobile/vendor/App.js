@@ -226,15 +226,6 @@ export default function VendorApp() {
         <View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Text style={styles.storeName}>{restaurant.name}</Text>
-            <TouchableOpacity
-              style={[styles.connectionPill, { backgroundColor: serverOnline ? 'rgba(16,185,129,0.18)' : 'rgba(239,68,68,0.18)' }]}
-              onPress={() => setIsIpModalOpen(true)}
-            >
-              <View style={[styles.connectionDot, { backgroundColor: serverOnline ? '#10B981' : '#EF4444' }]} />
-              <Text style={[styles.connectionText, { color: serverOnline ? '#34D399' : '#F87171' }]}>
-                {serverOnline ? 'Connected' : 'Offline • Set IP'}
-              </Text>
-            </TouchableOpacity>
           </View>
           <Text style={styles.storeAddress} numberOfLines={1}>{restaurant.address}</Text>
         </View>
@@ -492,12 +483,6 @@ export default function VendorApp() {
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity
-              style={[styles.btn, { backgroundColor: '#334155', marginTop: 14 }]}
-              onPress={() => setIsIpModalOpen(true)}
-            >
-              <Text style={styles.btnText}>⚙️ Configure Backend IP Address</Text>
-            </TouchableOpacity>
 
             <View style={{ height: 80 }} />
           </ScrollView>
@@ -524,31 +509,7 @@ export default function VendorApp() {
         </TouchableOpacity>
       </View>
 
-      {/* 4. IP CONFIG MODAL */}
-      <Modal visible={isIpModalOpen} transparent animationType="fade" onRequestClose={() => setIsIpModalOpen(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.ipModalCard}>
-            <Text style={styles.ipModalTitle}>⚙️ Backend Connection Settings</Text>
-            <Text style={styles.ipModalSub}>Enter your PC's Wi-Fi IP address so the vendor app can connect to server.</Text>
-            <TextInput
-              style={styles.ipInput}
-              value={customIpInput}
-              onChangeText={setCustomIpInput}
-              placeholder="e.g. 192.168.29.220"
-              placeholderTextColor="#94A3B8"
-              autoCapitalize="none"
-            />
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              <TouchableOpacity style={styles.ipCancelBtn} onPress={() => setIsIpModalOpen(false)}>
-                <Text style={styles.ipCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.ipSaveBtn} onPress={handleUpdateBackendHost}>
-                <Text style={styles.ipSaveText}>Connect</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+
 
     </SafeAreaView>
   );

@@ -145,16 +145,6 @@ export default function Login() {
               Join as Delivery Partner
             </Link>
           </p>
-
-          <div className="mt-4 text-center">
-            <Link
-              to="/settings"
-              className="text-[11px] text-slate-400 hover:text-slate-600 inline-flex items-center gap-1 font-semibold"
-            >
-              <Wifi className="w-3 h-3" />
-              <span>Network & Server Diagnostics</span>
-            </Link>
-          </div>
         </div>
       </div>
       <div className="text-center py-4 text-xs text-slate-400 font-medium">
