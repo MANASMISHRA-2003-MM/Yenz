@@ -5,7 +5,8 @@ import { useCart } from '../context/CartContext';
 import { useMode } from '../context/ModeContext';
 import MilegaLogo from './MilegaLogo';
 import LocationSelector from './LocationSelector';
-import AddressModal, { getSavedAddresses } from './AddressModal';
+import AddressModal from './AddressModal';
+import { getSavedAddresses, getActiveAddress } from '../utils/addressStorage';
 import { Search, ShoppingBag, MapPin, LogOut, Receipt, User, Menu, X, ChevronDown, Truck, LayoutGrid, Download, History, FileText, CreditCard } from 'lucide-react';
 import { toast } from 'sonner';
 import { getUniversalProfileIcon } from '../utils/imageUtils';
@@ -121,6 +122,22 @@ export default function Navbar({ onVegToggle }) {
 
   return (
     <>
+      <AddressModal
+        isOpen={showAddressModal}
+        onClose={() => setShowAddressModal(false)}
+        onSelectAddress={(addr) => {
+          try {
+            localStorage.setItem('krawing_user_address', JSON.stringify(addr));
+            localStorage.setItem('krawing_selected_address', JSON.stringify(addr));
+            if (addr.lat && addr.lng) {
+              localStorage.setItem('krawing_user_coords', JSON.stringify({ lat: addr.lat, lng: addr.lng }));
+            }
+          } catch (e) {}
+          setActiveSavedAddress(addr);
+          window.dispatchEvent(new Event('krawing_location_changed'));
+          window.dispatchEvent(new Event('krawing_addresses_updated'));
+        }}
+      />
       <header className="fc-navbar">
         <div className="fc-topbar hidden lg:block">
           <div className="fc-container py-2 flex items-center justify-between gap-4 text-[11px] font-medium">

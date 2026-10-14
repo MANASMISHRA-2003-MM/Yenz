@@ -1,36 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { MapPin, ChevronDown, Navigation } from 'lucide-react';
-import AddressModal, { getSavedAddresses, saveAddresses } from './AddressModal';
+import AddressModal from './AddressModal';
+import { getActiveAddress, setActiveAddress, getSavedAddresses, saveAddresses, safeStorage } from '../utils/addressStorage';
 import { reverseGeocode } from '../utils/reverseGeocode';
 
 export default function LocationSelector({ variant = 'desktop', onLocationUpdate }) {
   const [addressTitle, setAddressTitle] = useState(() => {
-    try {
-      const savedRaw = localStorage.getItem('krawing_user_address') || localStorage.getItem('krawing_selected_address');
-      if (savedRaw) {
-        if (savedRaw.toLowerCase().includes('ansal')) {
-          localStorage.removeItem('krawing_user_address');
-          localStorage.removeItem('krawing_selected_address');
-          return 'Choose location 📍';
-        }
-        const parsed = JSON.parse(savedRaw);
-        return parsed.street || parsed.title || parsed.area || 'Choose location 📍';
-      }
-    } catch {}
-    return 'Choose location 📍';
+    const active = getActiveAddress();
+    return active?.street || active?.title || active?.area || 'Choose location 📍';
   });
 
   const [addressSubtext, setAddressSubtext] = useState(() => {
-    try {
-      const savedRaw = localStorage.getItem('krawing_user_address') || localStorage.getItem('krawing_selected_address');
-      if (savedRaw) {
-        if (savedRaw.toLowerCase().includes('ansal')) {
-          return 'Choose location & enter mobile number';
-        }
-        const parsed = JSON.parse(savedRaw);
-        return [parsed.city, parsed.pincode].filter(Boolean).join(' - ') || parsed.state || 'Choose location & enter mobile number';
-      }
-    } catch {}
+    const active = getActiveAddress();
+    if (active) {
+      return [active.city, active.pincode].filter(Boolean).join(' - ') || active.state || 'Choose location & enter mobile number';
+    }
     return 'Choose location & enter mobile number';
   });
 
@@ -38,93 +22,68 @@ export default function LocationSelector({ variant = 'desktop', onLocationUpdate
   const [gettingLocation, setGettingLocation] = useState(false);
 
   useEffect(() => {
-    loadSavedAddress();
-    const handleLocationEvent = () => loadSavedAddress();
+    const syncAddress = (addr) => {
+      const target = addr || getActiveAddress();
+      if (target && (target.street || target.title || target.area || target.city)) {
+        const titleStr = target.street || target.title || target.area || 'Choose location 📍';
+        const subtextStr = [target.city, target.pincode].filter(Boolean).join(' - ') || target.state || 'Choose location & enter mobile number';
+        setAddressTitle(titleStr);
+        setAddressSubtext(subtextStr);
+      } else {
+        setAddressTitle('Choose location 📍');
+        setAddressSubtext('Choose location & enter mobile number');
+      }
+    };
+
+    syncAddress();
+
+    const handleLocationEvent = (e) => {
+      syncAddress(e?.detail?.address);
+    };
+    const handleAddressesEvent = () => {
+      syncAddress();
+    };
+
     window.addEventListener('krawing_location_changed', handleLocationEvent);
-    window.addEventListener('krawing_addresses_updated', handleLocationEvent);
+    window.addEventListener('krawing_addresses_updated', handleAddressesEvent);
 
     return () => {
       window.removeEventListener('krawing_location_changed', handleLocationEvent);
-      window.removeEventListener('krawing_addresses_updated', handleLocationEvent);
+      window.removeEventListener('krawing_addresses_updated', handleAddressesEvent);
     };
   }, []);
 
-  const loadSavedAddress = () => {
-    try {
-      // 1. Check if user explicitly selected/saved a location
-      const savedRaw = localStorage.getItem('krawing_user_address') || localStorage.getItem('krawing_selected_address');
-      let targetAddr = null;
-      if (savedRaw) {
-        if (savedRaw.toLowerCase().includes('ansal')) {
-          localStorage.removeItem('krawing_user_address');
-          localStorage.removeItem('krawing_selected_address');
-        } else {
-          targetAddr = JSON.parse(savedRaw);
-        }
-      }
-
-      // 2. If no active selection, check saved addresses list for default or first address
-      if (!targetAddr || (!targetAddr.street && !targetAddr.title && !targetAddr.area && !targetAddr.city)) {
-        const savedList = getSavedAddresses().filter(a => !JSON.stringify(a).toLowerCase().includes('ansal'));
-        if (savedList && savedList.length > 0) {
-          targetAddr = savedList.find(a => a.isDefault) || savedList[0];
-        }
-      }
-
-      // 3. Format address display if valid targetAddr exists
-      if (targetAddr && (targetAddr.street || targetAddr.title || targetAddr.area || targetAddr.city)) {
-        const titleStr = targetAddr.street || targetAddr.title || targetAddr.area || 'Choose location 📍';
-        const subtextStr = [targetAddr.city, targetAddr.pincode].filter(Boolean).join(' - ') || targetAddr.state || 'Choose location & enter mobile number';
-        setAddressTitle(titleStr);
-        setAddressSubtext(subtextStr);
-        return;
-      }
-
-      // 4. Default state when no location has been selected
-      setAddressTitle('Choose location 📍');
-      setAddressSubtext('Choose location & enter mobile number');
-    } catch (e) {
-      console.error('Error loading address:', e);
-      setAddressTitle('Choose location 📍');
-      setAddressSubtext('Choose location & enter mobile number');
-    }
-  };
-
   const handleSelectAddress = (addr) => {
-    try {
-      localStorage.setItem('krawing_user_address', JSON.stringify(addr));
-      localStorage.setItem('krawing_selected_address', JSON.stringify(addr));
-    } catch (e) {}
+    if (!addr) return;
+    setActiveAddress(addr);
     const titleStr = addr.street || addr.title || addr.area || 'Selected Address';
-    const subtextStr = [addr.city, addr.pincode].filter(Boolean).join(' - ') || 'Saved Location';
+    const subtextStr = [addr.city, addr.pincode].filter(Boolean).join(' - ') || addr.state || 'Saved Location';
     setAddressTitle(titleStr);
     setAddressSubtext(subtextStr);
     setIsModalOpen(false);
-    window.dispatchEvent(new Event('krawing_location_changed'));
+
+    const lat = addr.lat || addr.latitude;
+    const lng = addr.lng || addr.longitude;
+    if (onLocationUpdate && lat && lng) {
+      onLocationUpdate({ lat: Number(lat), lng: Number(lng) });
+    }
   };
 
   const handleUseLiveGPS = (e) => {
     if (e) e.stopPropagation();
-    if (!navigator.geolocation) {
-      alert('Geolocation is not supported by your browser');
-      return;
-    }
     setGettingLocation(true);
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const { latitude, longitude } = pos.coords;
-        const coords = { lat: latitude, lng: longitude };
-        localStorage.setItem('krawing_user_coords', JSON.stringify(coords));
-        
+
+    const processCoords = async (latitude, longitude) => {
+      try {
         const geoResult = await reverseGeocode(latitude, longitude);
 
         const gpsAddress = {
           id: 'addr-live-current',
           title: 'Live Location 📍',
-          street: geoResult.street,
-          city: geoResult.city,
-          state: geoResult.state,
-          pincode: geoResult.pincode,
+          street: geoResult.street || `GPS (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`,
+          city: geoResult.city || '',
+          state: geoResult.state || '',
+          pincode: geoResult.pincode || '',
           latitude,
           longitude,
           lat: latitude,
@@ -137,21 +96,46 @@ export default function LocationSelector({ variant = 'desktop', onLocationUpdate
         const nonLive = savedList.filter(a => !(a.id?.startsWith('addr-live') || a.title?.includes('Live Location')));
         const updatedList = [gpsAddress, ...nonLive.map(a => ({ ...a, isDefault: false }))];
         saveAddresses(updatedList);
+        setActiveAddress(gpsAddress);
 
-        localStorage.setItem('krawing_user_address', JSON.stringify(gpsAddress));
-        localStorage.setItem('krawing_selected_address', JSON.stringify(gpsAddress));
-        
-        setAddressTitle(geoResult.street || 'Live Location 📍');
-        setAddressSubtext([geoResult.city, geoResult.pincode].filter(Boolean).join(' - '));
+        setAddressTitle(gpsAddress.street);
+        setAddressSubtext([geoResult.city, geoResult.pincode].filter(Boolean).join(' - ') || 'Live Location');
+        if (onLocationUpdate) onLocationUpdate({ lat: latitude, lng: longitude });
+      } catch (err) {
+        console.error('Error reverse geocoding:', err);
+      } finally {
         setGettingLocation(false);
-        window.dispatchEvent(new Event('krawing_location_changed'));
-        if (onLocationUpdate) onLocationUpdate(coords);
+      }
+    };
+
+    if (!navigator.geolocation) {
+      fallbackIP();
+      return;
+    }
+
+    function fallbackIP() {
+      fetch('https://api.bigdatacloud.net/data/reverse-geocode-client')
+        .then(r => r.json())
+        .then(d => {
+          if (d.latitude && d.longitude) {
+            processCoords(Number(d.latitude), Number(d.longitude));
+          } else {
+            setGettingLocation(false);
+          }
+        })
+        .catch(() => setGettingLocation(false));
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => processCoords(pos.coords.latitude, pos.coords.longitude),
+      () => {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => processCoords(pos.coords.latitude, pos.coords.longitude),
+          () => fallbackIP(),
+          { enableHighAccuracy: false, timeout: 6000, maximumAge: 60000 }
+        );
       },
-      (err) => {
-        setGettingLocation(false);
-        alert('Could not access live location. Please select address manually.');
-      },
-      { timeout: 15000, enableHighAccuracy: true, maximumAge: 0 }
+      { timeout: 4500, enableHighAccuracy: true, maximumAge: 30000 }
     );
   };
 

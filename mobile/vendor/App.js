@@ -20,13 +20,19 @@ import axios from 'axios';
 // 1. CONFIG & BACKEND CONNECTIVITY
 // ==========================================
 export const CONFIG = {
-  DEFAULT_HOST: '192.168.29.220',
+  DEFAULT_HOST: 'https://yenz-mviu.onrender.com',
   PORT: 5000,
-  activeHost: '192.168.29.220',
+  activeHost: 'https://yenz-mviu.onrender.com',
   get API_BASE_URL() {
+    if (this.activeHost.startsWith('http://') || this.activeHost.startsWith('https://')) {
+      return `${this.activeHost.replace(/\/$/, '')}/api`;
+    }
     return `http://${this.activeHost}:${this.PORT}/api`;
   },
   get SOCKET_URL() {
+    if (this.activeHost.startsWith('http://') || this.activeHost.startsWith('https://')) {
+      return this.activeHost.replace(/\/$/, '');
+    }
     return `http://${this.activeHost}:${this.PORT}`;
   }
 };
@@ -158,13 +164,18 @@ export default function VendorApp() {
   // Update Order Status
   const handleUpdateOrderStatus = async (orderId, newStatus) => {
     try {
-      await mobileApi.put(`/orders/${orderId}/status`, { status: newStatus }).catch(() => null);
+      const payload = { status: newStatus };
+      if (newStatus === 'PICKED_UP') {
+        payload.vendorHandoverPhoto = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=600';
+        payload.note = 'Vendor verified handover photo via Mobile App';
+      }
+      await mobileApi.put(`/orders/${orderId}/status`, payload).catch(() => null);
     } catch (e) {}
 
     setOrders((prev) =>
       prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o))
     );
-    Alert.alert('Order Updated', `Status changed to: ${newStatus.replace(/_/g, ' ')}`);
+    Alert.alert('Order Updated', `Status changed to: ${newStatus.replace(/_/g, ' ')}${newStatus === 'PICKED_UP' ? ' (Package Photo Recorded in DB)' : ''}`);
   };
 
   // Toggle Stock

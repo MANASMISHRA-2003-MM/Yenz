@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { MapPin, Plus, Trash2, Home, Briefcase, Navigation, X } from 'lucide-react';
+import { MapPin, Plus, Trash2, Home, Briefcase, Navigation, X, AlertCircle } from 'lucide-react';
+import { toast } from 'sonner';
 import { reverseGeocode } from '../utils/reverseGeocode';
+import { getSavedAddresses, saveAddresses, setActiveAddress, getUserCoords, deduplicateLiveAddresses } from '../utils/addressStorage';
+export { getSavedAddresses, saveAddresses, setActiveAddress, getUserCoords, deduplicateLiveAddresses };
 import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 
-const DEFAULT_ADDRESSES = [];
-
-// Pure pinpoint marker for accurate location pointing, zero text/words at pointer
+// Pure pinpoint marker for accurate location pointing
 const purePinIcon = L.divIcon({
   className: 'custom-pure-pin',
   html: `
@@ -48,6 +49,33 @@ function MapRecenter({ lat, lng }) {
   return null;
 }
 
+// Automatically fly to user's real live coordinates on map open if no coordinates exist yet
+function AutoLocateMap({ onLocated, hasCoords }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!hasCoords) {
+      map.locate({ setView: true, maxZoom: 16 })
+        .on('locationfound', (e) => {
+          onLocated(Number(e.latlng.lat.toFixed(6)), Number(e.latlng.lng.toFixed(6)));
+        })
+        .on('locationerror', () => {
+          fetch('https://api.bigdatacloud.net/data/reverse-geocode-client')
+            .then(r => r.json())
+            .then(d => {
+              if (d.latitude && d.longitude) {
+                const lat = Number(Number(d.latitude).toFixed(6));
+                const lng = Number(Number(d.longitude).toFixed(6));
+                map.setView([lat, lng], 15);
+                onLocated(lat, lng);
+              }
+            })
+            .catch(() => {});
+        });
+    }
+  }, [map, hasCoords, onLocated]);
+  return null;
+}
+
 function DraggablePinMarker({ lat, lng, onPositionChange }) {
   const markerRef = useRef(null);
 
@@ -83,63 +111,14 @@ function DraggablePinMarker({ lat, lng, onPositionChange }) {
   );
 }
 
-export function deduplicateLiveAddresses(list) {
-  if (!Array.isArray(list)) return [];
-  const nonLive = list.filter(a => !(a.id?.startsWith('addr-live') || a.title?.includes('Live Location')));
-  const liveItems = list.filter(a => a.id?.startsWith('addr-live') || a.title?.includes('Live Location'));
-  if (liveItems.length === 0) return nonLive;
-  
-  const singleLive = {
-    ...liveItems[0],
-    id: 'addr-live-current',
-    title: 'Live Location 📍'
-  };
-  return [singleLive, ...nonLive];
-}
-
-export function getSavedAddresses() {
-  try {
-    const data = localStorage.getItem('krawing_user_saved_addresses');
-    if (data) {
-      const parsed = JSON.parse(data);
-      const filtered = parsed.filter(a => !JSON.stringify(a).toLowerCase().includes('ansal'));
-      return deduplicateLiveAddresses(filtered);
-    }
-  } catch (e) {
-    console.error('Error reading saved addresses:', e);
-  }
-  return DEFAULT_ADDRESSES;
-}
-
-export function saveAddresses(addresses) {
-  try {
-    const cleaned = deduplicateLiveAddresses(addresses.filter(a => !JSON.stringify(a).toLowerCase().includes('ansal')));
-    localStorage.setItem('krawing_user_saved_addresses', JSON.stringify(cleaned));
-    window.dispatchEvent(new Event('krawing_addresses_updated'));
-  } catch (e) {
-    console.error('Error saving addresses:', e);
-  }
-}
-
 export default function AddressModal({ isOpen, onClose, onSelectAddress }) {
-  const [addresses, setAddresses] = useState(getSavedAddresses());
+  const [addresses, setAddresses] = useState(() => getSavedAddresses());
   const [showAddForm, setShowAddForm] = useState(false);
   const [locating, setLocating] = useState(false);
   const [resolvingPin, setResolvingPin] = useState(false);
 
-  // Initial coordinates from user storage or default
-  const getInitialCoords = () => {
-    try {
-      const stored = localStorage.getItem('krawing_user_coords');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed.lat && parsed.lng) return { lat: Number(parsed.lat), lng: Number(parsed.lng) };
-      }
-    } catch (e) {}
-    return { lat: 28.5355, lng: 77.3910 };
-  };
-
-  const initialCoords = getInitialCoords();
+  // Initial coordinates from user storage or null (no fake Noida coordinates!)
+  const initialCoords = getUserCoords();
 
   const [newAddr, setNewAddr] = useState({
     title: 'Home',
@@ -148,8 +127,8 @@ export default function AddressModal({ isOpen, onClose, onSelectAddress }) {
     state: '',
     pincode: '',
     phone: '',
-    latitude: initialCoords.lat,
-    longitude: initialCoords.lng
+    latitude: initialCoords?.lat || null,
+    longitude: initialCoords?.lng || null
   });
 
   useEffect(() => {
@@ -161,12 +140,36 @@ export default function AddressModal({ isOpen, onClose, onSelectAddress }) {
   if (!isOpen) return null;
 
   const handleSetDefault = (id) => {
+    const target = addresses.find(a => a.id === id);
     const updated = addresses.map(a => ({
       ...a,
       isDefault: a.id === id
     }));
     setAddresses(updated);
     saveAddresses(updated);
+
+    if (target) {
+      const selected = { ...target, isDefault: true };
+      setActiveAddress(selected);
+      try { toast.success(`"${target.title}" set as default location`); } catch (e) {}
+    }
+  };
+
+  const handleSelectSavedAddress = (item) => {
+    const selected = { ...item, isDefault: true };
+    const updated = addresses.map(a => ({
+      ...a,
+      isDefault: a.id === item.id
+    }));
+    setAddresses(updated);
+    saveAddresses(updated);
+    setActiveAddress(selected);
+
+    if (onSelectAddress) {
+      onSelectAddress(selected);
+    }
+    try { toast.success(`Selected "${selected.title}"`); } catch (e) {}
+    onClose();
   };
 
   const handleDelete = (id) => {
@@ -202,108 +205,187 @@ export default function AddressModal({ isOpen, onClose, onSelectAddress }) {
     }
   };
 
+  // 1-Click: Take location from Map Pin, validate coordinates exist, save to Saved Addresses, and update active location
+  const handleConfirmMapPinLocation = async () => {
+    if (!newAddr.latitude || !newAddr.longitude) {
+      toast.error('Location coordinates not set! Please click "Use live GPS" or point on the map first.');
+      return;
+    }
+
+    let street = newAddr.street;
+    let city = newAddr.city;
+    let state = newAddr.state;
+    let pincode = newAddr.pincode;
+
+    if (!street) {
+      try {
+        const geoResult = await reverseGeocode(newAddr.latitude, newAddr.longitude);
+        street = geoResult.street;
+        city = geoResult.city || city;
+        state = geoResult.state || state;
+        pincode = geoResult.pincode || pincode;
+      } catch (e) {}
+    }
+
+    const mapAddr = {
+      id: `addr-map-${Date.now()}`,
+      title: newAddr.title || 'Pinned Location 📍',
+      street: street || `Doorstep Location (${newAddr.latitude.toFixed(4)}, ${newAddr.longitude.toFixed(4)})`,
+      city: city || '',
+      state: state || '',
+      pincode: pincode || '',
+      phone: newAddr.phone || '',
+      latitude: newAddr.latitude,
+      longitude: newAddr.longitude,
+      lat: newAddr.latitude,
+      lng: newAddr.longitude,
+      isDefault: true
+    };
+
+    const updated = [mapAddr, ...addresses.map(a => ({ ...a, isDefault: false }))];
+    setAddresses(updated);
+    saveAddresses(updated);
+    setActiveAddress(mapAddr);
+
+    if (onSelectAddress) {
+      onSelectAddress(mapAddr);
+    }
+    try { toast.success('Location confirmed from map & saved!'); } catch (e) {}
+    onClose();
+  };
+
   const handleAddSubmit = (e) => {
     e.preventDefault();
-    if (!newAddr.street || !newAddr.city || !newAddr.pincode) return;
+    if (!newAddr.latitude || !newAddr.longitude) {
+      toast.error('Location coordinates missing! Please use live GPS or pick your location on the map.');
+      return;
+    }
+    if (!newAddr.street || !newAddr.city || !newAddr.pincode) {
+      toast.error('Please enter complete delivery address details.');
+      return;
+    }
 
     const created = {
       id: `addr-${Date.now()}`,
       ...newAddr,
       lat: newAddr.latitude,
       lng: newAddr.longitude,
-      isDefault: addresses.length === 0
+      isDefault: true
     };
-    const updated = [...addresses, created];
+    const updated = [created, ...addresses.map(a => ({ ...a, isDefault: false }))];
     setAddresses(updated);
     saveAddresses(updated);
-    setShowAddForm(false);
-    setNewAddr({
-      title: 'Home',
-      street: '',
-      city: '',
-      state: '',
-      pincode: '',
-      phone: '',
-      latitude: initialCoords.lat,
-      longitude: initialCoords.lng
-    });
+    setActiveAddress(created);
 
+    setShowAddForm(false);
     if (onSelectAddress) {
       onSelectAddress(created);
     }
+    try { toast.success('Address saved and selected!'); } catch (e) {}
+    onClose();
   };
 
-  const handleFetchDeviceLocation = () => {
-    if (!navigator.geolocation) {
-      alert('Geolocation is not supported by your browser');
+  const acquirePosition = () => {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        return reject(new Error('Geolocation not supported'));
+      }
+      navigator.geolocation.getCurrentPosition(
+        resolve,
+        () => {
+          // Low-accuracy fallback
+          navigator.geolocation.getCurrentPosition(
+            resolve,
+            (err) => reject(err),
+            { enableHighAccuracy: false, timeout: 6000, maximumAge: 60000 }
+          );
+        },
+        { enableHighAccuracy: true, timeout: 4500, maximumAge: 30000 }
+      );
+    });
+  };
+
+  const handleFetchDeviceLocation = async () => {
+    setLocating(true);
+    let latitude = null;
+    let longitude = null;
+
+    try {
+      const position = await acquirePosition();
+      latitude = position.coords.latitude;
+      longitude = position.coords.longitude;
+    } catch (geoErr) {
+      console.warn('Geolocation fallback to IP coordinates:', geoErr);
+      try {
+        const ipRes = await fetch('https://api.bigdatacloud.net/data/reverse-geocode-client');
+        if (ipRes.ok) {
+          const ipData = await ipRes.json();
+          if (ipData.latitude && ipData.longitude) {
+            latitude = Number(ipData.latitude);
+            longitude = Number(ipData.longitude);
+          }
+        }
+      } catch (ipErr) {
+        console.warn('IP fallback failed:', ipErr);
+      }
+    }
+
+    if (!latitude || !longitude) {
+      setLocating(false);
+      try { toast.error('Could not detect location. Please click on the map to set your doorstep.'); } catch (e) {}
       return;
     }
 
-    setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        try {
-          const geoResult = await reverseGeocode(latitude, longitude);
+    try {
+      const geoResult = await reverseGeocode(latitude, longitude);
 
-          const liveAddr = {
-            id: 'addr-live-current',
-            title: 'Live Location 📍',
-            street: geoResult.street,
-            city: geoResult.city,
-            state: geoResult.state,
-            pincode: geoResult.pincode,
-            latitude,
-            longitude,
-            lat: latitude,
-            lng: longitude,
-            phone: '',
-            isDefault: true
-          };
+      const liveAddr = {
+        id: 'addr-live-current',
+        title: 'Live Location 📍',
+        street: geoResult.street || `GPS (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`,
+        city: geoResult.city || '',
+        state: geoResult.state || '',
+        pincode: geoResult.pincode || '',
+        latitude,
+        longitude,
+        lat: latitude,
+        lng: longitude,
+        phone: newAddr.phone || '',
+        isDefault: true
+      };
 
-          // If add form is currently open, also populate it directly
-          if (showAddForm) {
-            setNewAddr(prev => ({
-              ...prev,
-              street: geoResult.street || prev.street,
-              city: geoResult.city || prev.city,
-              state: geoResult.state || prev.state,
-              pincode: geoResult.pincode || prev.pincode,
-              latitude,
-              longitude
-            }));
-          }
+      setNewAddr(prev => ({
+        ...prev,
+        street: geoResult.street || prev.street,
+        city: geoResult.city || prev.city,
+        state: geoResult.state || prev.state,
+        pincode: geoResult.pincode || prev.pincode,
+        latitude,
+        longitude
+      }));
 
-          // Keep non-live addresses, set isDefault false on them
-          const nonLive = addresses.filter(a => !(a.id?.startsWith('addr-live') || a.title?.includes('Live Location')));
-          const updated = [liveAddr, ...nonLive.map(a => ({ ...a, isDefault: false }))];
-          setAddresses(updated);
-          saveAddresses(updated);
+      const nonLive = addresses.filter(a => !(a.id?.startsWith('addr-live') || a.title?.includes('Live Location')));
+      const updated = [liveAddr, ...nonLive.map(a => ({ ...a, isDefault: false }))];
+      setAddresses(updated);
+      saveAddresses(updated);
+      setActiveAddress(liveAddr);
 
-          try {
-            localStorage.setItem('krawing_user_coords', JSON.stringify({ lat: latitude, lng: longitude }));
-            localStorage.setItem('krawing_user_address', JSON.stringify(liveAddr));
-            localStorage.setItem('krawing_selected_address', JSON.stringify(liveAddr));
-          } catch (e) {}
-
-          if (!showAddForm && onSelectAddress) {
-            onSelectAddress(liveAddr);
-            onClose();
-          }
-        } catch (err) {
-          console.error('Error getting location address:', err);
-          alert('Could not fetch address details for current coordinates.');
-        } finally {
-          setLocating(false);
-        }
-      },
-      (err) => {
-        setLocating(false);
-        alert(`Location permission error: ${err.message}`);
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-    );
+      if (onSelectAddress) {
+        onSelectAddress(liveAddr);
+      }
+      try { toast.success('Live GPS location detected and saved!'); } catch (e) {}
+      onClose();
+    } catch (err) {
+      console.error('Error getting location address:', err);
+      try { toast.error('Could not fetch address details for coordinates.'); } catch (e) {}
+    } finally {
+      setLocating(false);
+    }
   };
+
+  const mapCenterLat = newAddr.latitude || 20.5937;
+  const mapCenterLng = newAddr.longitude || 78.9629;
+  const mapInitialZoom = (newAddr.latitude && newAddr.longitude) ? 15 : 4;
 
   const modalContent = (
     <div className="fixed inset-0 z-[9999] bg-gray-900/50 p-4 flex items-center justify-center backdrop-blur-xs" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
@@ -317,7 +399,7 @@ export default function AddressModal({ isOpen, onClose, onSelectAddress }) {
             </div>
             <div>
               <h2 className="font-extrabold text-gray-900 text-base">Select delivery location</h2>
-              <p className="text-xs text-gray-500 mt-0.5">Pick location with pin, use live GPS, or select saved address.</p>
+              <p className="text-xs text-gray-500 mt-0.5">Use live GPS, pick doorstep on map, or select saved address.</p>
             </div>
           </div>
           <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-900 rounded-lg hover:bg-gray-100 transition" aria-label="Close">
@@ -333,27 +415,27 @@ export default function AddressModal({ isOpen, onClose, onSelectAddress }) {
           </button>
           <button onClick={() => setShowAddForm(!showAddForm)} className="fc-btn" style={{background:'#1f2937',borderColor:'#1f2937',color:'#fff'}}>
             <Plus className="w-4 h-4" />
-            {showAddForm ? 'View saved addresses' : 'Add address with pin'}
+            {showAddForm ? 'View saved addresses' : 'Pick on map / Add pin'}
           </button>
         </div>
 
         {/* SCROLLABLE BODY */}
         <div className="p-4 overflow-y-auto space-y-4">
           
-          {/* ADD ADDRESS FORM WITH MAP PIN SELECTOR (NO LAT/LNG WRITER BOXES) */}
+          {/* ADD ADDRESS FORM WITH MAP PIN SELECTOR */}
           {showAddForm && (
             <form onSubmit={handleAddSubmit} className="p-4 rounded-xl bg-gray-50 border border-gray-200 space-y-3.5">
               <div className="flex items-center justify-between">
-                <h3 className="font-extrabold text-sm text-gray-900">New address & pin location</h3>
-                <span className="text-[10px] uppercase font-bold tracking-wider text-gray-400">Accurate Delivery Pin</span>
+                <h3 className="font-extrabold text-sm text-gray-900">Map doorstep location</h3>
+                <span className="text-[10px] uppercase font-bold tracking-wider text-gray-400">Doorstep Pin</span>
               </div>
 
               {/* INTERACTIVE MAP PIN SELECTOR */}
-              <div className="space-y-1">
-                <div className="relative w-full h-52 rounded-xl overflow-hidden border border-gray-300 shadow-inner z-0">
+              <div className="space-y-2">
+                <div className="relative w-full h-56 rounded-xl overflow-hidden border border-gray-300 shadow-inner z-0">
                   <MapContainer
-                    center={[newAddr.latitude || initialCoords.lat, newAddr.longitude || initialCoords.lng]}
-                    zoom={15}
+                    center={[mapCenterLat, mapCenterLng]}
+                    zoom={mapInitialZoom}
                     scrollWheelZoom={false}
                     className="w-full h-full"
                   >
@@ -363,6 +445,7 @@ export default function AddressModal({ isOpen, onClose, onSelectAddress }) {
                     />
                     <MapResizer />
                     <MapRecenter lat={newAddr.latitude} lng={newAddr.longitude} />
+                    <AutoLocateMap onLocated={handlePinMove} hasCoords={Boolean(newAddr.latitude && newAddr.longitude)} />
                     <DraggablePinMarker
                       lat={newAddr.latitude}
                       lng={newAddr.longitude}
@@ -371,12 +454,46 @@ export default function AddressModal({ isOpen, onClose, onSelectAddress }) {
                   </MapContainer>
 
                   {resolvingPin && (
-                    <div className="absolute top-2 right-2 z-[400] bg-white/90 backdrop-blur-xs px-2.5 py-1 rounded-lg border border-gray-200 text-[10px] font-bold text-gray-700 shadow-sm flex items-center gap-1.5">
+                    <div className="absolute top-2 right-2 z-[400] bg-white/95 backdrop-blur-xs px-2.5 py-1 rounded-lg border border-gray-200 text-[10px] font-bold text-gray-700 shadow-sm flex items-center gap-1.5">
                       <div className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
-                      <span>Updating address…</span>
+                      <span>Updating address from map…</span>
+                    </div>
+                  )}
+
+                  {!newAddr.latitude && (
+                    <div className="absolute inset-x-3 bottom-3 z-[400] bg-white/95 backdrop-blur-xs p-2.5 rounded-xl border border-rose-200 text-xs font-semibold text-rose-800 shadow-md flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                      <span>Click anywhere on the map or use GPS to set your delivery doorstep.</span>
                     </div>
                   )}
                 </div>
+
+                {/* CURRENT PIN LOCATION & 1-CLICK USE BUTTON */}
+                <div className="p-2.5 bg-white border border-gray-200 rounded-xl flex items-center justify-between gap-2 shadow-xs">
+                  <div className="min-w-0 flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-rose-50 flex items-center justify-center shrink-0">
+                      <MapPin className="w-4 h-4 text-rose-600" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-gray-900 truncate">
+                        {newAddr.street || (newAddr.latitude ? `GPS (${newAddr.latitude.toFixed(4)}, ${newAddr.longitude.toFixed(4)})` : 'No location selected yet')}
+                      </div>
+                      <div className="text-[10px] text-gray-500 truncate">
+                        {[newAddr.city, newAddr.pincode].filter(Boolean).join(' - ') || (newAddr.latitude ? 'Location set on map' : 'Click map to place pin')}
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleConfirmMapPinLocation}
+                    disabled={!newAddr.latitude || !newAddr.longitude}
+                    className="shrink-0 px-3 py-1.5 rounded-lg text-white font-extrabold text-xs shadow-xs transition hover:opacity-95 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{ background: 'var(--fc-fresh)' }}
+                  >
+                    <span>Use this location</span>
+                  </button>
+                </div>
+
                 <p className="text-[10px] text-gray-500 font-medium text-center pt-0.5">
                   Click anywhere on the map or drag the pin to set your exact doorstep.
                 </p>
@@ -404,7 +521,7 @@ export default function AddressModal({ isOpen, onClose, onSelectAddress }) {
                   required
                   value={newAddr.street}
                   onChange={e => setNewAddr({ ...newAddr, street: e.target.value })}
-                  placeholder="Choose location & enter address"
+                  placeholder="e.g. Flat 302, Building A, Main Road"
                 />
               </label>
 
@@ -441,7 +558,7 @@ export default function AddressModal({ isOpen, onClose, onSelectAddress }) {
                   type="tel"
                   value={newAddr.phone}
                   onChange={e => setNewAddr({ ...newAddr, phone: e.target.value })}
-                  placeholder="Enter mobile number"
+                  placeholder="Enter mobile number for delivery"
                 />
               </label>
 
@@ -457,52 +574,58 @@ export default function AddressModal({ isOpen, onClose, onSelectAddress }) {
             </form>
           )}
 
-          {/* SAVED ADDRESSES LIST */}
-          {addresses.length === 0 ? (
-            <div className="py-10 text-center text-sm text-gray-500">
-              <MapPin className="w-8 h-8 mx-auto text-gray-300" />
-              <p className="mt-2.5 font-medium">No saved addresses yet.</p>
+          {/* SAVED ADDRESSES SECTION */}
+          <div>
+            <div className="flex items-center justify-between mb-2 px-1">
+              <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Saved Addresses</span>
+              <span className="text-xs text-gray-400 font-medium">{addresses.length} saved</span>
             </div>
-          ) : (
-            <div className="space-y-3">
-              {addresses.map(item => (
-                <div key={item.id} className={`rounded-xl border p-4 transition ${item.isDefault ? 'border-gray-900 bg-gray-50/60 shadow-xs' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex gap-3 min-w-0">
-                      <div className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center shrink-0">
-                        {item.title.toLowerCase().includes('home') ? <Home className="w-4 h-4 text-gray-700" /> : item.title.toLowerCase().includes('work') ? <Briefcase className="w-4 h-4 text-gray-700" /> : <MapPin className="w-4 h-4 text-rose-600" />}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-sm text-gray-900">{item.title}</span>
-                          {item.isDefault && (
-                            <span className="text-[10px] px-2 py-0.5 rounded-full font-bold text-white" style={{background:'var(--fc-red)'}}>Default</span>
-                          )}
+
+            {addresses.length === 0 ? (
+              <div className="py-10 text-center text-sm text-gray-500">
+                <MapPin className="w-8 h-8 mx-auto text-gray-300" />
+                <p className="mt-2.5 font-medium">No saved addresses yet.</p>
+                <p className="text-xs text-gray-400 mt-1">Please use live GPS or pick a location on the map above.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {addresses.map(item => (
+                  <div key={item.id} className={`rounded-xl border p-4 transition ${item.isDefault ? 'border-gray-900 bg-gray-50/60 shadow-xs' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center shrink-0">
+                          {item.title.toLowerCase().includes('home') ? <Home className="w-4 h-4 text-gray-700" /> : item.title.toLowerCase().includes('work') ? <Briefcase className="w-4 h-4 text-gray-700" /> : <MapPin className="w-4 h-4 text-rose-600" />}
                         </div>
-                        <p className="text-xs text-gray-600 mt-1 font-medium leading-relaxed">{item.street}, {item.city} - {item.pincode}</p>
-                        <p className="text-[11px] text-gray-400 mt-0.5">{item.phone}</p>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-sm text-gray-900">{item.title}</span>
+                            {item.isDefault && (
+                              <span className="text-[10px] px-2 py-0.5 rounded-full font-bold text-white" style={{background:'var(--fc-red)'}}>Default</span>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-600 mt-1 font-medium leading-relaxed">{item.street}, {item.city} - {item.pincode}</p>
+                          {item.phone && <p className="text-[11px] text-gray-400 mt-0.5">{item.phone}</p>}
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {!item.isDefault && (
-                        <button onClick={() => handleSetDefault(item.id)} className="text-[11px] font-bold text-gray-500 hover:text-gray-900 px-2 py-1 rounded-md hover:bg-gray-100 transition">
-                          Set default
-                        </button>
-                      )}
-                      {onSelectAddress && (
-                        <button onClick={() => { onSelectAddress(item); onClose(); }} className="fc-btn !px-3 !py-1.5 text-xs text-white" style={{background:'var(--fc-green)',borderColor:'var(--fc-green)'}}>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {!item.isDefault && (
+                          <button onClick={() => handleSetDefault(item.id)} className="text-[11px] font-bold text-gray-500 hover:text-gray-900 px-2 py-1 rounded-md hover:bg-gray-100 transition">
+                            Set default
+                          </button>
+                        )}
+                        <button onClick={() => handleSelectSavedAddress(item)} className="fc-btn !px-3 !py-1.5 text-xs text-white" style={{background:'var(--fc-green)',borderColor:'var(--fc-green)'}}>
                           Select
                         </button>
-                      )}
-                      <button onClick={() => handleDelete(item.id)} className="p-1.5 text-gray-400 hover:text-red-600 rounded-md hover:bg-gray-100 transition" title="Delete address">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                        <button onClick={() => handleDelete(item.id)} className="p-1.5 text-gray-400 hover:text-red-600 rounded-md hover:bg-gray-100 transition" title="Delete address">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
+          </div>
 
         </div>
       </div>

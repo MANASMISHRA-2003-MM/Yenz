@@ -345,12 +345,152 @@ const toggleOnlineStatus = async (req, res, next) => {
       });
     }
 
+    const { coords } = req.body || {};
+    const incomingPhoto =
+      req.body?.photo ||
+      req.body?.image ||
+      req.body?.selfie ||
+      req.body?.avatar ||
+      req.body?.photoUrl ||
+      null;
+
+    const addressName = req.body?.addressName || req.body?.address || '';
+    const nextOnline =
+      typeof req.body?.targetStatus === 'boolean'
+        ? req.body.targetStatus
+        : typeof req.body?.isOnline === 'boolean'
+          ? req.body.isOnline
+          : !user.isOnline;
+
+    const updateData = { isOnline: nextOnline };
+    if (incomingPhoto && typeof incomingPhoto === 'string') {
+      updateData.avatar = incomingPhoto;
+    }
+
     const updated = await prisma.user.update({
       where: { id: req.user.id },
-      data: { isOnline: !user.isOnline }
+      data: updateData
     });
 
-    res.json({ success: true, isOnline: updated.isOnline });
+    // Save front camera selfie in Postgres VerificationAuditLog whenever photo is provided
+    let auditRecord = null;
+    if (incomingPhoto && typeof incomingPhoto === 'string') {
+      try {
+        auditRecord = await prisma.verificationAuditLog.create({
+          data: {
+            id: crypto.randomUUID(),
+            actorId: req.user.id,
+            action: 'RIDER_ONLINE_SELFIE',
+            targetId: req.user.id,
+            metadata: {
+              photo: incomingPhoto,
+              riderName: user.fullName,
+              phone: user.phone,
+              coords: coords || null,
+              addressName: addressName || 'Live GPS Location Recorded',
+              capturedAt: new Date().toISOString(),
+              source: req.headers['x-client-source'] || (req.headers['user-agent']?.includes('Mobile') ? 'Mobile App' : 'Web Dashboard')
+            }
+          }
+        });
+        console.log(`[Selfie Audit] Saved front-camera selfie for rider: ${user.fullName} (${user.id})`);
+
+        // Emit real-time socket event so Admin Dashboard updates instantly
+        const io = req.app.get('socketio');
+        if (io) {
+          io.emit('rider_selfie_captured', {
+            id: auditRecord.id,
+            actorId: req.user.id,
+            action: 'RIDER_ONLINE_SELFIE',
+            riderName: user.fullName,
+            phone: user.phone,
+            photo: incomingPhoto,
+            coords: coords || null,
+            addressName: addressName || 'Live GPS Location Recorded',
+            capturedAt: new Date().toISOString()
+          });
+        }
+      } catch (e) {
+        console.error('[Selfie Audit] Failed to save verification audit log:', e.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      isOnline: updated.isOnline,
+      selfieSaved: Boolean(auditRecord) || Boolean(incomingPhoto)
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const uploadRiderSelfie = async (req, res, next) => {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const incomingPhoto =
+      req.body?.photo ||
+      req.body?.image ||
+      req.body?.selfie ||
+      req.body?.avatar ||
+      req.body?.photoUrl;
+
+    if (!incomingPhoto || typeof incomingPhoto !== 'string') {
+      return res.status(400).json({ success: false, message: 'Valid photo data required' });
+    }
+
+    const coords = req.body?.coords || null;
+    const addressName = req.body?.addressName || req.body?.address || '';
+
+    // Update rider avatar
+    await prisma.user.update({
+      where: { id: req.user.id },
+      data: { avatar: incomingPhoto }
+    });
+
+    const auditRecord = await prisma.verificationAuditLog.create({
+      data: {
+        id: crypto.randomUUID(),
+        actorId: req.user.id,
+        action: 'RIDER_ONLINE_SELFIE',
+        targetId: req.user.id,
+        metadata: {
+          photo: incomingPhoto,
+          riderName: user.fullName,
+          phone: user.phone,
+          coords: coords || null,
+          addressName: addressName || 'Live Verification Photo',
+          capturedAt: new Date().toISOString(),
+          source: req.headers['x-client-source'] || (req.headers['user-agent']?.includes('Mobile') ? 'Mobile App' : 'Web Dashboard')
+        }
+      }
+    });
+
+    // Real-time broadcast to Admin Dashboard
+    const io = req.app.get('socketio');
+    if (io) {
+      io.emit('rider_selfie_captured', {
+        id: auditRecord.id,
+        actorId: req.user.id,
+        action: 'RIDER_ONLINE_SELFIE',
+        riderName: user.fullName,
+        phone: user.phone,
+        photo: incomingPhoto,
+        coords: coords || null,
+        addressName: addressName || 'Live Verification Photo',
+        capturedAt: new Date().toISOString()
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Selfie saved successfully',
+      selfieId: auditRecord.id
+    });
   } catch (err) {
     next(err);
   }
@@ -1063,5 +1203,6 @@ module.exports = {
   acceptDeliveryOffer,
   rejectDeliveryOffer,
   updateRiderLocation,
-  updateRiderProfile
+  updateRiderProfile,
+  uploadRiderSelfie
 };

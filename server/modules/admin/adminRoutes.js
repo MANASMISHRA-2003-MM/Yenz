@@ -14,7 +14,12 @@ const {
   updateDeliveryPartnerApplicationStatus,
   resolveDispute,
   uploadImage,
-  getOrderDispatchHistory
+  getOrderDispatchHistory,
+  getRiderSelfies,
+  deleteRiderSelfie,
+  deleteUser,
+  deleteVendorApplication,
+  deleteDeliveryPartnerApplication
 } = require('./adminController');
 const { protect, authorize } = require('../../middlewares/authMiddleware');
 const { adminRateLimiter } = require('../../middlewares/rateLimiter');
@@ -24,6 +29,7 @@ router.use(protect, authorize('ADMIN', 'admin'));
 router.get('/metrics', adminRateLimiter, getAdminMetrics);
 router.get('/users', getUsers);
 router.put('/users/:id', updateUser);
+router.delete('/users/:id', deleteUser);
 
 router.post('/upload-image', uploadImage);
 router.put('/products/:id/price', updateProductPrice);
@@ -33,9 +39,14 @@ router.post('/products/:id/variants', createProductVariant);
 
 router.get('/vendors/applications', getVendorApplications);
 router.put('/vendors/applications/:id/status', updateVendorApplicationStatus);
+router.delete('/vendors/applications/:id', deleteVendorApplication);
 
 router.get('/delivery-partners/applications', getDeliveryPartnerApplications);
 router.put('/delivery-partners/applications/:id/status', updateDeliveryPartnerApplicationStatus);
+router.delete('/delivery-partners/applications/:id', deleteDeliveryPartnerApplication);
+
+router.get('/delivery-partners/selfies', getRiderSelfies);
+router.delete('/delivery-partners/selfies/:id', deleteRiderSelfie);
 
 router.put('/disputes/:orderId', resolveDispute);
 router.get('/orders/:id/dispatch-history', getOrderDispatchHistory);

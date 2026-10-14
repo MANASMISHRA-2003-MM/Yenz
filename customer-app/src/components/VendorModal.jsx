@@ -153,7 +153,7 @@ export default function VendorModal({ isOpen, onClose, vendor, defaultType = 'CR
   const numLat = Number(formData.latitude);
   const numLng = Number(formData.longitude);
   const hasValidCoords = !isNaN(numLat) && !isNaN(numLng) && formData.latitude !== '' && formData.longitude !== '' && numLat !== 0 && numLng !== 0;
-  const mapCenter = hasValidCoords ? [numLat, numLng] : [28.5355, 77.3910];
+  const mapCenter = hasValidCoords ? [numLat, numLng] : [20.5937, 78.9629];
 
   // Fetch live GPS from browser/device like in customer location modal
   const handleFetchLiveGps = (e) => {

@@ -5,7 +5,8 @@ import { useCart } from '../context/CartContext';
 import { useMode } from '../context/ModeContext';
 import MilegaLogo from './MilegaLogo';
 import LocationSelector from './LocationSelector';
-import AddressModal, { getSavedAddresses } from './AddressModal';
+import AddressModal from './AddressModal';
+import { getSavedAddresses, getActiveAddress } from '../utils/addressStorage';
 import { Search, ShoppingBag, MapPin, LogOut, Receipt, User, Menu, X, ChevronDown, LayoutGrid } from 'lucide-react';
 import { toast } from 'sonner';
 import { getUniversalProfileIcon } from '../utils/imageUtils';
@@ -99,7 +100,22 @@ export default function Navbar({ onVegToggle }) {
 
   return (
     <>
-      <AddressModal isOpen={showAddressModal} onClose={() => setShowAddressModal(false)} />
+      <AddressModal
+        isOpen={showAddressModal}
+        onClose={() => setShowAddressModal(false)}
+        onSelectAddress={(addr) => {
+          try {
+            localStorage.setItem('krawing_user_address', JSON.stringify(addr));
+            localStorage.setItem('krawing_selected_address', JSON.stringify(addr));
+            if (addr.lat && addr.lng) {
+              localStorage.setItem('krawing_user_coords', JSON.stringify({ lat: addr.lat, lng: addr.lng }));
+            }
+          } catch (e) {}
+          setActiveSavedAddress(addr);
+          window.dispatchEvent(new Event('krawing_location_changed'));
+          window.dispatchEvent(new Event('krawing_addresses_updated'));
+        }}
+      />
 
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100 shadow-sm safe-top">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2.5 sm:py-3">

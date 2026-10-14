@@ -6,12 +6,13 @@ import DeliveryNavbar from '../../components/DeliveryNavbar';
 import DeliveryBottomNav from '../../components/DeliveryBottomNav';
 import OrderStatusBadge from '../../components/OrderStatusBadge';
 import DeliveryTimeline from '../../components/DeliveryTimeline';
+import CameraCaptureModal from '../../components/CameraCaptureModal';
 import {
   Bike, MapPin, Navigation, ToggleLeft, ToggleRight,
   BellRing, CheckCircle2, AlertTriangle, Phone, KeyRound,
   Compass, ArrowRight, ShieldCheck, RefreshCw, Clock, Timer, History, Store,
   User, CreditCard, FileText, Lock, Eye, EyeOff, Edit3, Save, CheckCircle, Smartphone, Award, X,
-  Radio
+  Radio, Camera
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { startRepeatingAlert, stopAlertSound, playActionSound, unlockAudio, triggerHaptics, playCashRegisterSound } from '../../utils/alertSound';
@@ -60,6 +61,8 @@ export default function DeliveryDashboard() {
 
   const [data, setData] = useState(null);
   const [isOnline, setIsOnline] = useState(true);
+  const [isSelfieModalOpen, setIsSelfieModalOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [newJobAlert, setNewJobAlert] = useState(null);
   const [offerCountdown, setOfferCountdown] = useState(15);
@@ -346,23 +349,135 @@ export default function DeliveryDashboard() {
   };
 
   const handleToggleOnline = async () => {
+    const riderStatus = (data?.riderProfile?.status || riderProfile?.status || '').toUpperCase();
+    if (riderStatus === 'PENDING' || riderStatus === 'REJECTED' || riderStatus === 'PENDING_VERIFICATION') {
+      toast.error('🔒 Account Pending Verification: Your delivery partner account is currently under platform admin review. Going online will unlock once approved by the admin.');
+      return;
+    }
+
+    if (!isOnline) {
+      // Mandate live front-camera selfie verification before coming online!
+      setIsSelfieModalOpen(true);
+      return;
+    }
+
     try {
-      const res = await API.put('/deliveries/toggle-online');
+      setLoading(true);
+      const res = await API.put('/deliveries/toggle-online', { targetStatus: false });
       if (res.data.success) {
-        setIsOnline(res.data.isOnline);
+        setIsOnline(false);
+        stopWatchingLocation();
+        setNewJobAlert(null);
+        stopAlertSound();
         playActionSound();
-        if (!res.data.isOnline) {
-          stopWatchingLocation();
-          setNewJobAlert(null);
-          stopAlertSound();
-        } else {
-          startWatchingLocation();
-        }
-        toast.success(res.data.isOnline ? 'You are now ONLINE' : 'You are now OFFLINE');
+        toast.info('You are now OFFLINE. Shift paused.');
       }
     } catch (err) {
-      console.error('Toggle online error:', err);
+      toast.error('Failed to update online status');
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const handleSelfieCaptured = async (photoDataUrl) => {
+    try {
+      setLoading(true);
+      let coords = riderCoords;
+      if (!coords && 'geolocation' in navigator) {
+        try {
+          const pos = await new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 6000 });
+          });
+          coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          setRiderCoords(coords);
+        } catch (e) {}
+      }
+
+      const res = await API.put('/deliveries/toggle-online', {
+        targetStatus: true,
+        photo: photoDataUrl,
+        coords,
+        addressName: riderAddressName
+      });
+
+      if (res.data.success) {
+        setIsOnline(true);
+        try {
+          localStorage.setItem('milega_latest_rider_selfie', JSON.stringify({
+            id: 'selfie-' + Date.now(),
+            actorId: riderProfile?.id || data?.riderProfile?.id || 'usr-driver-01',
+            riderName: riderProfile?.fullName || data?.riderProfile?.fullName || 'Arjun Delivery Fleet',
+            phone: riderProfile?.phone || data?.riderProfile?.phone || '9000000002',
+            photo: photoDataUrl,
+            coords,
+            addressName: riderAddressName || 'Live GPS Location Recorded',
+            capturedAt: new Date().toISOString(),
+            type: 'SHIFT_SELFIE'
+          }));
+        } catch (e) {}
+
+        playCashRegisterSound();
+        triggerHaptics();
+        toast.success('📸 Front-camera verification complete! You are now ONLINE & ready for delivery orders.');
+        startWatchingLocation();
+        fetchDashboard();
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to verify selfie and go online.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRefreshLiveLocation = () => {
+    setIsRefreshing(true);
+    fetchDashboard();
+
+    if (!('geolocation' in navigator)) {
+      toast.error('Geolocation is not supported by your browser.');
+      setIsRefreshing(false);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setRiderCoords({ lat, lng });
+        let geoName = '';
+        try {
+          geoName = await reverseGeocode(lat, lng);
+          if (geoName) {
+            setRiderAddressName(geoName);
+            localStorage.setItem('milega_rider_address_name', geoName);
+            localStorage.setItem('milega_rider_location_name', geoName);
+            localStorage.setItem('milega_rider_coords', JSON.stringify({ lat, lng }));
+            window.dispatchEvent(new CustomEvent('milega_rider_location_changed', {
+              detail: { address: geoName, lat, lng }
+            }));
+          }
+        } catch (e) {
+          console.warn('Reverse geocode error:', e);
+        }
+
+        if (riderProfile?.id) {
+          socket.emit('driver_location_update', {
+            deliveryPartnerId: riderProfile.id,
+            lat,
+            lng
+          });
+        }
+
+        toast.success(geoName ? `📍 Refreshed live GPS: ${geoName}` : '📍 Exact live GPS coordinates refreshed!');
+        setIsRefreshing(false);
+      },
+      (err) => {
+        console.warn('Refresh GPS error:', err);
+        toast.error('Could not get live GPS location. Please check browser permissions.');
+        setIsRefreshing(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
   };
 
   const handleAcceptJob = async (orderId, offerId) => {
@@ -545,91 +660,133 @@ export default function DeliveryDashboard() {
   const activeDelivery = data?.activeDelivery || null;
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-slate-900 pb-28">
+    <div className="min-h-screen bg-[#F8FAFC] text-slate-900 pb-16">
       <DeliveryNavbar isOnline={isOnline} hasActiveTrip={Boolean(activeDelivery)} />
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
 
-        {/* Clean Standard Header Bar */}
-        <div className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-200/90 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl shrink-0">
-              <Bike className="w-7 h-7" />
+        {/* Account Pending Admin Verification Banner */}
+        {((data?.riderProfile?.status || riderProfile?.status || '').toUpperCase() === 'PENDING' ||
+          (data?.riderProfile?.status || riderProfile?.status || '').toUpperCase() === 'PENDING_VERIFICATION' ||
+          (data?.riderProfile?.status || riderProfile?.status || '').toUpperCase() === 'REJECTED') && (
+          <div className="bg-amber-50 border border-amber-200 rounded-3xl p-5 flex items-start gap-4 text-amber-900 shadow-soft">
+            <div className="w-10 h-10 rounded-2xl bg-amber-100 flex items-center justify-center shrink-0 text-amber-700">
+              <Clock className="w-5 h-5" />
+            </div>
+            <div className="flex-1">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-200/80 text-amber-900 text-[10px] font-extrabold uppercase mb-1">
+                Admin Verification Pending
+              </div>
+              <h3 className="text-sm font-extrabold text-amber-950">Rider Account Under Platform Review</h3>
+              <p className="text-xs text-amber-800/90 mt-1">
+                Your delivery partner registration is in the Admin Applications Hub for review. Going online and receiving delivery trips will activate automatically once approved by the platform admin.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Clean, Premium Header Bar */}
+        <div className="bg-white p-4 sm:p-5 rounded-3xl border border-slate-200/90 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-3.5">
+          <div className="flex items-center gap-3.5">
+            <div className="p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl shrink-0">
+              <Bike className="w-6 h-6" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-[11px] font-black tracking-wider uppercase text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-lg border border-emerald-200">
-                  Rider Dispatch Portal
+                <span className="text-[10px] font-black tracking-wider uppercase text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                  Rider Hub
                 </span>
-                <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold border ${isOnline ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
-                  {isOnline ? 'ONLINE & READY FOR JOBS' : 'OFFLINE'}
+                <span className={`px-2 py-0.5 rounded-md text-[10px] font-black border flex items-center gap-1 ${
+                  isOnline
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : 'bg-slate-100 text-slate-500 border-slate-200'
+                }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+                  {isOnline ? 'ONLINE' : 'OFFLINE'}
                 </span>
               </div>
-              <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 mt-1">
-                {riderProfile?.fullName || 'Delivery Partner Portal'}
+              <h1 className="text-lg sm:text-xl font-black text-slate-900 mt-0.5">
+                {riderProfile?.fullName || 'Delivery Partner'}
               </h1>
-              <p className="text-xs text-slate-500 font-medium">
-                📍 Live Zone: <strong className="text-slate-800">{riderAddressName || 'GPS Active'}</strong>
-              </p>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end">
+            {/* Live GPS Address Pill */}
+            <div className="flex items-center gap-1.5 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 max-w-[220px]" title={riderAddressName || 'Fetching exact GPS location...'}>
+              <span className={`w-2 h-2 rounded-full shrink-0 ${isRefreshing ? 'bg-amber-500 animate-ping' : 'bg-emerald-500'}`} />
+              <span className="truncate">
+                {riderAddressName || 'Locating exact GPS...'}
+              </span>
+            </div>
+
+            {/* Live GPS Refresh Button */}
+            <button
+              onClick={handleRefreshLiveLocation}
+              disabled={isRefreshing}
+              className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition border border-slate-200 active:scale-95 disabled:opacity-60"
+              title="Refresh Live GPS & Location"
+            >
+              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-emerald-600' : ''}`} />
+            </button>
+
+            {/* Test Audio Pill */}
+            <button
+              type="button"
+              onClick={() => {
+                unlockAudio();
+                playCashRegisterSound();
+                triggerHaptics();
+                toast.success('🔔 Sound alarm & mobile vibration tested!');
+              }}
+              className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl transition border border-slate-200 active:scale-95"
+              title="Test Sound & Vibration"
+            >
+              <BellRing className="w-4 h-4 text-amber-500" />
+            </button>
+
+            {/* Online / Offline Toggle with Selfie Enforcement */}
             <button
               onClick={handleToggleOnline}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border font-extrabold text-xs transition active:scale-95 ${
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border font-black text-xs transition active:scale-95 shadow-sm ${
                 isOnline
-                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300 shadow-sm'
-                  : 'bg-slate-100 text-slate-600 border-slate-200'
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                  : 'bg-slate-900 hover:bg-slate-800 text-white border-slate-800'
               }`}
             >
               {isOnline ? <ToggleRight className="w-5 h-5 text-emerald-600" /> : <ToggleLeft className="w-5 h-5 text-slate-400" />}
               <span>{isOnline ? 'Go Offline' : 'Go Online'}</span>
             </button>
-            <button
-              onClick={fetchDashboard}
-              className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition border border-slate-200"
-              title="Refresh Dashboard"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </button>
+
+            {/* Quick Shift Selfie Update Button */}
+            {isOnline && (
+              <button
+                type="button"
+                onClick={() => setIsSelfieModalOpen(true)}
+                className="p-2.5 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-xl transition border border-purple-200 active:scale-95 flex items-center gap-1.5"
+                title="Update Shift Selfie Photo"
+              >
+                <Camera className="w-4 h-4 text-purple-600" />
+                <span className="hidden sm:inline text-xs font-black">Selfie</span>
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Quick Summary Pill Bar */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-          <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-sm">
-            <p className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider">Today's Earnings</p>
-            <p className="text-xl font-extrabold text-emerald-600 mt-0.5">₹{data?.totalEarnings || 413}</p>
+        {/* Compact Metrics Row */}
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-white p-3.5 rounded-2xl border border-slate-200/90 shadow-sm">
+            <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider">Today's Earnings</p>
+            <p className="text-lg font-black text-emerald-600 mt-0.5">₹{data?.totalEarnings || 0}</p>
           </div>
-          <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-sm">
-            <p className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider">Completed Trips</p>
-            <p className="text-xl font-extrabold text-cyan-600 mt-0.5">{data?.completedCount || 6}</p>
+          <div className="bg-white p-3.5 rounded-2xl border border-slate-200/90 shadow-sm">
+            <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider">Completed Trips</p>
+            <p className="text-lg font-black text-cyan-600 mt-0.5">{data?.completedCount || 0}</p>
           </div>
-          <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-sm col-span-2 sm:col-span-1">
-            <p className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider">Payout Rate</p>
-            <p className="text-sm font-extrabold text-slate-900 mt-0.5">Base ₹35 + ₹20 / km</p>
+          <div className="bg-white p-3.5 rounded-2xl border border-slate-200/90 shadow-sm">
+            <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider">Trip Payout Rate</p>
+            <p className="text-xs sm:text-sm font-black text-slate-900 mt-0.5">₹35 + ₹20/km</p>
           </div>
-        </div>
-
-        {/* Sound & Vibration Alarm Banner */}
-        <div className="bg-amber-50 border border-amber-200/80 p-3.5 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-amber-900 text-xs">
-          <div className="flex items-center gap-2 font-bold">
-            <BellRing className="w-4 h-4 text-amber-600 animate-pulse" />
-            <span>🔔 Sound Alarms & Mobile Vibration active for incoming orders</span>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              unlockAudio();
-              playCashRegisterSound();
-              triggerHaptics();
-              toast.success('🔔 Sound ring & mobile vibration tested successfully!');
-            }}
-            className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-[11px] rounded-xl shadow-sm transition active:scale-95"
-          >
-            Test Sound & Vibration
-          </button>
         </div>
 
         {/* GPS Mandatory Status Bar */}
@@ -1271,6 +1428,17 @@ export default function DeliveryDashboard() {
       )}
 
       <DeliveryBottomNav hasActiveTrip={Boolean(activeDelivery)} />
+
+      {/* Front-Camera Selfie Verification Modal */}
+      <CameraCaptureModal
+        isOpen={isSelfieModalOpen}
+        onClose={() => setIsSelfieModalOpen(false)}
+        onCapture={handleSelfieCaptured}
+        mode="selfie"
+        title="Rider Attendance Verification"
+        subtitle="Capture a live front-camera selfie to verify identity & go online"
+        confirmText="Verify Face & Go Online"
+      />
     </div>
   );
 }

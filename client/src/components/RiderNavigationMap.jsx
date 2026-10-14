@@ -270,6 +270,80 @@ export default function RiderNavigationMap({
     };
   }, [orderId]);
 
+  // Live continuous real-time distance and ETA calculation
+  useEffect(() => {
+    if (
+      !currentRiderPos ||
+      !Array.isArray(currentRiderPos) ||
+      !isValidCoord(currentRiderPos[0]) ||
+      !isValidCoord(currentRiderPos[1]) ||
+      !isValidCoord(targetLat) ||
+      !isValidCoord(targetLng)
+    ) {
+      return;
+    }
+
+    const rLat = currentRiderPos[0];
+    const rLng = currentRiderPos[1];
+
+    const R = 6371; // km
+    const toRad = (x) => (x * Math.PI) / 180;
+    const dLat = toRad(targetLat - rLat);
+    const dLon = toRad(targetLng - rLng);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(toRad(rLat)) * Math.cos(toRad(targetLat)) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const straightDistKm = R * c;
+
+    let realRemainingKm = straightDistKm * 1.25;
+
+    // If polyline geometry exists, compute exact route path distance
+    if (Array.isArray(routeGeometry) && routeGeometry.length > 1) {
+      let closestIdx = 0;
+      let minD = Infinity;
+      for (let i = 0; i < routeGeometry.length; i++) {
+        const pt = routeGeometry[i];
+        const distToPt = Math.hypot(pt[0] - rLat, pt[1] - rLng);
+        if (distToPt < minD) {
+          minD = distToPt;
+          closestIdx = i;
+        }
+      }
+
+      let polyDistKm = 0;
+      for (let i = closestIdx; i < routeGeometry.length - 1; i++) {
+        const p1 = routeGeometry[i];
+        const p2 = routeGeometry[i + 1];
+        const segDLat = toRad(p2[0] - p1[0]);
+        const segDLon = toRad(p2[1] - p1[1]);
+        const segA =
+          Math.sin(segDLat / 2) * Math.sin(segDLat / 2) +
+          Math.cos(toRad(p1[0])) * Math.cos(toRad(p2[0])) *
+          Math.sin(segDLon / 2) * Math.sin(segDLon / 2);
+        const segC = 2 * Math.atan2(Math.sqrt(segA), Math.sqrt(1 - segA));
+        polyDistKm += R * segC;
+      }
+      if (polyDistKm > 0.05) {
+        realRemainingKm = polyDistKm;
+      }
+    }
+
+    let distStr = '';
+    if (realRemainingKm < 0.1) {
+      distStr = `${Math.round(realRemainingKm * 1000)} m (Arriving)`;
+    } else if (realRemainingKm < 1.0) {
+      distStr = `${Math.round(realRemainingKm * 1000)} m`;
+    } else {
+      distStr = `${realRemainingKm.toFixed(1)} km`;
+    }
+    setRemainingDistanceText(distStr);
+
+    const etaMins = Math.max(1, Math.round(realRemainingKm * 3.2));
+    setEtaText(`${etaMins} mins`);
+  }, [currentRiderPos, targetLat, targetLng, routeGeometry]);
+
   // Dynamic turn detection based on current rider location
   useEffect(() => {
     if (!currentRiderPos || !routeSteps || routeSteps.length === 0) return;
@@ -324,22 +398,8 @@ export default function RiderNavigationMap({
       }
     >
 
-      {/* FULLSCREEN CLOSE (X) BUTTON TO RETURN TO ACTIVE-TRIP MENU */}
-      {isFullScreen && (
-        <button
-          type="button"
-          onClick={handleClose}
-          className="absolute top-4 right-4 z-50 px-4 py-2.5 bg-rose-600 hover:bg-rose-500 active:scale-95 text-white rounded-2xl shadow-xl flex items-center gap-2 border-2 border-rose-400/80 font-black text-xs transition-all cursor-pointer backdrop-blur-md group"
-          title="Close Full Screen Navigation & Return to Active Trip Menu"
-        >
-          <X className="w-5 h-5 group-hover:rotate-90 transition-transform duration-200" />
-          <span className="hidden sm:inline">Back to Active Trip Menu</span>
-          <span className="sm:hidden">Close</span>
-        </button>
-      )}
-
       {/* TOP TURN-BY-TURN GUIDANCE HUD */}
-      <div className={`absolute top-3 inset-x-3 ${isFullScreen ? 'pr-24 sm:pr-64' : ''} z-30 pointer-events-none transition-all`}>
+      <div className="absolute top-3 inset-x-3 z-30 pointer-events-none transition-all">
         <div className="bg-white/95 backdrop-blur-md border border-slate-200/90 rounded-2xl p-4 shadow-md text-slate-900 pointer-events-auto flex items-center justify-between gap-3">
           <div className="flex items-center gap-3.5 min-w-0">
             {/* Big Maneuver Icon */}
@@ -375,53 +435,6 @@ export default function RiderNavigationMap({
             </div>
           )}
         </div>
-      </div>
-
-      {/* FLOATING CAMERA & RE-CENTER CONTROLS */}
-      <div className="absolute top-28 right-3 z-30 flex flex-col gap-2">
-        <button
-          type="button"
-          onClick={() => handleToggleFullScreen(!isFullScreen)}
-          className="p-3 rounded-2xl shadow-md border text-xs font-bold transition active:scale-95 flex items-center gap-1.5 bg-white hover:bg-slate-50 text-slate-700 border-slate-200 shadow-sm"
-          title={isFullScreen ? 'Exit Full Screen Navigation' : 'Extend Map to Full Screen for Navigation'}
-        >
-          {isFullScreen ? (
-            <>
-              <Minimize2 className="w-4 h-4 text-emerald-700" />
-              <span className="text-[11px] font-black hidden sm:inline text-slate-700">Exit Full</span>
-            </>
-          ) : (
-            <>
-              <Maximize2 className="w-4 h-4 text-emerald-700" />
-              <span className="text-[11px] font-black hidden sm:inline text-slate-700">Extend Map</span>
-            </>
-          )}
-        </button>
-
-        <button
-          onClick={() => setFollowMode(true)}
-          className={`p-3 rounded-2xl shadow-md border font-bold text-xs flex items-center gap-1.5 transition active:scale-95 ${
-            followMode
-              ? 'bg-emerald-600 text-white border-emerald-500 shadow-emerald-500/20'
-              : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200 shadow-sm'
-          }`}
-          title="Re-center map on rider"
-        >
-          <RotateCcw className="w-4 h-4" />
-          <span className="text-[11px] font-black">{followMode ? 'Following' : 'Re-center'}</span>
-        </button>
-
-        <button
-          onClick={() => setHeadingUpMode(!headingUpMode)}
-          className={`p-3 rounded-2xl shadow-md border text-xs font-bold transition active:scale-95 flex items-center justify-center ${
-            headingUpMode
-              ? 'bg-emerald-600 text-white border-emerald-500 shadow-emerald-500/20'
-              : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200 shadow-sm'
-          }`}
-          title="Toggle Heading Up / North Up mode"
-        >
-          <Compass className="w-4 h-4" />
-        </button>
       </div>
 
       {/* LEAFLET MAP CANVAS */}
@@ -528,9 +541,13 @@ export default function RiderNavigationMap({
         <div className="flex flex-wrap items-center justify-between sm:justify-end gap-3 bg-slate-50 sm:bg-transparent p-3 sm:p-0 rounded-2xl sm:rounded-none border sm:border-0 border-slate-200">
           <button
             type="button"
-            onClick={() => handleToggleFullScreen(!isFullScreen)}
+            onClick={() => {
+              const nextState = !isFullScreen;
+              handleToggleFullScreen(nextState);
+              if (!nextState && onClose) onClose();
+            }}
             className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-black transition active:scale-95"
-            title={isFullScreen ? 'Exit full screen' : 'Extend map to full screen for navigation'}
+            title={isFullScreen ? 'Exit full screen' : 'Enter full screen'}
           >
             {isFullScreen ? (
               <>
@@ -540,22 +557,10 @@ export default function RiderNavigationMap({
             ) : (
               <>
                 <Maximize2 className="w-4 h-4 text-emerald-700" />
-                <span>Extend Map (Fullscreen)</span>
+                <span>Enter Fullscreen</span>
               </>
             )}
           </button>
-
-          {isFullScreen && (
-            <button
-              type="button"
-              onClick={handleClose}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-black shadow-lg transition active:scale-95"
-              title="Close and return to active trip menu"
-            >
-              <X className="w-4 h-4" />
-              <span>Back to Menu</span>
-            </button>
-          )}
 
           <div className="h-8 w-px bg-slate-200 hidden sm:block" />
 

@@ -4,7 +4,9 @@ import API from '../../services/api';
 import { useCart } from '../../context/CartContext';
 import { useMode } from '../../context/ModeContext';
 import Navbar from '../../components/Navbar';
-import AddressModal, { getSavedAddresses } from '../../components/AddressModal';
+import AddressModal from '../../components/AddressModal';
+import { getSavedAddresses } from '../../utils/addressStorage';
+import { reverseGeocode } from '../../utils/reverseGeocode';
 import FreshCartFooter from '../../components/FreshCartFooter';
 import { MapPin, CreditCard, ShieldCheck, CheckCircle2, ArrowRight, Navigation, Plus, Minus, Trash2, Bookmark, Store, Clock, Scale, Tag, ShoppingBag, AlertTriangle, Lock, RefreshCw, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -41,64 +43,68 @@ export default function CheckoutPage({ modeOverride }) {
   const [savedAddresses, setSavedAddresses] = useState(getSavedAddresses());
   const [locating, setLocating] = useState(false);
 
-  // Address fields with safe fallbacks (never null)
+  // Address fields — NO fake defaults, user must select or fetch their location
   const [address, setAddress] = useState(() => {
     try {
       const selectedRaw = localStorage.getItem('krawing_selected_address') || localStorage.getItem('krawing_user_address');
       if (selectedRaw) {
-        const parsed = JSON.parse(selectedRaw);
-        if (parsed && (parsed.street || parsed.latitude || parsed.city)) {
-          const userCoordsRaw = localStorage.getItem('krawing_user_coords');
-          let savedLat = parsed.latitude || parsed.lat;
-          let savedLng = parsed.longitude || parsed.lng;
-          if ((savedLat === undefined || savedLng === undefined || savedLat === null || savedLng === null) && userCoordsRaw) {
-            const parsedCoords = JSON.parse(userCoordsRaw);
-            savedLat = parsedCoords.lat || parsedCoords.latitude;
-            savedLng = parsedCoords.lng || parsedCoords.longitude;
+        if (!selectedRaw.toLowerCase().includes('ansal')) {
+          const parsed = JSON.parse(selectedRaw);
+          if (parsed && (parsed.street || parsed.latitude || parsed.city)) {
+            const userCoordsRaw = localStorage.getItem('krawing_user_coords');
+            let savedLat = parsed.latitude || parsed.lat;
+            let savedLng = parsed.longitude || parsed.lng;
+            if ((savedLat === undefined || savedLng === undefined || savedLat === null || savedLng === null) && userCoordsRaw) {
+              const parsedCoords = JSON.parse(userCoordsRaw);
+              savedLat = parsedCoords.lat || parsedCoords.latitude;
+              savedLng = parsedCoords.lng || parsedCoords.longitude;
+            }
+            return {
+              title: parsed.title || 'Delivery Address',
+              street: parsed.street || parsed.addressLine || '',
+              city: parsed.city || '',
+              state: parsed.state || '',
+              pincode: parsed.pincode || '',
+              latitude: (savedLat && !isNaN(Number(savedLat))) ? Number(savedLat) : null,
+              longitude: (savedLng && !isNaN(Number(savedLng))) ? Number(savedLng) : null,
+              lat: (savedLat && !isNaN(Number(savedLat))) ? Number(savedLat) : null,
+              lng: (savedLng && !isNaN(Number(savedLng))) ? Number(savedLng) : null,
+              phone: parsed.phone || ''
+            };
           }
-          return {
-            title: parsed.title || 'Delivery Address',
-            street: parsed.street || parsed.addressLine || 'Sector 15, Main Market Road',
-            city: parsed.city || 'Faridabad',
-            state: parsed.state || 'Haryana',
-            pincode: parsed.pincode || '121009',
-            latitude: (savedLat && !isNaN(Number(savedLat))) ? Number(savedLat) : 28.4866,
-            longitude: (savedLng && !isNaN(Number(savedLng))) ? Number(savedLng) : 77.2918,
-            lat: (savedLat && !isNaN(Number(savedLat))) ? Number(savedLat) : 28.4866,
-            lng: (savedLng && !isNaN(Number(savedLng))) ? Number(savedLng) : 77.2918,
-            phone: parsed.phone || '+91 98765 43210'
-          };
         }
+      }
+      const saved = getSavedAddresses().filter(a => !JSON.stringify(a).toLowerCase().includes('ansal'));
+      const defaultAddr = saved && saved.length > 0 ? (saved.find(a => a.isDefault) || saved[0]) : null;
+      if (defaultAddr) {
+        const savedLat = defaultAddr.latitude || defaultAddr.lat;
+        const savedLng = defaultAddr.longitude || defaultAddr.lng;
+        return {
+          title: defaultAddr.title || 'Home',
+          street: defaultAddr.street || defaultAddr.addressLine || '',
+          city: defaultAddr.city || '',
+          state: defaultAddr.state || '',
+          pincode: defaultAddr.pincode || '',
+          latitude: (savedLat && !isNaN(Number(savedLat))) ? Number(savedLat) : null,
+          longitude: (savedLng && !isNaN(Number(savedLng))) ? Number(savedLng) : null,
+          lat: (savedLat && !isNaN(Number(savedLat))) ? Number(savedLat) : null,
+          lng: (savedLng && !isNaN(Number(savedLng))) ? Number(savedLng) : null,
+          phone: defaultAddr.phone || ''
+        };
       }
     } catch (e) {}
 
-    const saved = getSavedAddresses();
-    const defaultAddr = saved && saved.length > 0 ? (saved.find(a => a.isDefault) || saved[0]) : null;
-    if (defaultAddr) {
-      return {
-        title: defaultAddr.title || 'Home',
-        street: defaultAddr.street || defaultAddr.addressLine || 'Sector 15, Main Market Road',
-        city: defaultAddr.city || 'Faridabad',
-        state: defaultAddr.state || 'Haryana',
-        pincode: defaultAddr.pincode || '121009',
-        latitude: defaultAddr.latitude ? Number(defaultAddr.latitude) : 28.4866,
-        longitude: defaultAddr.longitude ? Number(defaultAddr.longitude) : 77.2918,
-        lat: defaultAddr.latitude ? Number(defaultAddr.latitude) : 28.4866,
-        lng: defaultAddr.longitude ? Number(defaultAddr.longitude) : 77.2918,
-        phone: defaultAddr.phone || '+91 98765 43210'
-      };
-    }
     return {
-      title: 'Home',
-      street: 'Sector 15, Main Market Road',
-      city: 'Faridabad',
-      state: 'Haryana',
-      pincode: '121009',
-      latitude: 28.4866,
-      longitude: 77.2918,
-      lat: 28.4866,
-      lng: 77.2918,
-      phone: '+91 98765 43210'
+      title: '',
+      street: '',
+      city: '',
+      state: '',
+      pincode: '',
+      latitude: null,
+      longitude: null,
+      lat: null,
+      lng: null,
+      phone: ''
     };
   });
 
@@ -108,115 +114,108 @@ export default function CheckoutPage({ modeOverride }) {
     };
     window.addEventListener('krawing_addresses_updated', handleUpdate);
 
-    // Auto-detect exact live device GPS if currently using fallback coordinates
-    if (navigator.geolocation && (address.latitude === 28.4866 || !address.latitude)) {
-      handleFetchLiveGps();
-    }
-
     return () => window.removeEventListener('krawing_addresses_updated', handleUpdate);
   }, []);
 
   const selectSavedAddress = (savedItem) => {
     if (!savedItem) return;
-    const latVal = savedItem.latitude || savedItem.lat || 28.4866;
-    const lngVal = savedItem.longitude || savedItem.lng || 77.2918;
-    setAddress({
+    const latVal = savedItem.latitude || savedItem.lat || null;
+    const lngVal = savedItem.longitude || savedItem.lng || null;
+    const updated = {
       title: savedItem.title || 'Saved Location',
-      street: savedItem.street || savedItem.addressLine || 'Selected Location',
-      city: savedItem.city || 'Faridabad',
-      state: savedItem.state || 'Haryana',
-      pincode: savedItem.pincode || '121009',
-      latitude: Number(latVal),
-      longitude: Number(lngVal),
-      lat: Number(latVal),
-      lng: Number(lngVal),
-      phone: savedItem.phone || '+91 98765 43210'
-    });
+      street: savedItem.street || savedItem.addressLine || '',
+      city: savedItem.city || '',
+      state: savedItem.state || '',
+      pincode: savedItem.pincode || '',
+      latitude: latVal ? Number(latVal) : null,
+      longitude: lngVal ? Number(lngVal) : null,
+      lat: latVal ? Number(latVal) : null,
+      lng: lngVal ? Number(lngVal) : null,
+      phone: savedItem.phone || ''
+    };
+    setAddress(updated);
+    try {
+      localStorage.setItem('krawing_selected_address', JSON.stringify(updated));
+      localStorage.setItem('krawing_user_address', JSON.stringify(updated));
+      if (latVal && lngVal) {
+        localStorage.setItem('krawing_user_coords', JSON.stringify({ lat: Number(latVal), lng: Number(lngVal) }));
+      }
+    } catch (e) {}
+    window.dispatchEvent(new Event('krawing_location_changed'));
     toast.success(`Address updated to "${savedItem.title || 'Saved Location'}"`);
   };
 
-  const handleFetchLiveGps = () => {
-    if (!navigator.geolocation) {
-      toast.error('Geolocation is not supported by your browser');
+  const handleFetchLiveGps = async () => {
+    setLocating(true);
+    let latitude = null;
+    let longitude = null;
+
+    try {
+      const pos = await new Promise((resolve, reject) => {
+        if (!navigator.geolocation) return reject(new Error('No geolocation'));
+        navigator.geolocation.getCurrentPosition(
+          resolve,
+          () => {
+            navigator.geolocation.getCurrentPosition(
+              resolve,
+              (err) => reject(err),
+              { enableHighAccuracy: false, timeout: 6000, maximumAge: 60000 }
+            );
+          },
+          { enableHighAccuracy: true, timeout: 4500, maximumAge: 30000 }
+        );
+      });
+      latitude = pos.coords.latitude;
+      longitude = pos.coords.longitude;
+    } catch (geoErr) {
+      try {
+        const ipRes = await fetch('https://api.bigdatacloud.net/data/reverse-geocode-client');
+        if (ipRes.ok) {
+          const ipData = await ipRes.json();
+          if (ipData.latitude && ipData.longitude) {
+            latitude = Number(ipData.latitude);
+            longitude = Number(ipData.longitude);
+          }
+        }
+      } catch (e) {}
+    }
+
+    if (!latitude || !longitude) {
+      setLocating(false);
+      toast.error('Could not detect location. Please select address or pick on map.');
       return;
     }
-    setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        try {
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
-          );
-          const data = await res.json();
-          let street = '';
-          let city = '';
-          let pincode = '';
-          let state = 'Haryana';
 
-          if (data && data.address) {
-            const a = data.address;
-            const sub = a.suburb || a.neighbourhood || a.residential || a.road || a.subdistrict || '';
-            const house = a.house_number || a.building || '';
-            street = [house, sub, a.amenity].filter(Boolean).join(', ') || data.display_name.split(',')[0];
-            city = a.city || a.town || a.district || a.county || '';
-            state = a.state || '';
-            pincode = a.postcode || '';
-          } else {
-            street = `GPS Location (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`;
-            city = '';
-            state = '';
-            pincode = '';
-          }
+    try {
+      const geoResult = await reverseGeocode(latitude, longitude);
 
-          const updatedGpsAddr = {
-            title: 'Live GPS Location 📍',
-            street,
-            city,
-            state,
-            pincode,
-            latitude,
-            longitude,
-            lat: latitude,
-            lng: longitude
-          };
-          setAddress(prev => ({ ...prev, ...updatedGpsAddr }));
-          try {
-            localStorage.setItem('krawing_user_coords', JSON.stringify({ lat: latitude, lng: longitude }));
-            localStorage.setItem('krawing_user_address', JSON.stringify(updatedGpsAddr));
-            localStorage.setItem('krawing_selected_address', JSON.stringify(updatedGpsAddr));
-          } catch (e) {}
-          toast.success('Updated address with live GPS coordinates!');
-        } catch (err) {
-          console.error('Error reverse geocoding location:', err);
-          const fallbackGpsAddr = {
-            title: 'Live GPS Location 📍',
-            street: `Live GPS: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
-            city: address.city || '',
-            state: address.state || '',
-            pincode: address.pincode || '',
-            latitude,
-            longitude,
-            lat: latitude,
-            lng: longitude
-          };
-          setAddress(prev => ({ ...prev, ...fallbackGpsAddr }));
-          try {
-            localStorage.setItem('krawing_user_coords', JSON.stringify({ lat: latitude, lng: longitude }));
-            localStorage.setItem('krawing_user_address', JSON.stringify(fallbackGpsAddr));
-            localStorage.setItem('krawing_selected_address', JSON.stringify(fallbackGpsAddr));
-          } catch (e) {}
-          toast.success('Live GPS coordinates captured!');
-        } finally {
-          setLocating(false);
-        }
-      },
-      (err) => {
-        setLocating(false);
-        toast.error(`Location permission error: ${err.message}`);
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-    );
+      const updatedGpsAddr = {
+        title: 'Live GPS Location 📍',
+        street: geoResult.street || `GPS (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`,
+        city: geoResult.city || '',
+        state: geoResult.state || '',
+        pincode: geoResult.pincode || '',
+        latitude,
+        longitude,
+        lat: latitude,
+        lng: longitude,
+        phone: address.phone || ''
+      };
+      setAddress(updatedGpsAddr);
+      try {
+        localStorage.setItem('krawing_user_coords', JSON.stringify({ lat: latitude, lng: longitude }));
+        localStorage.setItem('krawing_user_address', JSON.stringify(updatedGpsAddr));
+        localStorage.setItem('krawing_selected_address', JSON.stringify(updatedGpsAddr));
+      } catch (e) {}
+      window.dispatchEvent(new Event('krawing_location_changed'));
+      window.dispatchEvent(new Event('krawing_addresses_updated'));
+      toast.success('Live GPS location captured & set!');
+    } catch (err) {
+      console.error('Error reverse geocoding location:', err);
+      toast.error('Could not resolve address details for GPS.');
+    } finally {
+      setLocating(false);
+    }
   };
 
   const deliveryFee = cart.restaurant?.deliveryFee || 35;
@@ -240,8 +239,11 @@ export default function CheckoutPage({ modeOverride }) {
       toast.error(`Your ${isFreshMode ? 'Fresh Mandi' : 'Cravings'} basket is empty!`);
       return;
     }
-    if (!address.street || !address.city) {
-      toast.error('Please specify a valid delivery address with street and city.');
+    const hasLat = address.latitude || address.lat;
+    const hasLng = address.longitude || address.lng;
+    if (!address.street || !address.city || !hasLat || !hasLng) {
+      toast.error('Delivery location not set! Please fetch live GPS or choose your delivery address before proceeding.');
+      setShowAddressModal(true);
       return;
     }
     generateNewConfirmCode();
@@ -253,12 +255,20 @@ export default function CheckoutPage({ modeOverride }) {
       toast.error(`Please type "${confirmCode}" correctly to confirm your order.`);
       return;
     }
+    const dropLat = address.latitude || address.lat;
+    const dropLng = address.longitude || address.lng;
+    if (!address.street || !dropLat || !dropLng) {
+      toast.error('Cannot place order: Delivery location coordinates are missing. Please pick your delivery location.');
+      setShowConfirmModal(false);
+      setShowAddressModal(true);
+      return;
+    }
     try {
       setLoading(true);
       const res = await API.post('/orders', {
         address,
-        dropLat: address.latitude || address.lat,
-        dropLng: address.longitude || address.lng,
+        dropLat: Number(dropLat),
+        dropLng: Number(dropLng),
         paymentMethod,
         deliveryNotes,
         shoppingMode: activeMode
@@ -327,12 +337,12 @@ export default function CheckoutPage({ modeOverride }) {
               </div>
 
               {/* Exact Coordinates Display */}
-              <div className="mt-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs font-mono">
-                <span className="text-slate-600 font-semibold flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-emerald-600" /> Exact Dropoff GPS:
+              <div className={`mt-3 p-2.5 rounded-xl border flex items-center justify-between text-xs font-mono ${(address.latitude && address.longitude) ? 'bg-slate-50 border-slate-200' : 'bg-rose-50 border-rose-200'}`}>
+                <span className={`font-semibold flex items-center gap-1.5 ${(address.latitude && address.longitude) ? 'text-slate-600' : 'text-rose-700'}`}>
+                  <MapPin className={`w-3.5 h-3.5 ${(address.latitude && address.longitude) ? 'text-emerald-600' : 'text-rose-600'}`} /> Exact Dropoff GPS:
                 </span>
-                <span className="font-bold text-slate-900">
-                  {address.latitude ? Number(address.latitude).toFixed(5) : '...'}°, {address.longitude ? Number(address.longitude).toFixed(5) : '...'}°
+                <span className={`font-bold ${(address.latitude && address.longitude) ? 'text-slate-900' : 'text-rose-700'}`}>
+                  {(address.latitude && address.longitude) ? `${Number(address.latitude).toFixed(5)}°, ${Number(address.longitude).toFixed(5)}°` : '⚠️ Location required (Click Use live GPS)'}
                 </span>
               </div>
 

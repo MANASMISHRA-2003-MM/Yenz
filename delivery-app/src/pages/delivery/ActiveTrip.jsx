@@ -556,10 +556,10 @@ export default function ActiveTrip() {
               type="button"
               onClick={() => setIsFullScreenMap(true)}
               className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black shadow-sm transition active:scale-95"
-              title="Extend map to full screen navigation"
+              title="Enter full screen navigation"
             >
               <Maximize2 className="w-3.5 h-3.5" />
-              <span>Extend Fullscreen Map</span>
+              <span>Enter Fullscreen</span>
             </button>
           </div>
 

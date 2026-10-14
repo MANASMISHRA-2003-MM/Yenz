@@ -86,7 +86,7 @@ const getUsers = async (req, res, next) => {
       const { passwordHash, ...userWithoutPassword } = u;
       return formatWithId({
         ...userWithoutPassword,
-        avatar: 'https://img.icons8.com/?size=100&id=85147&format=png&color=000000'
+        avatar: u.avatar || 'https://img.icons8.com/?size=100&id=85147&format=png&color=000000'
       });
     });
 
@@ -280,29 +280,48 @@ const updateVendorApplicationStatus = async (req, res, next) => {
 
     // If APPROVED, create Vendor store and assign role VENDOR to applicant
     if (status === 'APPROVED') {
+      const targetVendorType = (req.body.vendorType && req.body.vendorType.toUpperCase().includes('FRESH'))
+        ? 'FRESH'
+        : ((app.vendorType && app.vendorType.toUpperCase().includes('FRESH')) ? 'FRESH' : 'CRAVINGS');
+
       await prisma.user.update({
         where: { id: app.userId },
-        data: { role: 'VENDOR' }
-      });
+        data: { role: 'VENDOR', status: 'active' }
+      }).catch(err => console.warn('User activate warning:', err.message));
 
       const existingVendor = await prisma.vendor.findFirst({ where: { ownerUserId: app.userId } });
       if (!existingVendor) {
+        let storePhone = app.phone;
+        const phoneTaken = await prisma.vendor.findUnique({ where: { phone: storePhone } });
+        if (phoneTaken) {
+          storePhone = `${storePhone}-${Math.floor(100 + Math.random() * 900)}`;
+        }
         await prisma.vendor.create({
           data: {
             id: crypto.randomUUID(),
             ownerUserId: app.userId,
-            vendorType: app.vendorType || 'CRAVINGS',
+            vendorType: targetVendorType,
             name: app.businessName,
-            phone: app.phone,
-            email: app.email,
-            address: app.address,
-            city: app.city,
-            state: app.state,
-            pincode: app.pincode,
-            image: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&q=80&w=600',
-            bannerImage: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&q=80&w=1200'
+            phone: storePhone,
+            email: app.email || null,
+            address: app.address || 'Main Market',
+            city: app.city || 'Noida',
+            state: app.state || 'UP',
+            pincode: app.pincode || '201301',
+            status: 'open',
+            image: targetVendorType === 'FRESH'
+              ? 'https://images.unsplash.com/photo-1610832958506-aa56368176cf?auto=format&fit=crop&q=80&w=600'
+              : 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&q=80&w=600',
+            bannerImage: targetVendorType === 'FRESH'
+              ? 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=1200'
+              : 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&q=80&w=1200'
           }
-        });
+        }).catch(err => console.warn('Vendor store create warning:', err.message));
+      } else {
+        await prisma.vendor.update({
+          where: { id: existingVendor.id },
+          data: { vendorType: targetVendorType, status: 'open' }
+        }).catch(() => {});
       }
     }
 
@@ -315,7 +334,7 @@ const updateVendorApplicationStatus = async (req, res, next) => {
         targetId: app.id,
         metadata: { businessName: app.businessName, userId: app.userId }
       }
-    });
+    }).catch(() => {});
 
     res.json({ success: true, message: `Application status updated to ${status}`, application: updatedApp });
   } catch (err) {
@@ -363,15 +382,16 @@ const updateDeliveryPartnerApplicationStatus = async (req, res, next) => {
       }
     });
 
-    // If APPROVED, update user role to DELIVERY_PARTNER
+    // If APPROVED, update user role to DELIVERY_PARTNER and activate
     if (status === 'APPROVED') {
       await prisma.user.update({
         where: { id: app.userId },
         data: {
           role: 'DELIVERY_PARTNER',
+          status: 'active',
           vehicleType: app.vehicleType || 'Bike'
         }
-      });
+      }).catch(err => console.warn('Driver activate warning:', err.message));
     }
 
     // Audit log
@@ -523,19 +543,195 @@ const getOrderDispatchHistory = async (req, res, next) => {
   }
 };
 
+const getRiderSelfies = async (req, res, next) => {
+  try {
+    const logs = await prisma.verificationAuditLog.findMany({
+      where: {
+        action: {
+          in: ['RIDER_ONLINE_SELFIE', 'RIDER_DELIVERY_PHOTO', 'VENDOR_HANDOVER_PHOTO']
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 150
+    });
+
+    // Fetch delivery partners & vendors to enrich records with names and phone numbers
+    const partnerUsers = await prisma.user.findMany({
+      where: {
+        role: { in: ['DELIVERY_PARTNER', 'VENDOR', 'RESTAURANT'] }
+      },
+      select: { id: true, fullName: true, phone: true, avatar: true, updatedAt: true, role: true }
+    });
+    const userMap = new Map(partnerUsers.map(u => [u.id, u]));
+
+    // Also fetch vendors to map store names
+    const vendorStores = await prisma.vendor.findMany({
+      select: { id: true, name: true, phone: true, vendorType: true, ownerId: true }
+    }).catch(() => []);
+    const storeMap = new Map(vendorStores.map(v => [v.ownerId || v.id, v]));
+
+    const isRealPhoto = (url) => {
+      if (!url || typeof url !== 'string') return false;
+      if (url.includes('icons8')) return false;
+      return url.startsWith('data:image') || url.startsWith('http');
+    };
+
+    const selfies = [];
+
+    for (const l of logs) {
+      const meta = (typeof l.metadata === 'object' && l.metadata !== null) ? l.metadata : {};
+      const photo = meta.photo;
+      if (isRealPhoto(photo)) {
+        const matchedUser = userMap.get(l.actorId);
+        const matchedStore = storeMap.get(l.actorId);
+        const isShiftSelfie = l.action === 'RIDER_ONLINE_SELFIE';
+        const isHandover = l.action === 'VENDOR_HANDOVER_PHOTO';
+        const isDeliveryProof = l.action === 'RIDER_DELIVERY_PHOTO';
+
+        let name = meta.riderName || matchedStore?.name || matchedUser?.fullName || (isHandover ? 'Vendor Partner Store' : 'Delivery Partner');
+        let phone = meta.phone || matchedStore?.phone || matchedUser?.phone || '';
+        let address = meta.addressName || (isShiftSelfie ? 'Live Shift Attendance' : (isHandover ? 'Store Handover Verification' : 'Doorstep Delivery Proof'));
+
+        selfies.push({
+          id: l.id,
+          actorId: l.actorId,
+          action: l.action,
+          type: isShiftSelfie ? 'SHIFT_SELFIE' : (isHandover ? 'VENDOR_HANDOVER' : 'DELIVERY_PROOF'),
+          createdAt: l.createdAt,
+          photo,
+          riderName: name,
+          phone,
+          coords: meta.coords || null,
+          addressName: address,
+          capturedAt: meta.capturedAt || meta.verifiedAt || l.createdAt,
+          source: meta.source || (isHandover ? 'Store Package Camera' : 'Front Camera')
+        });
+      }
+    }
+
+    // Also include any delivery partner who has a real uploaded camera photo in user.avatar
+    for (const u of partnerUsers.filter(p => p.role === 'DELIVERY_PARTNER')) {
+      const alreadyIncluded = selfies.some(s => s.actorId === u.id);
+      if (!alreadyIncluded && isRealPhoto(u.avatar) && (u.avatar.startsWith('data:image') || u.avatar.includes('cloudinary') || u.avatar.includes('unsplash'))) {
+        selfies.push({
+          id: 'user-avatar-' + u.id,
+          actorId: u.id,
+          action: 'RIDER_ONLINE_SELFIE',
+          type: 'SHIFT_SELFIE',
+          createdAt: u.updatedAt,
+          photo: u.avatar,
+          riderName: u.fullName,
+          phone: u.phone,
+          coords: null,
+          addressName: 'Registered Shift Verification Photo',
+          capturedAt: u.updatedAt,
+          source: 'Front Camera Verification'
+        });
+      }
+    }
+
+    console.log(`[Admin] getRiderSelfies responding with ${selfies.length} real uploaded verification photo records`);
+
+    res.json({
+      success: true,
+      count: selfies.length,
+      selfies
+    });
+  } catch (err) {
+    console.error('[Admin] getRiderSelfies error:', err);
+    next(err);
+  }
+};
+
+// @desc Delete Rider / Verification Photo (from verification audit log & user avatar in DB)
+// @route DELETE /api/admin/delivery-partners/selfies/:id
+const deleteRiderSelfie = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const actorId = req.query.actorId || req.body?.actorId;
+
+    if (id && !id.startsWith('driver-') && !id.startsWith('user-avatar-')) {
+      await prisma.verificationAuditLog.deleteMany({
+        where: { id }
+      }).catch(err => console.warn('Audit log delete warning:', err.message));
+    }
+
+    const targetUserId = actorId || (id.startsWith('driver-') ? id.replace('driver-', '') : (id.startsWith('user-avatar-') ? id.replace('user-avatar-', '') : null));
+    if (targetUserId) {
+      await prisma.user.update({
+        where: { id: targetUserId },
+        data: { avatar: 'https://img.icons8.com/?size=100&id=85147&format=png&color=000000' }
+      }).catch(err => console.warn('User avatar reset warning:', err.message));
+
+      await prisma.verificationAuditLog.deleteMany({
+        where: { actorId: targetUserId, action: { in: ['RIDER_ONLINE_SELFIE', 'VENDOR_HANDOVER_PHOTO', 'RIDER_DELIVERY_PHOTO'] } }
+      }).catch(err => console.warn('Audit logs clear warning:', err.message));
+    }
+
+    res.json({ success: true, message: 'Verification photo permanently deleted from database' });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc Delete User
+// @route DELETE /api/admin/users/:id
+const deleteUser = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    await prisma.cart.deleteMany({ where: { userId: id } }).catch(() => {});
+    await prisma.vendorApplication.deleteMany({ where: { userId: id } }).catch(() => {});
+    await prisma.deliveryPartnerApplication.deleteMany({ where: { userId: id } }).catch(() => {});
+    await prisma.verificationAuditLog.deleteMany({ where: { actorId: id } }).catch(() => {});
+    await prisma.user.delete({ where: { id } });
+    res.json({ success: true, message: 'User deleted successfully from database' });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc Delete Vendor Application
+// @route DELETE /api/admin/vendors/applications/:id
+const deleteVendorApplication = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    await prisma.vendorApplication.deleteMany({ where: { id } });
+    res.json({ success: true, message: 'Vendor application deleted from database' });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// @desc Delete Delivery Partner Application
+// @route DELETE /api/admin/delivery-partners/applications/:id
+const deleteDeliveryPartnerApplication = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    await prisma.deliveryPartnerApplication.deleteMany({ where: { id } });
+    res.json({ success: true, message: 'Delivery partner application deleted from database' });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getAdminMetrics,
   getUsers,
   updateUser,
+  deleteUser,
   updateProductPrice,
   getProductPriceHistory,
   updateProductImage,
   createProductVariant,
   getVendorApplications,
   updateVendorApplicationStatus,
+  deleteVendorApplication,
   getDeliveryPartnerApplications,
   updateDeliveryPartnerApplicationStatus,
+  deleteDeliveryPartnerApplication,
   resolveDispute,
   uploadImage,
-  getOrderDispatchHistory
+  getOrderDispatchHistory,
+  getRiderSelfies,
+  deleteRiderSelfie
 };

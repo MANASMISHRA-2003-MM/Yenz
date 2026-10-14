@@ -10,64 +10,56 @@ export async function reverseGeocode(latitude, longitude) {
   let pincode = '';
   let rawDisplayName = '';
 
-  // 1. Fetch BigDataCloud (Reliable administrative boundaries: city, district, state)
-  try {
-    const bdcRes = await fetch(
-      `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
-    );
-    if (bdcRes.ok) {
-      const bdcData = await bdcRes.json();
-      if (bdcData.locality || bdcData.city) {
-        city = bdcData.locality || bdcData.city;
-      }
-      if (bdcData.principalSubdivision) {
-        state = bdcData.principalSubdivision;
-      }
-      if (bdcData.postcode) {
-        pincode = bdcData.postcode;
-      }
+  const fetchWithTimeout = async (url, opts = {}, timeoutMs = 3500) => {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, { ...opts, signal: controller.signal });
+      return res;
+    } catch (e) {
+      return null;
+    } finally {
+      clearTimeout(id);
     }
-  } catch (e) {
-    console.warn('BigDataCloud reverse geocode warning:', e);
-  }
+  };
 
-  // 2. Fetch Photon (Best for precise landmark/society/block names, e.g. "Ansal Golf Links 1-Block C")
+  // Run BigDataCloud, Photon and Nominatim concurrently in parallel
+  const [bdcRes, pRes, nRes] = await Promise.allSettled([
+    fetchWithTimeout(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`),
+    fetchWithTimeout(`https://photon.komoot.io/reverse?lon=${longitude}&lat=${latitude}`, { headers: { 'User-Agent': 'Mozilla/5.0 YenzApp/1.0' } }),
+    fetchWithTimeout(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`)
+  ]);
+
+  // 1. Process BigDataCloud
   try {
-    const pRes = await fetch(
-      `https://photon.komoot.io/reverse?lon=${longitude}&lat=${latitude}`,
-      { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) YenzApp/1.0' } }
-    );
-    if (pRes.ok) {
-      const pData = await pRes.json();
-      if (pData && pData.features && pData.features.length > 0) {
+    if (bdcRes.status === 'fulfilled' && bdcRes.value && bdcRes.value.ok) {
+      const bdcData = await bdcRes.value.json();
+      if (bdcData.locality || bdcData.city) city = bdcData.locality || bdcData.city;
+      if (bdcData.principalSubdivision) state = bdcData.principalSubdivision;
+      if (bdcData.postcode) pincode = bdcData.postcode;
+    }
+  } catch (e) {}
+
+  // 2. Process Photon
+  try {
+    if (pRes.status === 'fulfilled' && pRes.value && pRes.value.ok) {
+      const pData = await pRes.value.json();
+      if (pData?.features?.length > 0) {
         const p = pData.features[0].properties;
         const nameParts = [p.name, p.street, p.district, p.locality, p.suburb].filter(Boolean);
         const uniqueParts = nameParts.filter((item, index) => nameParts.indexOf(item) === index);
-        if (uniqueParts.length > 0) {
-          street = uniqueParts.join(', ');
-        }
-        if (!city && (p.city || p.town || p.county)) {
-          city = p.city || p.town || p.county;
-        }
-        if (!state && p.state) {
-          state = p.state;
-        }
-        if (!pincode && p.postcode) {
-          pincode = p.postcode;
-        }
+        if (uniqueParts.length > 0) street = uniqueParts.join(', ');
+        if (!city && (p.city || p.town || p.county)) city = p.city || p.town || p.county;
+        if (!state && p.state) state = p.state;
+        if (!pincode && p.postcode) pincode = p.postcode;
       }
     }
-  } catch (e) {
-    console.warn('Photon reverse geocode warning:', e);
-  }
+  } catch (e) {}
 
-  // 3. Fetch Nominatim (Detailed address components & display_name)
+  // 3. Process Nominatim
   try {
-    const nRes = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`
-    );
-    if (nRes.ok) {
-      const nData = await nRes.json();
+    if (nRes.status === 'fulfilled' && nRes.value && nRes.value.ok) {
+      const nData = await nRes.value.json();
       if (nData) {
         rawDisplayName = nData.display_name || '';
         if (nData.address) {
@@ -78,21 +70,13 @@ export async function reverseGeocode(latitude, longitude) {
           if (!street || street.length < 4) {
             street = nomStreet || rawDisplayName.split(',')[0] || '';
           }
-          if (!city) {
-            city = a.city || a.town || a.district || a.city_district || a.county || a.state_district || '';
-          }
-          if (!state) {
-            state = a.state || '';
-          }
-          if (!pincode) {
-            pincode = a.postcode || '';
-          }
+          if (!city) city = a.city || a.town || a.district || a.city_district || a.county || a.state_district || '';
+          if (!state) state = a.state || '';
+          if (!pincode) pincode = a.postcode || '';
         }
       }
     }
-  } catch (e) {
-    console.warn('Nominatim reverse geocode warning:', e);
-  }
+  } catch (e) {}
 
   // Pure dynamic resolution without hardcoding any city or state
   if (!street) {

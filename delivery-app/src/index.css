@@ -122,6 +122,39 @@ body {
     color: #334155;
     margin-bottom: 0.35rem;
   }
+  .fc-btn-soft {
+    background: #F1F5F9;
+    border-color: #E2E8F0;
+    color: #334155;
+  }
+  .fc-btn-soft:hover {
+    background: #E2E8F0;
+    color: #0F172A;
+  }
+}
+
+.fc-navbar {
+  background: #ffffff;
+  border-bottom: 1px solid #E2E8F0;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.fc-topbar {
+  background: #F8FAFC;
+  border-bottom: 1px solid #E2E8F0;
+  color: #64748B;
+}
+
+.fc-nav-link {
+  color: #334155;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.fc-nav-link:hover, .fc-nav-link.active {
+  color: #16A34A;
 }
 
 /* Animations */

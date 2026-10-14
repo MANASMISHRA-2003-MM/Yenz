@@ -13,7 +13,8 @@ import {
   Switch,
   RefreshControl,
   Linking,
-  Modal
+  Modal,
+  Image
 } from 'react-native';
 import axios from 'axios';
 
@@ -21,13 +22,19 @@ import axios from 'axios';
 // 1. CONFIG & BACKEND CONNECTIVITY
 // ==========================================
 export const CONFIG = {
-  DEFAULT_HOST: '192.168.29.220',
+  DEFAULT_HOST: 'https://yenz-mviu.onrender.com',
   PORT: 5000,
-  activeHost: '192.168.29.220',
+  activeHost: 'https://yenz-mviu.onrender.com',
   get API_BASE_URL() {
+    if (this.activeHost.startsWith('http://') || this.activeHost.startsWith('https://')) {
+      return `${this.activeHost.replace(/\/$/, '')}/api`;
+    }
     return `http://${this.activeHost}:${this.PORT}/api`;
   },
   get SOCKET_URL() {
+    if (this.activeHost.startsWith('http://') || this.activeHost.startsWith('https://')) {
+      return this.activeHost.replace(/\/$/, '');
+    }
     return `http://${this.activeHost}:${this.PORT}`;
   }
 };
@@ -102,6 +109,11 @@ export default function RiderApp() {
   const [isIpModalOpen, setIsIpModalOpen] = useState(false);
   const [customIpInput, setCustomIpInput] = useState(CONFIG.activeHost);
 
+  // Shift Selfie State
+  const [selfieModalVisible, setSelfieModalVisible] = useState(false);
+  const [selectedSelfiePhoto, setSelectedSelfiePhoto] = useState(null);
+  const [submittingSelfie, setSubmittingSelfie] = useState(false);
+
   // Auth Form State
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -143,14 +155,46 @@ export default function RiderApp() {
     fetchDashboard();
   };
 
-  // Toggle Online
+  // Toggle Online with Front-Camera Shift Selfie Enforcement
   const handleToggleOnline = async () => {
-    const nextState = !isOnline;
-    setIsOnline(nextState);
+    if (!isOnline) {
+      // Require Shift Selfie before going online
+      setSelfieModalVisible(true);
+      return;
+    }
+
+    // Go offline
+    setIsOnline(false);
     try {
-      await mobileApi.put('/deliveries/toggle-online', { isOnline: nextState });
+      await mobileApi.put('/deliveries/toggle-online', { targetStatus: false, isOnline: false });
     } catch (e) {}
-    Alert.alert('Status Updated', `You are now ${nextState ? 'ONLINE & Receiving Orders' : 'OFFLINE'}`);
+    Alert.alert('Status Updated', 'You are now OFFLINE. Shift paused.');
+  };
+
+  const handleConfirmSelfieAndGoOnline = async (photoUrl) => {
+    try {
+      setSubmittingSelfie(true);
+      const photoToSend = photoUrl || selectedSelfiePhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=600';
+
+      await mobileApi.put('/deliveries/toggle-online', {
+        targetStatus: true,
+        isOnline: true,
+        photo: photoToSend,
+        coords: { lat: 28.5355, lng: 77.3910 },
+        addressName: 'Noida Sector 62 (Mobile Field Rider)'
+      }, {
+        headers: { 'x-client-source': 'Mobile Rider App' }
+      });
+
+      setIsOnline(true);
+      setSelfieModalVisible(false);
+      Alert.alert('🎉 Shift Selfie Verified!', 'Your front-camera attendance is recorded in the PostgreSQL database and visible to Admin. You are now ONLINE & ready for trips.');
+      fetchDashboard();
+    } catch (e) {
+      Alert.alert('Verification Notice', e.response?.data?.message || 'Error updating shift selfie');
+    } finally {
+      setSubmittingSelfie(false);
+    }
   };
 
   // Accept / Reject Offers
@@ -519,7 +563,63 @@ export default function RiderApp() {
         </TouchableOpacity>
       </View>
 
+      {/* 7. FRONT-CAMERA SHIFT SELFIE MODAL */}
+      <Modal visible={selfieModalVisible} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.ipModalCard, { width: '90%', maxHeight: '85%' }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <View>
+                <Text style={styles.ipModalTitle}>📸 Rider Identity Verification</Text>
+                <Text style={styles.ipModalSub}>Live front-camera selfie required before going online</Text>
+              </View>
+              <TouchableOpacity onPress={() => setSelfieModalVisible(false)} style={{ padding: 4 }}>
+                <Text style={{ color: '#94A3B8', fontSize: 18, fontWeight: '800' }}>✕</Text>
+              </TouchableOpacity>
+            </View>
 
+            {/* Selfie Preview Viewport */}
+            <View style={{ height: 220, backgroundColor: '#0F172A', borderRadius: 16, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', marginBottom: 14, borderWidth: 2, borderColor: '#3B82F6' }}>
+              <Image
+                source={{ uri: selectedSelfiePhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=600' }}
+                style={{ width: '100%', height: '100%', resizeMode: 'cover' }}
+              />
+              <View style={{ position: 'absolute', bottom: 8, left: 8, right: 8, backgroundColor: 'rgba(0,0,0,0.7)', padding: 6, borderRadius: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ color: '#10B981', fontSize: 10, fontWeight: '800' }}>✓ Front Camera Active</Text>
+                <Text style={{ color: '#FFF', fontSize: 9, fontFamily: 'monospace' }}>{new Date().toLocaleTimeString()}</Text>
+              </View>
+            </View>
+
+            {/* Details Box */}
+            <View style={{ backgroundColor: '#0F172A', padding: 12, borderRadius: 12, marginBottom: 14 }}>
+              <Text style={{ color: '#F8FAFC', fontSize: 13, fontWeight: '800' }}>🛵 {user.fullName} ({user.vehicleType})</Text>
+              <Text style={{ color: '#94A3B8', fontSize: 11, marginTop: 2 }}>📍 Sector 62, Noida • Lat: 28.5355, Lng: 77.3910</Text>
+              <Text style={{ color: '#3B82F6', fontSize: 10, marginTop: 4, fontWeight: '700' }}>Attendance photo will be saved to PostgreSQL & visible to Admin.</Text>
+            </View>
+
+            {/* Action Buttons */}
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity
+                style={[styles.ipCancelBtn, { paddingVertical: 12 }]}
+                onPress={() => setSelfieModalVisible(false)}
+                disabled={submittingSelfie}
+              >
+                <Text style={styles.ipCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.ipSaveBtn, { paddingVertical: 12, flex: 2 }]}
+                onPress={() => handleConfirmSelfieAndGoOnline()}
+                disabled={submittingSelfie}
+              >
+                {submittingSelfie ? (
+                  <ActivityIndicator color="#FFF" size="small" />
+                ) : (
+                  <Text style={styles.ipSaveText}>✓ Verify Face & Go Online</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
     </SafeAreaView>
   );

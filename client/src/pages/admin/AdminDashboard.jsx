@@ -12,7 +12,8 @@ import {
 } from 'recharts';
 import {
   ShieldCheck, CheckCircle2, XCircle, FileText, Store, Bike, Plus, Edit2,
-  Trash2, History, Utensils, ShoppingBag, Eye, Tag, AlertCircle, Search, X, FileCheck2
+  Trash2, History, Utensils, ShoppingBag, Eye, Tag, AlertCircle, Search, X, FileCheck2,
+  Camera, MapPin, Clock
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getUniversalProfileIcon } from '../../utils/imageUtils';
@@ -26,6 +27,8 @@ export default function AdminDashboard() {
   const [vendorApps, setVendorApps] = useState([]);
   const [driverApps, setDriverApps] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [riderSelfies, setRiderSelfies] = useState([]);
+  const [loadingSelfies, setLoadingSelfies] = useState(false);
 
   // Cravings & Fresh Mandi state
   const [cravingsVendors, setCravingsVendors] = useState([]);
@@ -137,16 +140,110 @@ export default function AdminDashboard() {
 
       if (resMetrics.data.success) setMetrics(resMetrics.data.metrics);
       if (resAnalytics.data.success) setAnalytics(resAnalytics.data);
-      if (resUsers.data.success) {
-        setUsers(resUsers.data.users);
-        setDrivers(resUsers.data.users.filter(u => (u.role || '').toUpperCase() === 'DELIVERY_PARTNER'));
-      }
       if (resOrders.data.success) setOrders(resOrders.data.orders);
-      if (resVendorApps.data.success) setVendorApps(resVendorApps.data.applications || []);
-      if (resDriverApps.data.success) setDriverApps(resDriverApps.data.applications || []);
       if (resCategories.data.success) setCategories(resCategories.data.categories || []);
       if (resCravings.data.success) setCravingsVendors(resCravings.data.restaurants || []);
-      if (resFresh.data.success) setFreshVendors(resFresh.data.restaurants || []);
+      if (resFresh.data?.success) setFreshVendors(resFresh.data.restaurants || []);
+
+      const isRealSelfie = (url) => {
+        if (!url || typeof url !== 'string') return false;
+        if (url.includes('icons8')) return false;
+        if (url.length < 80) return false;
+        return url.startsWith('data:image') || url.includes('cloudinary') || url.includes('unsplash');
+      };
+
+      let auditSelfies = [];
+      try {
+        const resSelfies = await API.get('/admin/delivery-partners/selfies').catch(() => null);
+        if (resSelfies?.data?.success && Array.isArray(resSelfies.data.selfies)) {
+          auditSelfies = resSelfies.data.selfies.filter(s => isRealSelfie(s.photo));
+        }
+      } catch (e) {}
+
+      if (resUsers?.data?.success && Array.isArray(resUsers.data.users)) {
+        setUsers(resUsers.data.users);
+        const driverList = resUsers.data.users.filter(u => (u.role || '').toUpperCase() === 'DELIVERY_PARTNER');
+        setDrivers(driverList);
+
+        let combinedSelfies = [...auditSelfies];
+        driverList
+          .filter(d => isRealSelfie(d.avatar))
+          .forEach(d => {
+            if (!combinedSelfies.some(s => s.actorId === d.id || s.id === 'driver-' + d.id || s.id === 'user-avatar-' + d.id)) {
+              combinedSelfies.push({
+                id: 'driver-' + d.id,
+                actorId: d.id,
+                action: 'RIDER_ONLINE_SELFIE',
+                riderName: d.fullName || d.name || 'Fleet Driver',
+                phone: d.phone || '',
+                photo: d.avatar,
+                coords: (d.latitude && d.longitude) ? { lat: d.latitude, lng: d.longitude } : null,
+                addressName: d.isOnline ? 'Online Shift Active' : 'Registered Driver Shift',
+                capturedAt: d.updatedAt || d.createdAt || new Date().toISOString(),
+                type: 'SHIFT_SELFIE'
+              });
+            }
+          });
+
+        try {
+          const cached = localStorage.getItem('milega_latest_rider_selfie');
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (isRealSelfie(parsed.photo) && !combinedSelfies.some(s => s.actorId === parsed.actorId)) {
+              combinedSelfies.unshift(parsed);
+            }
+          }
+        } catch (e) {}
+
+        setRiderSelfies(combinedSelfies);
+
+        // Synthesize direct registrations from users into vendorApps & driverApps so admin sees everyone who registered
+        const existingVendors = resVendorApps.data?.applications || [];
+        const existingDrivers = resDriverApps.data?.applications || [];
+        const combinedVendors = [...existingVendors];
+        const combinedDrivers = [...existingDrivers];
+
+        resUsers.data.users.forEach(u => {
+          const roleUpper = (u.role || '').toUpperCase();
+          if (roleUpper === 'VENDOR') {
+            if (!combinedVendors.some(v => v.userId === u.id || v.email === u.email)) {
+              combinedVendors.push({
+                id: 'user-' + u.id,
+                userId: u.id,
+                businessName: `${u.fullName || 'Partner Store'} (Direct Signup)`,
+                fullName: u.fullName,
+                phone: u.phone,
+                email: u.email,
+                address: u.address || 'Registered via Web/App',
+                city: 'Noida',
+                vendorType: 'CRAVINGS',
+                status: 'PENDING',
+                createdAt: u.createdAt || new Date().toISOString()
+              });
+            }
+          } else if (roleUpper === 'DELIVERY_PARTNER') {
+            if (!combinedDrivers.some(d => d.userId === u.id || d.email === u.email)) {
+              combinedDrivers.push({
+                id: 'user-' + u.id,
+                userId: u.id,
+                fullName: u.fullName,
+                phone: u.phone,
+                email: u.email,
+                vehicleType: u.vehicleType || 'Bike',
+                vehicleNumber: 'Direct Signup',
+                status: 'PENDING',
+                createdAt: u.createdAt || new Date().toISOString()
+              });
+            }
+          }
+        });
+
+        setVendorApps(combinedVendors);
+        setDriverApps(combinedDrivers);
+      } else {
+        if (resVendorApps.data?.success) setVendorApps(resVendorApps.data.applications || []);
+        if (resDriverApps.data?.success) setDriverApps(resDriverApps.data.applications || []);
+      }
     } catch (err) {
       console.error('Error fetching admin dashboard:', err);
     } finally {
@@ -162,6 +259,100 @@ export default function AdminDashboard() {
       }
     } catch (err) {
       toast.error('Failed to load store products');
+    }
+  };
+
+  const fetchRiderSelfies = async () => {
+    const isRealSelfie = (url) => {
+      if (!url || typeof url !== 'string') return false;
+      if (url.includes('icons8')) return false;
+      if (url.length < 80) return false;
+      return url.startsWith('data:image') || url.includes('cloudinary') || url.includes('unsplash');
+    };
+
+    try {
+      setLoadingSelfies(true);
+      let combined = [];
+
+      try {
+        const resSelfies = await API.get('/admin/delivery-partners/selfies').catch(() => null);
+        if (resSelfies?.data?.success && Array.isArray(resSelfies.data.selfies)) {
+          combined = resSelfies.data.selfies.filter(s => isRealSelfie(s.photo));
+        }
+      } catch (e) {}
+
+      const res = await API.get('/admin/users');
+      if (res.data?.success && Array.isArray(res.data.users)) {
+        const driversList = res.data.users.filter(u => (u.role || '').toUpperCase() === 'DELIVERY_PARTNER');
+        setDrivers(driversList);
+        driversList.forEach(d => {
+          if (isRealSelfie(d.avatar) && !combined.some(s => s.actorId === d.id || s.id === 'driver-' + d.id || s.id === 'user-avatar-' + d.id)) {
+            combined.push({
+              id: 'driver-' + d.id,
+              actorId: d.id,
+              action: 'RIDER_ONLINE_SELFIE',
+              riderName: d.fullName || d.name || 'Fleet Driver',
+              phone: d.phone || '',
+              photo: d.avatar,
+              coords: (d.latitude && d.longitude) ? { lat: d.latitude, lng: d.longitude } : null,
+              addressName: d.isOnline ? 'Online Shift Active' : 'Registered Driver Shift',
+              capturedAt: d.updatedAt || d.createdAt || new Date().toISOString(),
+              type: 'SHIFT_SELFIE'
+            });
+          }
+        });
+      }
+
+      try {
+        const cached = localStorage.getItem('milega_latest_rider_selfie');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (isRealSelfie(parsed.photo) && !combined.some(s => s.actorId === parsed.actorId)) {
+            combined.unshift(parsed);
+          }
+        }
+      } catch (e) {}
+
+      setRiderSelfies(combined);
+    } catch (err) {
+      console.warn('Driver records fetch error:', err?.message);
+    } finally {
+      setLoadingSelfies(false);
+    }
+  };
+
+  const handleDeleteDriverSelfie = async (selfie) => {
+    const riderName = selfie.riderName || 'this driver';
+    if (!window.confirm(`Are you sure you want to delete the shift selfie for ${riderName}?`)) {
+      return;
+    }
+    const driverId = selfie.actorId || (selfie.id ? selfie.id.replace('driver-', '') : null);
+    if (!driverId) {
+      toast.error('Driver ID not found');
+      return;
+    }
+    try {
+      // 1. Reset avatar in User database record
+      await API.put(`/admin/users/${driverId}`, {
+        avatar: 'https://img.icons8.com/?size=100&id=85147&format=png&color=000000'
+      });
+
+      // 2. Clear selfie from audit logs in database
+      await API.delete(`/admin/delivery-partners/selfies/${selfie.id || driverId}`, {
+        data: { actorId: driverId }
+      }).catch(e => console.warn('Selfie audit delete warning:', e.message));
+
+      try {
+        localStorage.removeItem('milega_latest_rider_selfie');
+      } catch (e) {}
+
+      setRiderSelfies(prev => prev.filter(s => s.id !== selfie.id && s.actorId !== driverId));
+      setDrivers(prev => prev.map(d => d.id === driverId ? { ...d, avatar: 'https://img.icons8.com/?size=100&id=85147&format=png&color=000000' } : d));
+      setUsers(prev => prev.map(u => u.id === driverId ? { ...u, avatar: 'https://img.icons8.com/?size=100&id=85147&format=png&color=000000' } : u));
+      toast.success(`Deleted verification selfie for ${riderName} from database`);
+    } catch (err) {
+      console.error('Failed to delete selfie:', err);
+      toast.error('Failed to delete driver selfie from database');
     }
   };
 
@@ -191,11 +382,45 @@ export default function AdminDashboard() {
 
   const handleVendorAppStatus = async (appId, status) => {
     try {
-      const res = await API.put(`/admin/vendors/applications/${appId}/status`, { status });
-      if (res.data.success) {
-        toast.success(`Vendor application ${status}`);
+      const app = vendorApps.find(a => a.id === appId);
+      const userId = app?.userId || (appId.startsWith('user-') ? appId.replace('user-', '') : null);
+
+      if (status === 'APPROVED') {
+        const vendorType = (app?.vendorType && app.vendorType.toUpperCase().includes('FRESH')) ? 'FRESH' : 'CRAVINGS';
+
+        if (!appId.startsWith('user-')) {
+          await API.put(`/admin/vendors/applications/${appId}/status`, { status: 'APPROVED', vendorType }).catch(() => {});
+        }
+
+        if (userId) {
+          await API.put(`/admin/users/${userId}`, { role: 'VENDOR', status: 'ACTIVE', isVerified: true }).catch(() => {});
+        }
+
+        try {
+          await API.post('/restaurants', {
+            ownerUserId: userId,
+            name: app?.businessName?.replace(' (Direct Signup)', '') || `${app?.fullName || 'Partner'}'s Store`,
+            vendorType,
+            phone: app?.phone,
+            email: app?.email,
+            address: app?.address || 'Main Market',
+            city: app?.city || 'Noida'
+          });
+        } catch (e) {}
+
+        toast.success(`Store approved and created under ${vendorType === 'FRESH' ? 'FRESH MANDI' : 'CRAVINGS (Food)'}!`);
         fetchAdminData();
+        return;
       }
+
+      if (!appId.startsWith('user-')) {
+        await API.put(`/admin/vendors/applications/${appId}/status`, { status });
+      }
+      if (userId) {
+        await API.put(`/admin/users/${userId}`, { status: 'REJECTED', isVerified: false }).catch(() => {});
+      }
+      toast.success(`Vendor application ${status}`);
+      fetchAdminData();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Status update failed');
     }
@@ -203,13 +428,71 @@ export default function AdminDashboard() {
 
   const handleDriverAppStatus = async (appId, status) => {
     try {
-      const res = await API.put(`/admin/delivery-partners/applications/${appId}/status`, { status });
-      if (res.data.success) {
-        toast.success(`Driver application ${status}`);
+      const app = driverApps.find(a => a.id === appId);
+      const userId = app?.userId || (appId.startsWith('user-') ? appId.replace('user-', '') : null);
+
+      if (status === 'APPROVED') {
+        if (!appId.startsWith('user-')) {
+          await API.put(`/admin/delivery-partners/applications/${appId}/status`, { status: 'APPROVED' }).catch(() => {});
+        }
+        if (userId) {
+          await API.put(`/admin/users/${userId}`, { role: 'DELIVERY_PARTNER', status: 'ACTIVE', isVerified: true }).catch(() => {});
+        }
+        toast.success('Driver application approved & activated! Visible in Available Drivers.');
         fetchAdminData();
+        return;
       }
+
+      if (!appId.startsWith('user-')) {
+        await API.put(`/admin/delivery-partners/applications/${appId}/status`, { status });
+      }
+      if (userId) {
+        await API.put(`/admin/users/${userId}`, { status: 'REJECTED', isVerified: false }).catch(() => {});
+      }
+      toast.success(`Driver application ${status}`);
+      fetchAdminData();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Status update failed');
+    }
+  };
+
+  const handleDeleteVendorApp = async (app) => {
+    const name = app.businessName || app.fullName || 'this store application';
+    if (!window.confirm(`Permanently delete vendor application for "${name}" from database?`)) return;
+    try {
+      const userId = app.userId || (app.id.startsWith('user-') ? app.id.replace('user-', '') : null);
+      if (!app.id.startsWith('user-')) {
+        await API.delete(`/admin/vendors/applications/${app.id}`).catch(() => {});
+      }
+      if (userId) {
+        await API.delete(`/admin/users/${userId}`).catch(async () => {
+          await API.put(`/admin/users/${userId}`, { status: 'DELETED', isActive: false }).catch(() => {});
+        });
+      }
+      setVendorApps(prev => prev.filter(v => v.id !== app.id && v.userId !== userId));
+      toast.success(`Application for "${name}" deleted from database`);
+    } catch (err) {
+      toast.error('Failed to delete vendor application');
+    }
+  };
+
+  const handleDeleteDriverApp = async (app) => {
+    const name = app.fullName || 'this driver application';
+    if (!window.confirm(`Permanently delete driver application for "${name}" from database?`)) return;
+    try {
+      const userId = app.userId || (app.id.startsWith('user-') ? app.id.replace('user-', '') : null);
+      if (!app.id.startsWith('user-')) {
+        await API.delete(`/admin/delivery-partners/applications/${app.id}`).catch(() => {});
+      }
+      if (userId) {
+        await API.delete(`/admin/users/${userId}`).catch(async () => {
+          await API.put(`/admin/users/${userId}`, { status: 'DELETED', isActive: false }).catch(() => {});
+        });
+      }
+      setDriverApps(prev => prev.filter(d => d.id !== app.id && d.userId !== userId));
+      toast.success(`Application for "${name}" deleted from database`);
+    } catch (err) {
+      toast.error('Failed to delete driver application');
     }
   };
 
@@ -304,7 +587,7 @@ export default function AdminDashboard() {
       <Navbar />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-        
+
         {/* Admin Title & Mode Tabs */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200/90 shadow-soft">
           <div className="flex items-center gap-4">
@@ -328,6 +611,7 @@ export default function AdminDashboard() {
               { id: 'categories', label: 'Categories' },
               { id: 'vendor_apps', label: `Vendor Apps (${vendorApps.filter(a => a.status === 'PENDING').length})` },
               { id: 'driver_apps', label: `Driver Apps (${driverApps.filter(a => a.status === 'PENDING').length})` },
+              { id: 'rider_selfies', label: `Rider Shift Selfies (${riderSelfies.filter(s => s.photo && !s.photo.includes('icons8')).length})` },
               { id: 'users', label: 'Users' },
               { id: 'orders', label: 'Orders' }
             ].map(tab => (
@@ -337,12 +621,12 @@ export default function AdminDashboard() {
                   setActiveTab(tab.id);
                   if (tab.id === 'cravings') setSelectedVendor(cravingsVendors[0] || null);
                   if (tab.id === 'fresh') setSelectedVendor(freshVendors[0] || null);
+                  if (tab.id === 'rider_selfies') fetchRiderSelfies();
                 }}
-                className={`px-3 py-2 rounded-xl text-xs font-extrabold transition ${
-                  activeTab === tab.id
+                className={`px-3 py-2 rounded-xl text-xs font-extrabold transition ${activeTab === tab.id
                     ? 'bg-purple-600 text-white shadow-sm'
                     : 'text-slate-600 hover:text-slate-900'
-                }`}
+                  }`}
               >
                 {tab.label}
               </button>
@@ -474,11 +758,10 @@ export default function AdminDashboard() {
                     <div
                       key={v._id || v.id}
                       onClick={() => setSelectedVendor(v)}
-                      className={`p-4 rounded-2xl border transition cursor-pointer flex items-center gap-3 ${
-                        (selectedVendor?._id || selectedVendor?.id) === (v._id || v.id)
+                      className={`p-4 rounded-2xl border transition cursor-pointer flex items-center gap-3 ${(selectedVendor?._id || selectedVendor?.id) === (v._id || v.id)
                           ? 'bg-amber-50 border-amber-300 shadow-sm'
                           : 'bg-white border-slate-200/90 hover:border-slate-300'
-                      }`}
+                        }`}
                     >
                       <img src={v.image || v.bannerImage || '/favicon.png'} alt="logo" className="w-12 h-12 rounded-xl object-contain bg-slate-50 border border-slate-200 p-0.5" />
                       <div className="flex-1 min-w-0">
@@ -722,11 +1005,10 @@ export default function AdminDashboard() {
                     <div
                       key={v._id || v.id}
                       onClick={() => setSelectedVendor(v)}
-                      className={`p-4 rounded-2xl border transition cursor-pointer flex items-center gap-3 ${
-                        (selectedVendor?._id || selectedVendor?.id) === (v._id || v.id)
+                      className={`p-4 rounded-2xl border transition cursor-pointer flex items-center gap-3 ${(selectedVendor?._id || selectedVendor?.id) === (v._id || v.id)
                           ? 'bg-emerald-50 border-emerald-300 shadow-sm'
                           : 'bg-white border-slate-200/90 hover:border-slate-300'
-                      }`}
+                        }`}
                     >
                       <img src={v.image || v.bannerImage || '/favicon.png'} alt="logo" className="w-12 h-12 rounded-xl object-contain bg-slate-50 border border-slate-200 p-0.5" />
                       <div className="flex-1 min-w-0">
@@ -987,10 +1269,9 @@ export default function AdminDashboard() {
                         <div>Bank: {app.documents?.bankAccount || 'Masked'}</div>
                       </td>
                       <td className="p-3">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
-                          app.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-800' :
-                          app.status === 'REJECTED' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'
-                        }`}>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${app.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-800' :
+                            app.status === 'REJECTED' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'
+                          }`}>
                           {app.status}
                         </span>
                       </td>
@@ -999,13 +1280,13 @@ export default function AdminDashboard() {
                           <>
                             <button
                               onClick={() => handleVendorAppStatus(app.id, 'APPROVED')}
-                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[10px] rounded-xl flex items-center gap-1"
+                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[10px] rounded-xl flex items-center gap-1 shadow-sm transition"
                             >
                               <CheckCircle2 className="w-3.5 h-3.5" /> Approve
                             </button>
                             <button
                               onClick={() => handleVendorAppStatus(app.id, 'REJECTED')}
-                              className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-[10px] rounded-xl flex items-center gap-1"
+                              className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-[10px] rounded-xl flex items-center gap-1 shadow-sm transition"
                             >
                               <XCircle className="w-3.5 h-3.5" /> Reject
                             </button>
@@ -1013,6 +1294,14 @@ export default function AdminDashboard() {
                         ) : (
                           <span className="text-slate-400 font-bold text-[10px]">Verified</span>
                         )}
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteVendorApp(app)}
+                          className="p-1.5 bg-slate-100 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-xl transition border border-slate-200"
+                          title="Directly delete vendor application from database"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -1058,10 +1347,9 @@ export default function AdminDashboard() {
                         <div>Aadhaar: {app.documents?.aadhaarNumber || 'Masked'}</div>
                       </td>
                       <td className="p-3">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
-                          app.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-800' :
-                          app.status === 'REJECTED' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'
-                        }`}>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${app.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-800' :
+                            app.status === 'REJECTED' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'
+                          }`}>
                           {app.status}
                         </span>
                       </td>
@@ -1070,13 +1358,13 @@ export default function AdminDashboard() {
                           <>
                             <button
                               onClick={() => handleDriverAppStatus(app.id, 'APPROVED')}
-                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[10px] rounded-xl flex items-center gap-1"
+                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[10px] rounded-xl flex items-center gap-1 shadow-sm transition"
                             >
                               <CheckCircle2 className="w-3.5 h-3.5" /> Approve
                             </button>
                             <button
                               onClick={() => handleDriverAppStatus(app.id, 'REJECTED')}
-                              className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-[10px] rounded-xl flex items-center gap-1"
+                              className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-[10px] rounded-xl flex items-center gap-1 shadow-sm transition"
                             >
                               <XCircle className="w-3.5 h-3.5" /> Reject
                             </button>
@@ -1084,6 +1372,14 @@ export default function AdminDashboard() {
                         ) : (
                           <span className="text-slate-400 font-bold text-[10px]">Verified</span>
                         )}
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteDriverApp(app)}
+                          className="p-1.5 bg-slate-100 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-xl transition border border-slate-200"
+                          title="Directly delete driver application from database"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -1252,7 +1548,148 @@ export default function AdminDashboard() {
           </div>
         )}
 
-      <FreshCartFooter />
+        {/* RIDER SHIFT SELFIES & ATTENDANCE TAB */}
+        {activeTab === 'rider_selfies' && (
+          <div className="space-y-4">
+            <div className="bg-white rounded-3xl border border-slate-200/90 shadow-soft p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-purple-100 text-purple-700 rounded-xl">
+                    <Camera className="w-5 h-5" />
+                  </div>
+                  <h2 className="text-base font-extrabold text-slate-900">Rider Shift Front Camera Selfies</h2>
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-purple-600 text-white">
+                    {riderSelfies.filter(s => s.photo && !s.photo.includes('icons8')).length} Records
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 font-medium mt-1">
+                  Front camera live verification photos captured every time a delivery driver goes online. Stored in PostgreSQL audit log.
+                </p>
+              </div>
+              <button
+                onClick={fetchRiderSelfies}
+                disabled={loadingSelfies}
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs rounded-xl flex items-center gap-2 transition disabled:opacity-50"
+              >
+                <Camera className={`w-3.5 h-3.5 ${loadingSelfies ? 'animate-spin' : ''}`} />
+                {loadingSelfies ? 'Refreshing...' : 'Refresh Records'}
+              </button>
+            </div>
+
+            {loadingSelfies ? (
+              <div className="p-12 text-center text-slate-400 font-bold text-xs bg-white rounded-3xl border border-slate-200">
+                Loading live rider verification selfies...
+              </div>
+            ) : riderSelfies.filter(s => s.photo && !s.photo.includes('icons8')).length === 0 ? (
+              <div className="p-12 text-center bg-white rounded-3xl border border-slate-200 space-y-2">
+                <Camera className="w-8 h-8 text-slate-300 mx-auto" />
+                <p className="text-sm font-extrabold text-slate-700">No shift selfies recorded yet</p>
+                <p className="text-xs text-slate-400">When delivery riders click "Go Online" in their dashboard, their front-camera verification will appear here.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {riderSelfies
+                  .filter(selfie => selfie.photo && !selfie.photo.includes('icons8'))
+                  .map(selfie => (
+                  <div
+                    key={selfie.id}
+                    className="bg-white rounded-3xl border border-slate-200/90 shadow-soft overflow-hidden flex flex-col hover:border-purple-300 transition group hover:shadow-md"
+                  >
+                    {/* Real Face Photo Viewport */}
+                    <div
+                      onClick={() => setProofPhotoModal({ isOpen: true, url: selfie.photo, title: `Shift Verification: ${selfie.riderName}` })}
+                      className="relative h-64 bg-slate-950 cursor-pointer overflow-hidden group-hover:opacity-95 transition"
+                    >
+                      {selfie.photo ? (
+                        <img
+                          src={selfie.photo}
+                          alt={selfie.riderName}
+                          className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-slate-600 text-xs">
+                          No Photo
+                        </div>
+                      )}
+                      <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between z-10">
+                        {selfie.action === 'VENDOR_HANDOVER_PHOTO' || selfie.type === 'VENDOR_HANDOVER' ? (
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500 text-white shadow-sm flex items-center gap-1">
+                            <Store className="w-3 h-3" /> Store Handover Photo
+                          </span>
+                        ) : selfie.action === 'RIDER_DELIVERY_PHOTO' || selfie.type === 'DELIVERY_PROOF' ? (
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-600 text-white shadow-sm flex items-center gap-1">
+                            <Bike className="w-3 h-3" /> Delivery Doorstep Proof
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500 text-white shadow-sm flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3" /> Live Front-Cam Selfie
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteDriverSelfie(selfie);
+                          }}
+                          className="p-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-90 text-white shadow-lg transition flex items-center justify-center cursor-pointer"
+                          title="Delete this driver verification selfie"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/85 via-black/40 to-transparent text-white text-[11px] flex items-center justify-between">
+                        <span className="font-bold flex items-center gap-1.5 text-purple-200">
+                          <Eye className="w-3.5 h-3.5 text-purple-300" /> Tap to Enlarge
+                        </span>
+                        <span className="text-white font-mono text-[11px] font-extrabold bg-black/50 px-2 py-0.5 rounded-md">
+                          {new Date(selfie.capturedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Card Details with Date & Time Prominently Displayed */}
+                    <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-sm font-black text-slate-900 truncate">{selfie.riderName}</h4>
+                          <span className="px-2 py-0.5 bg-purple-50 text-purple-700 border border-purple-200 rounded-lg text-[10px] font-black">
+                            {new Date(selfie.capturedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          </span>
+                        </div>
+                        {selfie.phone && (
+                          <p className="text-xs font-bold text-slate-500">📞 {selfie.phone}</p>
+                        )}
+                      </div>
+
+                      {/* Date & Time Timestamp Box */}
+                      <div className="flex items-center gap-2 text-[11px] font-extrabold text-slate-600 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100">
+                        <Clock className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                        <span>Captured: {new Date(selfie.capturedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })} ({new Date(selfie.capturedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })})</span>
+                      </div>
+
+                      {/* Location Box */}
+                      <div className="bg-slate-50 p-2.5 rounded-2xl border border-slate-100 text-[11px] text-slate-600 space-y-1">
+                        <div className="flex items-start gap-1 font-semibold text-slate-700">
+                          <MapPin className="w-3.5 h-3.5 text-purple-600 shrink-0 mt-0.5" />
+                          <span className="line-clamp-2">
+                            {selfie.addressName || 'Live GPS Location Recorded'}
+                          </span>
+                        </div>
+                        {selfie.coords && (
+                          <div className="text-[10px] font-mono text-slate-400 pl-4.5">
+                            {Number(selfie.coords.lat || selfie.coords.latitude).toFixed(4)}°, {Number(selfie.coords.lng || selfie.coords.longitude).toFixed(4)}°
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        <FreshCartFooter />
       </main>
 
       {/* Product Modal */}

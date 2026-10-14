@@ -38,7 +38,7 @@ const formatUserResponse = (user) => {
     email: user.email,
     role: mapToFrontendRole(user.role),
     phone: user.phone || '',
-    avatar: 'https://img.icons8.com/?size=100&id=85147&format=png&color=000000',
+    avatar: user.avatar || 'https://img.icons8.com/?size=100&id=85147&format=png&color=000000',
     vehicleType: user.vehicleType || 'Bike'
   });
 };
@@ -47,7 +47,22 @@ const formatUserResponse = (user) => {
 // @route POST /api/auth/register
 const registerUser = async (req, res, next) => {
   try {
-    const { name, email, password, role, phone, vehicleType } = req.body;
+    const {
+      name,
+      email,
+      password,
+      role,
+      phone,
+      vehicleType,
+      shopName,
+      vendorType,
+      address,
+      city,
+      state,
+      pincode,
+      vehicleNumber,
+      dlNumber
+    } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({ success: false, message: 'Please provide name, email, and password' });
@@ -86,9 +101,45 @@ const registerUser = async (req, res, next) => {
         phone: formattedPhone,
         passwordHash: hashedPassword,
         role: prismaRole,
-        vehicleType: vehicleType || 'Bike'
+        vehicleType: vehicleType || 'Bike',
+        status: (prismaRole === 'VENDOR' || prismaRole === 'DELIVERY_PARTNER') ? 'pending_verification' : 'active'
       }
     });
+
+    // If registering as VENDOR or DELIVERY_PARTNER, automatically log into Applications Hub for admin review
+    if (prismaRole === 'VENDOR') {
+      await prisma.vendorApplication.create({
+        data: {
+          id: crypto.randomUUID(),
+          userId: user.id,
+          fullName: name,
+          businessName: (shopName && shopName.trim()) || `${name}'s Store`,
+          vendorType: (vendorType && vendorType.toUpperCase().includes('FRESH')) ? 'FRESH' : 'CRAVINGS',
+          phone: formattedPhone,
+          email: cleanEmail,
+          address: (address && address.trim()) || 'Pending Onboarding',
+          city: (city && city.trim()) || 'Noida',
+          state: state || 'UP',
+          pincode: pincode || '201301',
+          status: 'PENDING'
+        }
+      }).catch(e => console.warn('[Auto Application] Vendor create notice:', e.message));
+    } else if (prismaRole === 'DELIVERY_PARTNER') {
+      await prisma.deliveryPartnerApplication.create({
+        data: {
+          id: crypto.randomUUID(),
+          userId: user.id,
+          fullName: name,
+          phone: formattedPhone,
+          email: cleanEmail,
+          address: (address && address.trim()) || 'Pending Onboarding',
+          vehicleType: vehicleType || 'Bike',
+          vehicleNumber: (vehicleNumber && vehicleNumber.trim()) || 'Pending Registration',
+          dlNumber: (dlNumber && dlNumber.trim()) || 'Pending Verification',
+          status: 'PENDING'
+        }
+      }).catch(e => console.warn('[Auto Application] Delivery Partner create notice:', e.message));
+    }
 
     const token = generateToken(user.id);
     const formattedUser = formatUserResponse(user);

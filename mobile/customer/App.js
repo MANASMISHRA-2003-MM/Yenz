@@ -60,13 +60,19 @@ export const THEME = {
 // 2. CONFIG & BACKEND CONNECTIVITY
 // ==========================================
 export const CONFIG = {
-  DEFAULT_HOST: '192.168.29.220',
+  DEFAULT_HOST: 'https://yenz-mviu.onrender.com',
   PORT: 5000,
-  activeHost: '192.168.29.220',
+  activeHost: 'https://yenz-mviu.onrender.com',
   get API_BASE_URL() {
+    if (this.activeHost.startsWith('http://') || this.activeHost.startsWith('https://')) {
+      return `${this.activeHost.replace(/\/$/, '')}/api`;
+    }
     return `http://${this.activeHost}:${this.PORT}/api`;
   },
   get SOCKET_URL() {
+    if (this.activeHost.startsWith('http://') || this.activeHost.startsWith('https://')) {
+      return this.activeHost.replace(/\/$/, '');
+    }
     return `http://${this.activeHost}:${this.PORT}`;
   }
 };

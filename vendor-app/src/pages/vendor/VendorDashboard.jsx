@@ -38,6 +38,7 @@ import { requestNotificationPermission, showBrowserAlert } from '../../utils/bro
 import StoreStatusSlider from '../../components/StoreStatusSlider';
 import CameraCaptureModal from '../../components/CameraCaptureModal';
 import MasterMenuStickyBar from '../../components/MasterMenuStickyBar';
+import { useAuth } from '../../context/AuthContext';
 
 const formatOrderTiming = (dateStr) => {
   if (!dateStr) return { time: 'Recently', elapsed: 'Just now' };
@@ -59,6 +60,7 @@ const getPredictedETA = (dateStr, prepOrDeliveryMinutes = 35) => {
 };
 
 export default function VendorDashboard() {
+  const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialTab = searchParams.get('tab') || 'orders';
 
@@ -263,6 +265,14 @@ export default function VendorDashboard() {
   };
 
   const handleToggleStoreStatus = async () => {
+    if (!restaurant) {
+      toast.warning('🔒 Store Pending Verification: Your vendor store is waiting for platform admin approval in the Applications Hub. Going online will unlock once approved by the admin.');
+      return;
+    }
+    if (restaurant.isVerified === false || restaurant.status === 'pending_approval' || (user?.status === 'pending_verification')) {
+      toast.warning('🔒 Store Pending Verification: Your shop is currently under review by the platform admin. Going online will be enabled once approved.');
+      return;
+    }
     try {
       setTogglingStatus(true);
       const res = await API.put('/restaurants/vendor/toggle-status');
@@ -485,6 +495,23 @@ export default function VendorDashboard() {
                   <span>Reject Order</span>
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {(!restaurant || restaurant.isVerified === false || restaurant.status === 'pending_approval' || user?.status === 'pending_verification') && (
+          <div className="bg-amber-50 border border-amber-200 rounded-3xl p-5 flex items-start gap-4 text-amber-900 shadow-soft">
+            <div className="w-10 h-10 rounded-2xl bg-amber-100 flex items-center justify-center shrink-0 text-amber-700">
+              <Clock className="w-5 h-5" />
+            </div>
+            <div className="flex-1">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-200/80 text-amber-900 text-[10px] font-extrabold uppercase mb-1">
+                Admin Verification Pending
+              </div>
+              <h3 className="text-sm font-extrabold text-amber-950">Store Registration Under Platform Review</h3>
+              <p className="text-xs text-amber-800/90 mt-1">
+                Your shop application has been submitted to the platform admin. You can view your dashboard, but going online / opening your store to customers will unlock automatically as soon as the admin verifies and approves your application in the Applications Hub.
+              </p>
             </div>
           </div>
         )}

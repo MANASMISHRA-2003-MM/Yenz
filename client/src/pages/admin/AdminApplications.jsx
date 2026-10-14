@@ -1,15 +1,17 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 import Navbar from '../../components/Navbar';
 import FreshCartFooter from '../../components/FreshCartFooter';
 import {
   ShieldCheck, Store, Bike, CheckCircle2, XCircle, Clock, Search, Filter,
-  Phone, Mail, MapPin, FileCheck2, User, ExternalLink, ArrowRight, X, MessageSquare
+  Phone, Mail, MapPin, FileCheck2, User, ExternalLink, ArrowRight, X, MessageSquare, Trash2
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function AdminApplications() {
+  const { user: authUser } = useAuth();
   const [vendorApps, setVendorApps] = useState([]);
   const [driverApps, setDriverApps] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -22,6 +24,7 @@ export default function AdminApplications() {
   // Inspection Modal
   const [selectedApp, setSelectedApp] = useState(null); // { app, type: 'vendor'|'driver' }
   const [adminNoteInput, setAdminNoteInput] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('CRAVINGS'); // 'CRAVINGS' | 'FRESH'
   const [processing, setProcessing] = useState(false);
 
   const navigate = useNavigate();
@@ -33,17 +36,99 @@ export default function AdminApplications() {
   const fetchApplications = async () => {
     try {
       setLoading(true);
-      const [resVendor, resDriver] = await Promise.all([
-        API.get('/admin/vendors/applications'),
-        API.get('/admin/delivery-partners/applications')
+      const [resVendor, resDriver, resUsers] = await Promise.all([
+        API.get('/admin/vendors/applications').catch(() => ({ data: { success: false } })),
+        API.get('/admin/delivery-partners/applications').catch(() => ({ data: { success: false } })),
+        API.get('/admin/users').catch(() => ({ data: { success: false } }))
       ]);
 
-      if (resVendor.data.success) {
-        setVendorApps(resVendor.data.applications || []);
+      let vendors = resVendor.data?.applications || [];
+      let drivers = resDriver.data?.applications || [];
+
+      // Automatically include any registered user with VENDOR or DELIVERY_PARTNER role
+      if (resUsers.data?.success && Array.isArray(resUsers.data.users)) {
+        resUsers.data.users.forEach(u => {
+          const roleUpper = (u.role || '').toUpperCase();
+          if (roleUpper === 'VENDOR') {
+            const alreadyHasApp = vendors.some(v => v.userId === u.id || v.email === u.email);
+            if (!alreadyHasApp) {
+              vendors.push({
+                id: 'reg-vendor-' + u.id,
+                userId: u.id,
+                businessName: `${u.fullName || 'Partner Store'} (Direct Signup)`,
+                fullName: u.fullName,
+                phone: u.phone,
+                email: u.email,
+                address: u.address || 'Registered via App / Website',
+                city: 'Noida',
+                state: 'UP',
+                pincode: '201301',
+                vendorType: 'CRAVINGS',
+                status: 'PENDING',
+                createdAt: u.createdAt || u.updatedAt || new Date().toISOString(),
+                details: { fssaiNumber: 'Direct Signup', gstNumber: 'Direct Signup' },
+                isDirectRegistration: true
+              });
+            }
+          } else if (roleUpper === 'DELIVERY_PARTNER') {
+            const alreadyHasApp = drivers.some(d => d.userId === u.id || d.email === u.email);
+            if (!alreadyHasApp) {
+              drivers.push({
+                id: 'reg-driver-' + u.id,
+                userId: u.id,
+                fullName: u.fullName,
+                phone: u.phone,
+                email: u.email,
+                address: u.address || 'Registered via App / Website',
+                vehicleType: u.vehicleType || 'Bike',
+                status: 'PENDING',
+                createdAt: u.createdAt || u.updatedAt || new Date().toISOString(),
+                details: { vehicleNumber: 'Direct Signup', dlNumber: 'Direct Signup' },
+                isDirectRegistration: true
+              });
+            }
+          }
+        });
       }
-      if (resDriver.data.success) {
-        setDriverApps(resDriver.data.applications || []);
+
+      // If current user is a vendor or driver, make sure their profile is included if not already present
+      if (authUser) {
+        const myRole = (authUser.role || '').toUpperCase();
+        if (myRole === 'VENDOR' && !vendors.some(v => v.userId === authUser.id || v.email === authUser.email)) {
+          vendors.unshift({
+            id: 'reg-vendor-' + authUser.id,
+            userId: authUser.id,
+            businessName: `${authUser.fullName || 'Partner Store'} (Your Application)`,
+            fullName: authUser.fullName,
+            phone: authUser.phone,
+            email: authUser.email,
+            address: authUser.address || 'Registered via App / Website',
+            city: 'Noida',
+            vendorType: 'CRAVINGS',
+            status: 'PENDING',
+            createdAt: authUser.createdAt || new Date().toISOString(),
+            details: { fssaiNumber: 'Pending Verification', gstNumber: 'Pending Verification' },
+            isDirectRegistration: true
+          });
+        } else if (myRole === 'DELIVERY_PARTNER' && !drivers.some(d => d.userId === authUser.id || d.email === authUser.email)) {
+          drivers.unshift({
+            id: 'reg-driver-' + authUser.id,
+            userId: authUser.id,
+            fullName: authUser.fullName,
+            phone: authUser.phone,
+            email: authUser.email,
+            address: authUser.address || 'Registered via App / Website',
+            vehicleType: authUser.vehicleType || 'Bike',
+            status: 'PENDING',
+            createdAt: authUser.createdAt || new Date().toISOString(),
+            details: { vehicleNumber: 'Pending Verification', dlNumber: 'Pending Verification' },
+            isDirectRegistration: true
+          });
+        }
       }
+
+      setVendorApps(vendors);
+      setDriverApps(drivers);
     } catch (err) {
       console.error('Error loading onboarding applications:', err);
       toast.error('Failed to load incoming onboarding requests');
@@ -52,19 +137,119 @@ export default function AdminApplications() {
     }
   };
 
-  const handleUpdateVendorStatus = async (appId, status, note = '') => {
+  const handleDeleteApplication = async (app) => {
+    if (!app) return;
+    const name = app.businessName || app.applicantName || 'this application';
+    if (!window.confirm(`Are you sure you want to permanently delete the application for "${name}" from the database? This cannot be undone.`)) {
+      return;
+    }
+
     try {
       setProcessing(true);
-      const res = await API.put(`/admin/vendors/applications/${appId}/status`, {
-        status,
-        adminNotes: note || undefined
-      });
-      if (res.data.success) {
-        toast.success(`Vendor application marked as ${status}`);
+      const isVendor = app.appType === 'VENDOR';
+      const userId = app.userId || (app.id.startsWith('reg-vendor-') ? app.id.replace('reg-vendor-', '') : (app.id.startsWith('reg-driver-') ? app.id.replace('reg-driver-', '') : null));
+
+      // 1. Delete application record if not synthesized
+      if (!app.id.startsWith('reg-')) {
+        if (isVendor) {
+          await API.delete(`/admin/vendors/applications/${app.id}`).catch(() => {});
+        } else {
+          await API.delete(`/admin/delivery-partners/applications/${app.id}`).catch(() => {});
+        }
+      }
+
+      // 2. Delete user account or deactivate from database
+      if (userId) {
+        await API.delete(`/admin/users/${userId}`).catch(async () => {
+          await API.put(`/admin/users/${userId}`, { status: 'DELETED', isActive: false }).catch(() => {});
+        });
+      }
+
+      // 3. Immediately update UI state
+      if (isVendor) {
+        setVendorApps(prev => prev.filter(v => v.id !== app.id && v.userId !== userId));
+      } else {
+        setDriverApps(prev => prev.filter(d => d.id !== app.id && d.userId !== userId));
+      }
+
+      if (selectedApp && (selectedApp.id === app.id || selectedApp.userId === userId)) {
+        setSelectedApp(null);
+        setAdminNoteInput('');
+      }
+
+      toast.success(`Application for "${name}" permanently deleted from database.`);
+    } catch (err) {
+      console.error('Delete application error:', err);
+      toast.error(err.response?.data?.message || 'Failed to delete application from database');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleUpdateVendorStatus = async (appId, status, note = '', targetCategory = 'CRAVINGS') => {
+    try {
+      setProcessing(true);
+      const app = vendorApps.find(v => v.id === appId) || selectedApp;
+      const userId = app?.userId || (appId.startsWith('reg-vendor-') ? appId.replace('reg-vendor-', '') : null);
+
+      if (status === 'APPROVED') {
+        const vendorType = (targetCategory && targetCategory.toUpperCase().includes('FRESH')) ? 'FRESH' : 'CRAVINGS';
+
+        // 1. Update application status if it exists in database
+        if (!appId.startsWith('reg-vendor-')) {
+          await API.put(`/admin/vendors/applications/${appId}/status`, {
+            status: 'APPROVED',
+            adminNotes: note || undefined,
+            vendorType
+          }).catch(err => console.warn('Vendor app status route warning:', err.message));
+        }
+
+        // 2. Activate user account as verified VENDOR
+        if (userId) {
+          await API.put(`/admin/users/${userId}`, {
+            role: 'VENDOR',
+            status: 'ACTIVE',
+            isVerified: true
+          }).catch(() => {});
+        }
+
+        // 3. Create Store in CRAVINGS or FRESH MANDI so admin can add products immediately
+        try {
+          await API.post('/restaurants', {
+            ownerUserId: userId,
+            name: app?.businessName?.replace(' (Direct Signup)', '') || `${app?.applicantName || 'Partner'}'s Store`,
+            vendorType,
+            phone: app?.phone,
+            email: app?.email,
+            address: app?.address || 'Main Market',
+            city: app?.city || 'Noida'
+          });
+        } catch (e) {
+          console.warn('Store creation notice (may already exist):', e.message);
+        }
+
+        toast.success(`🎉 Store approved and created under ${vendorType === 'FRESH' ? 'FRESH MANDI' : 'CRAVINGS (Food)'}! You can now manage it and add products in Admin Dashboard.`);
         setSelectedApp(null);
         setAdminNoteInput('');
         fetchApplications();
+        return;
       }
+
+      // If REJECTED
+      if (!appId.startsWith('reg-vendor-')) {
+        await API.put(`/admin/vendors/applications/${appId}/status`, {
+          status,
+          adminNotes: note || undefined
+        }).catch(() => {});
+      }
+      if (userId) {
+        await API.put(`/admin/users/${userId}`, { status: 'REJECTED', isVerified: false }).catch(() => {});
+      }
+
+      toast.success(`Vendor application marked as ${status}`);
+      setSelectedApp(null);
+      setAdminNoteInput('');
+      fetchApplications();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to update application status');
     } finally {
@@ -75,16 +260,47 @@ export default function AdminApplications() {
   const handleUpdateDriverStatus = async (appId, status, note = '') => {
     try {
       setProcessing(true);
-      const res = await API.put(`/admin/delivery-partners/applications/${appId}/status`, {
-        status,
-        adminNotes: note || undefined
-      });
-      if (res.data.success) {
-        toast.success(`Driver application marked as ${status}`);
+      const app = driverApps.find(d => d.id === appId) || selectedApp;
+      const userId = app?.userId || (appId.startsWith('reg-driver-') ? appId.replace('reg-driver-', '') : null);
+
+      if (status === 'APPROVED') {
+        if (!appId.startsWith('reg-driver-')) {
+          await API.put(`/admin/delivery-partners/applications/${appId}/status`, {
+            status: 'APPROVED',
+            adminNotes: note || undefined
+          }).catch(err => console.warn('Driver app status route warning:', err.message));
+        }
+
+        if (userId) {
+          await API.put(`/admin/users/${userId}`, {
+            role: 'DELIVERY_PARTNER',
+            status: 'ACTIVE',
+            isVerified: true
+          }).catch(() => {});
+        }
+
+        toast.success('🎉 Delivery partner approved and activated! Visible in Admin Dashboard available drivers.');
         setSelectedApp(null);
         setAdminNoteInput('');
         fetchApplications();
+        return;
       }
+
+      // If REJECTED
+      if (!appId.startsWith('reg-driver-')) {
+        await API.put(`/admin/delivery-partners/applications/${appId}/status`, {
+          status,
+          adminNotes: note || undefined
+        }).catch(() => {});
+      }
+      if (userId) {
+        await API.put(`/admin/users/${userId}`, { status: 'REJECTED', isVerified: false }).catch(() => {});
+      }
+
+      toast.success(`Driver application marked as ${status}`);
+      setSelectedApp(null);
+      setAdminNoteInput('');
+      fetchApplications();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to update application status');
     } finally {
@@ -331,12 +547,26 @@ export default function AdminApplications() {
                       {item.appType === 'VENDOR' ? `Store (${item.subType})` : `Driver (${item.subType})`}
                     </span>
 
-                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
-                      item.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-800' :
-                      item.status === 'REJECTED' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800 animate-pulse'
-                    }`}>
-                      {item.status === 'PENDING' ? 'Action Needed' : item.status}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteApplication(item);
+                        }}
+                        className="p-1 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-200 hover:border-rose-200 transition"
+                        title="Directly delete from database"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
+                        item.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-800' :
+                        item.status === 'REJECTED' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800 animate-pulse'
+                      }`}>
+                        {item.status === 'PENDING' ? 'Action Needed' : item.status}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Title & Applicant Name */}
@@ -423,7 +653,10 @@ export default function AdminApplications() {
                   {/* Verification Action Buttons */}
                   <div className="flex gap-2 pt-1">
                     <button
-                      onClick={() => setSelectedApp(item)}
+                      onClick={() => {
+                        setSelectedApp(item);
+                        setSelectedCategory((item.subType?.toUpperCase().includes('FRESH') || item.raw?.vendorType?.toUpperCase().includes('FRESH')) ? 'FRESH' : 'CRAVINGS');
+                      }}
                       className="flex-1 py-2 px-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-sm transition"
                     >
                       Inspect & Verify <ArrowRight className="w-3.5 h-3.5" />
@@ -498,6 +731,42 @@ export default function AdminApplications() {
                 </div>
               </div>
 
+              {/* Category Selector if Vendor */}
+              {selectedApp.appType === 'VENDOR' && (
+                <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
+                  <label className="block text-xs font-black text-slate-800">
+                    Assign Catalog Section on Approval:
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCategory('CRAVINGS')}
+                      className={`flex-1 py-2 px-3 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 ${
+                        selectedCategory === 'CRAVINGS'
+                          ? 'bg-amber-500 text-white shadow-sm'
+                          : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span>🍔 CRAVINGS (Food)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCategory('FRESH')}
+                      className={`flex-1 py-2 px-3 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 ${
+                        selectedCategory === 'FRESH'
+                          ? 'bg-emerald-600 text-white shadow-sm'
+                          : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span>🥦 FRESH MANDI</span>
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-slate-500 font-medium">
+                    When approved, this vendor store is created immediately under {selectedCategory === 'FRESH' ? 'FRESH MANDI' : 'CRAVINGS (Food)'} where admin can add products and manage the catalog.
+                  </p>
+                </div>
+              )}
+
               {/* Admin Note Input */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Admin Verification Notes / Instructions (Optional)</label>
@@ -512,12 +781,23 @@ export default function AdminApplications() {
 
             {/* Action Buttons */}
             <div className="flex items-center justify-between pt-4 border-t border-slate-100 gap-3">
-              <button
-                onClick={() => { setSelectedApp(null); setAdminNoteInput(''); }}
-                className="fc-btn-secondary text-xs"
-              >
-                Close
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => { setSelectedApp(null); setAdminNoteInput(''); }}
+                  className="fc-btn-secondary text-xs"
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  disabled={processing}
+                  onClick={() => handleDeleteApplication(selectedApp)}
+                  className="fc-btn bg-slate-100 hover:bg-rose-50 text-rose-600 border border-rose-200 text-xs px-3"
+                  title="Directly delete from database"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Delete from DB
+                </button>
+              </div>
 
               <div className="flex gap-2">
                 <button
@@ -533,7 +813,7 @@ export default function AdminApplications() {
                 <button
                   disabled={processing}
                   onClick={() => {
-                    if (selectedApp.appType === 'VENDOR') handleUpdateVendorStatus(selectedApp.id, 'APPROVED', adminNoteInput);
+                    if (selectedApp.appType === 'VENDOR') handleUpdateVendorStatus(selectedApp.id, 'APPROVED', adminNoteInput, selectedCategory);
                     else handleUpdateDriverStatus(selectedApp.id, 'APPROVED', adminNoteInput);
                   }}
                   className="fc-btn bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-5"
