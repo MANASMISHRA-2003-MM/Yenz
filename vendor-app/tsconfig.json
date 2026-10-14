@@ -15,8 +15,7 @@
     "checkJs": false,
     "strict": false,
     "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "types": ["vite/client"]
+    "noUnusedParameters": false
   },
   "include": ["src"]
 }
