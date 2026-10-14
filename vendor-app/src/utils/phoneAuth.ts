@@ -91,16 +91,6 @@ export interface SendOtpResult {
   isTestNumber: boolean;
 }
 
-export async function sendPhoneOtp(
-  phoneNumber: string,
-  preferredSize: 'invisible' | 'normal' = 'invisible',
-  timeoutMs: number = 120000
-): Promise<SendOtpResult> {
-  const formattedPhone = formatPhoneNumberE164(phoneNumber);
-  if (!formattedPhone || formattedPhone.replace(/\D/g, '').length < 10) {
-    throw new Error('Please enter a valid mobile phone number (at least 10 digits).');
-  }
-
 export function isTestPhoneNumber(phone: string): boolean {
   if (!phone) return false;
   const digits = phone.toString().replace(/\D/g, '');
@@ -113,6 +103,16 @@ export function isTestPhoneNumber(phone: string): boolean {
     DEV_TEST_NUMBERS.includes(phone)
   );
 }
+
+export async function sendPhoneOtp(
+  phoneNumber: string,
+  preferredSize: 'invisible' | 'normal' = 'invisible',
+  timeoutMs: number = 120000
+): Promise<SendOtpResult> {
+  const formattedPhone = formatPhoneNumberE164(phoneNumber);
+  if (!formattedPhone || formattedPhone.replace(/\D/g, '').length < 10) {
+    throw new Error('Please enter a valid mobile phone number (at least 10 digits).');
+  }
 
   const isTestNumber = isTestPhoneNumber(formattedPhone);
 
