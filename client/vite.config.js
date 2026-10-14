@@ -18,13 +18,15 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:5000',
-        changeOrigin: true
+        target: 'https://yenz-mviu.onrender.com',
+        changeOrigin: true,
+        secure: false
       },
       // Proxy Socket.IO polling (HTTP) AND websocket upgrade
       '/socket.io': {
-        target: 'http://localhost:5000',
+        target: 'https://yenz-mviu.onrender.com',
         changeOrigin: true,
+        secure: false,
         ws: true,
         // Suppress ECONNREFUSED & ECONNRESET when backend server is starting or offline
         configure: (proxy) => {

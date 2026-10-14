@@ -1,5 +1,10 @@
 import axios from 'axios';
 
+const cleanUrl = (url) => {
+  if (!url) return '';
+  return url.toString().trim().replace(/^["']|["']$/g, '').replace(/\/$/, '');
+};
+
 // Smart backend resolution for Android Capacitor native APK and Web Browser
 export const getBackendBaseUrl = () => {
   // 1. In-app manual override (configurable via Delivery Settings)
@@ -7,29 +12,17 @@ export const getBackendBaseUrl = () => {
     localStorage.getItem('milega_delivery_custom_backend_url') ||
     localStorage.getItem('krawing_custom_backend_url');
   if (custom && custom.trim()) {
-    return custom.trim().replace(/\/$/, '');
+    return cleanUrl(custom);
   }
 
   // 2. Vite environment variable from .env
-  const envUrl = import.meta.env.VITE_API_URL;
+  const envUrl = typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL;
   if (envUrl && envUrl.trim()) {
-    return envUrl.trim().replace(/\/$/, '');
+    return cleanUrl(envUrl);
   }
 
-  // 3. If running inside Capacitor Native Android WebView
-  const isCapacitorNative =
-    typeof window !== 'undefined' &&
-    (window?.Capacitor?.isNativePlatform?.() ||
-      window.location.protocol === 'capacitor:' ||
-      (window.location.hostname === 'localhost' && window.location.port === ''));
-
-  if (isCapacitorNative) {
-    // Default to production Render backend requested by user
-    return 'https://yenz-mviu.onrender.com';
-  }
-
-  // 4. In development web browser, empty string means relative /api (uses Vite proxy)
-  return '';
+  // 3. Fallback to production Render backend (strictly per user request: no localhost testing)
+  return 'https://yenz-mviu.onrender.com';
 };
 
 export const setCustomBackendBaseUrl = (url) => {
@@ -37,7 +30,7 @@ export const setCustomBackendBaseUrl = (url) => {
     localStorage.removeItem('milega_delivery_custom_backend_url');
     localStorage.removeItem('krawing_custom_backend_url');
   } else {
-    const formatted = url.trim().replace(/\/$/, '');
+    const formatted = cleanUrl(url);
     localStorage.setItem('milega_delivery_custom_backend_url', formatted);
     localStorage.setItem('krawing_custom_backend_url', formatted);
   }
@@ -45,7 +38,7 @@ export const setCustomBackendBaseUrl = (url) => {
 
 export const getApiUrl = () => {
   const base = getBackendBaseUrl();
-  return base ? `${base}/api` : '/api';
+  return base ? `${base}/api` : 'https://yenz-mviu.onrender.com/api';
 };
 
 const API = axios.create({
@@ -56,7 +49,9 @@ const API = axios.create({
 
 // Dynamic baseURL interceptor so URL updates immediately if changed in settings
 API.interceptors.request.use((config) => {
-  config.baseURL = getApiUrl();
+  if (!config.baseURL || config.baseURL === '/api' || config.baseURL === '') {
+    config.baseURL = getApiUrl();
+  }
   const token =
     localStorage.getItem('yenz_token') ||
     localStorage.getItem('milega_token') ||

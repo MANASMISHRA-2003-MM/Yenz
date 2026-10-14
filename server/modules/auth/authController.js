@@ -246,22 +246,30 @@ const resetPassword = async (req, res, next) => {
       });
     }
 
+    const digitsOnly = verifiedPhone.replace(/\D/g, '');
+    const phoneCandidates = [
+      verifiedPhone,
+      digitsOnly,
+      digitsOnly.length === 12 && digitsOnly.startsWith('91') ? digitsOnly.slice(2) : null,
+      digitsOnly.length === 10 ? `+91${digitsOnly}` : null
+    ].filter(Boolean);
+
     const prismaRole = role ? mapToPrismaRole(role) : null;
     let user = null;
 
     if (prismaRole) {
       user = await prisma.user.findFirst({
         where: {
-          phone: verifiedPhone,
+          phone: { in: phoneCandidates },
           role: prismaRole
         }
       });
     }
 
-    // Fallback: locate account by verified phone number if role was generic or unspecified
+    // Fallback: locate account by verified phone number variants if role was generic or unspecified
     if (!user) {
       user = await prisma.user.findFirst({
-        where: { phone: verifiedPhone }
+        where: { phone: { in: phoneCandidates } }
       });
     }
 

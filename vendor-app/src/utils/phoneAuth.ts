@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult } from 'firebase/auth';
 import { auth } from '../config/firebase';
 

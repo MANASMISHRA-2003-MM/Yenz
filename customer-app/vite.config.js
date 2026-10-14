@@ -20,12 +20,14 @@ export default defineConfig({
     host: true, // Listen on all network addresses (0.0.0.0) so phone can access dev server
     proxy: {
       '/api': {
-        target: 'http://localhost:5000',
-        changeOrigin: true
+        target: 'https://yenz-mviu.onrender.com',
+        changeOrigin: true,
+        secure: false
       },
       '/socket.io': {
-        target: 'http://localhost:5000',
+        target: 'https://yenz-mviu.onrender.com',
         changeOrigin: true,
+        secure: false,
         ws: true,
         configure: (proxy) => {
           proxy.on('error', (err) => {
